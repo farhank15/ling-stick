@@ -3,6 +3,7 @@ import { db } from "./db/client.server";
 import { llmCache, llmUsage } from "./db/schema";
 import { env } from "./env.server";
 import {
+  CHAT_SYSTEM,
   CHECK_SENTENCE_SYSTEM,
   EXTRACT_SYSTEM,
   EXPLORE_CATEGORIES,
@@ -10,10 +11,12 @@ import {
   exploreSystem,
 } from "./prompts";
 import {
+  chatOutputSchema,
   checkSentenceOutputSchema,
   exploreOutputSchema,
   extractOutputSchema,
   generateOutputSchema,
+  type ChatOutput,
   type CheckSentenceOutput,
   type ExploreOutput,
   type ExtractOutput,
@@ -91,15 +94,17 @@ async function chatJson<T>(
     throw new LlmError("Belum ada API key LLM (GROQ_API_KEY / POOLSIDE_API_KEY) di .env");
   }
 
-  const cacheKey = hashKey(cachePrefix, normalizeText(cacheInput));
-  const [hit] = await db.select().from(llmCache).where(eq(llmCache.key, cacheKey)).limit(1);
-  if (hit) {
-    try {
-      const parsed = schema.safeParse(JSON.parse(hit.response));
-      if (parsed.success && parsed.data)
-        return { data: parsed.data, cached: true, provider: "cache" };
-    } catch {
-      /* cache rusak → regenerasi */
+  const cacheKey = cachePrefix ? hashKey(cachePrefix, normalizeText(cacheInput)) : "";
+  if (cacheKey) {
+    const [hit] = await db.select().from(llmCache).where(eq(llmCache.key, cacheKey)).limit(1);
+    if (hit) {
+      try {
+        const parsed = schema.safeParse(JSON.parse(hit.response));
+        if (parsed.success && parsed.data)
+          return { data: parsed.data, cached: true, provider: "cache" };
+      } catch {
+        /* cache rusak → regenerasi */
+      }
     }
   }
 
@@ -145,10 +150,12 @@ async function chatJson<T>(
         const parsed = schema.safeParse(JSON.parse(extractJsonText(content)));
         if (parsed.success && parsed.data) {
           const data = parsed.data;
-          await db
-            .insert(llmCache)
-            .values({ key: cacheKey, response: JSON.stringify(data), createdAt: Date.now() })
-            .onConflictDoNothing();
+          if (cacheKey) {
+            await db
+              .insert(llmCache)
+              .values({ key: cacheKey, response: JSON.stringify(data), createdAt: Date.now() })
+              .onConflictDoNothing();
+          }
           return { data, cached: false, provider: p.name };
         }
         lastError = `${p.name}: output tidak sesuai skema`;
@@ -237,6 +244,34 @@ export async function llmExplore(
     "explore:v2",
     `${categorySlug}|v${variant}`,
   );
+}
+
+/**
+ * Chat dengan Ling — instructor bahasa Inggris. Tanpa cache (jawaban harus
+ * kontekstual), history dikirim sebagai transkrip teks di user message.
+ */
+export async function llmChat(
+  history: { role: "user" | "assistant"; content: string }[],
+  message: string,
+): Promise<{ data: ChatOutput; provider: string }> {
+  const transcript = history
+    .slice(-8)
+  .map((m) => `${m.role === "user" ? "Learner" : "Ling"}: ${m.content.slice(0, 500)}`)
+    .join("\n");
+  const user = transcript
+    ? `Conversation so far:
+${transcript}
+
+Learner's new message: "${message.slice(0, 1000)}"`
+    : `Learner's message: "${message.slice(0, 1000)}"`;
+  const { data, provider } = await chatJson(
+    CHAT_SYSTEM,
+    user,
+    chatOutputSchema,
+    "", // sengaja kosong — chat tidak di-cache
+    "",
+  );
+  return { data, provider };
 }
 
 /**

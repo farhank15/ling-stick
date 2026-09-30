@@ -161,7 +161,7 @@ export function QuickTranslate() {
       </div>
       <div className="relative">
         <textarea
-          className="input min-h-16 pr-10"
+          className="input-area min-h-20 pr-10"
           placeholder={
             from === "en"
               ? "Tulis bahasa Inggris… berhenti ngetik = auto translate"
@@ -173,7 +173,7 @@ export function QuickTranslate() {
         />
         {text ? (
           <button
-            className="absolute top-2 right-2 rounded-full p-1 text-zinc-400 hover:bg-zinc-100 hover:text-zinc-600 dark:hover:bg-zinc-800"
+            className="absolute top-2.5 right-2.5 rounded-full p-1 text-zinc-400 hover:bg-zinc-200/70 hover:text-zinc-600 dark:hover:bg-zinc-800"
             onClick={clear}
             title="Bersihkan"
             aria-label="Bersihkan"
@@ -189,7 +189,7 @@ export function QuickTranslate() {
       ) : null}
       {error ? <p className="mt-2 text-xs text-red-500">{error}</p> : null}
       {shown ? (
-        <div className="mt-2 rounded-xl bg-zinc-50 p-3 dark:bg-zinc-800/60">
+        <div className="mt-2 rounded-2xl border border-teal-200/70 bg-teal-50/50 p-3 dark:border-teal-900/60 dark:bg-teal-950/30">
           <p className="whitespace-pre-wrap text-sm">{shown}</p>
           {englishSide ? (
             <div className="mt-1 flex min-h-5 items-center gap-1.5">

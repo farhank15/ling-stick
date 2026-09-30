@@ -196,7 +196,7 @@ export default function Translate() {
         </div>
         <div className="relative">
           <textarea
-            className="input min-h-24 pr-10 text-[15px]"
+            className="input-area min-h-28 pr-10"
             value={text}
             maxLength={2000}
             onChange={(e) => setText(e.target.value)}
@@ -208,7 +208,7 @@ export default function Translate() {
           />
           {text ? (
             <button
-              className="absolute top-2 right-2 rounded-full p-1 text-zinc-400 hover:bg-zinc-100 hover:text-zinc-600 dark:hover:bg-zinc-800"
+              className="absolute top-2.5 right-2.5 rounded-full p-1 text-zinc-400 hover:bg-zinc-200/70 hover:text-zinc-600 dark:hover:bg-zinc-800"
               onClick={clearAll}
               title="Bersihkan semua"
               aria-label="Bersihkan semua"

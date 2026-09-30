@@ -1,6 +1,9 @@
+import type { MetaFunction } from "react-router";
 import { useState } from "react";
+import { useToast } from "~/components/Toast";
 
 export const handle = { title: "Mode nonton" };
+export const meta: MetaFunction = () => [{ title: "Mode nonton — LingStick" }];
 
 type Expr = {
   text: string;
@@ -13,6 +16,7 @@ type Expr = {
 const MAX = 3000;
 
 export default function Extract() {
+  const toast = useToast();
   const [text, setText] = useState("");
   const [selected, setSelected] = useState<Set<number>>(new Set());
   const [exprs, setFetched] = useState<Expr[]>([]);
@@ -56,7 +60,7 @@ export default function Extract() {
     }
     setSelected(new Set());
     setText("");
-    alert("Ekspresi terpilih tersimpan ke Library");
+    toast(`${selected.size} ekspresi tersimpan ke Library`);
   };
 
   return (

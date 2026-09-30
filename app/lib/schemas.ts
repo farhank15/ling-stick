@@ -87,3 +87,22 @@ export const exploreOutputSchema = z.object({
 });
 
 export type ExploreOutput = z.infer<typeof exploreOutputSchema>;
+
+export const chatOutputSchema = z.object({
+  reply: z.string().min(1),
+  suggestions: z
+    .array(
+      z.object({
+        text: z.string().min(1),
+        meaning_id: z.string().min(1),
+        examples: z
+          .array(z.object({ en: z.string().min(1), id: z.string().min(1) }))
+          .max(3)
+          .default([]),
+      }),
+    )
+    .max(3)
+    .default([]),
+});
+
+export type ChatOutput = z.infer<typeof chatOutputSchema>;

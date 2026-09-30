@@ -13,6 +13,7 @@ export default [
     route("explore/:category", "routes/explore.$category.tsx"),
     route("extract", "routes/extract.tsx"),
     route("translate", "routes/translate.tsx"),
+    route("chat", "routes/chat.tsx"),
     route("settings", "routes/settings.tsx"),
   ]),
 
@@ -36,4 +37,7 @@ export default [
   route("api/lara", "routes/api.lara.ts"),
   route("api/stats", "routes/api.stats.ts"),
   route("api/logout", "routes/api.logout.ts"),
+  route("api/chat", "routes/api.chat.ts"),
+  route("api/chat/sessions", "routes/api.chat.sessions.ts"),
+  route("api/import", "routes/api.import.ts"),
 ] satisfies RouteConfig;

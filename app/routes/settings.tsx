@@ -1,7 +1,8 @@
 import type { LoaderFunctionArgs, MetaFunction } from "react-router";
-import { CircleCheck, CircleX, Download } from "lucide-react";
-import { useEffect, useState } from "react";
+import { CircleCheck, CircleX, Download, FileUp } from "lucide-react";
+import { useEffect, useRef, useState } from "react";
 import { Form, useLoaderData, useNavigation } from "react-router";
+import { useToast } from "~/components/Toast";
 import { requireUser } from "~/lib/auth.server";
 import { db } from "~/lib/db/client.server";
 import { llmUsage } from "~/lib/db/schema";
@@ -48,7 +49,10 @@ type Stats = {
 export default function Settings() {
   const data = useLoaderData<typeof loader>();
   const nav = useNavigation();
+  const toast = useToast();
   const [stats, setStats] = useState<Stats | null>(null);
+  const [importing, setImporting] = useState(false);
+  const fileRef = useRef<HTMLInputElement | null>(null);
 
   useEffect(() => {
     fetch("/api/stats")
@@ -56,6 +60,37 @@ export default function Settings() {
       .then(setStats)
       .catch(() => {});
   }, []);
+
+  const doImport = async (file: File) => {
+    setImporting(true);
+    try {
+      const text = await file.text();
+      const json = JSON.parse(text) as unknown;
+      const res = await fetch("/api/import", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(json),
+      });
+      const out = await res.json();
+      if (out.ok) {
+        const s = out.stats as {
+          itemsAdded: number;
+          itemsSkipped: number;
+          examplesAdded: number;
+          exploreAdded: number;
+        };
+        toast(
+          `Import ok: +${s.itemsAdded} item (${s.itemsSkipped} sudah ada), +${s.examplesAdded} contoh, +${s.exploreAdded} explore`,
+        );
+      } else {
+        toast(out.error ?? "Import gagal");
+      }
+    } catch {
+      toast("File nggak valid — harus JSON backup LingStick");
+    } finally {
+      setImporting(false);
+    }
+  };
 
   return (
     <div className="space-y-4">
@@ -97,10 +132,35 @@ export default function Settings() {
         <Row k="Kartu baru / hari" v={String(data.newCardsPerDay)} />
       </section>
 
-      <section className="space-y-2">
+      <section className="card space-y-2">
+        <h2 className="label">Backup & restore</h2>
         <a href="/api/export" className="btn-secondary w-full" download>
-          <Download className="h-4 w-4" strokeWidth={1.75} /> Export backup (JSON)
+          <Download className="h-4 w-4" strokeWidth={1.75} /> Export semua data (JSON)
         </a>
+        <button
+          className="btn-secondary w-full"
+          disabled={importing}
+          onClick={() => fileRef.current?.click()}
+        >
+          <FileUp className="h-4 w-4" strokeWidth={1.75} /> Import dari backup
+        </button>
+        <input
+          ref={fileRef}
+          type="file"
+          accept="application/json,.json"
+          className="hidden"
+          onChange={(e) => {
+            const file = e.target.files?.[0];
+            e.target.value = "";
+            if (file) void doImport(file);
+          }}
+        />
+        <p className="text-[11px] text-zinc-400">
+          Import bersifat menambah: item yang sudah ada nggak akan ditimpa.
+        </p>
+      </section>
+
+      <section className="space-y-2">
         <Form method="post">
           <button
             className="btn-danger w-full"

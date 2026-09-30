@@ -1,9 +1,9 @@
 import type { LoaderFunctionArgs, MetaFunction } from "react-router";
 import { Link, useLoaderData, useSearchParams } from "react-router";
-import { useEffect, useState } from "react";
-import { BadgeCheck, CheckSquare, ChevronDown, Search, Square, Trash2 } from "lucide-react";
+import { useEffect, useMemo, useState } from "react";
+import { BadgeCheck, CheckSquare, Search, Square, Trash2 } from "lucide-react";
 import { requireUser } from "~/lib/auth.server";
-import { listItems } from "~/lib/items.server";
+import { getFacetCounts, listItems } from "~/lib/items.server";
 import { ConfirmModal } from "~/components/ConfirmModal";
 import { useToast } from "~/components/Toast";
 
@@ -13,36 +13,40 @@ export const handle = { title: "Library" };
 export async function loader({ request }: LoaderFunctionArgs) {
   await requireUser(request);
   const url = new URL(request.url);
-  const rows = await listItems({
-    q: url.searchParams.get("q") ?? undefined,
-    type: url.searchParams.get("type") ?? undefined,
-    register: url.searchParams.get("register") ?? undefined,
-    status: url.searchParams.get("status") ?? undefined,
-    limit: 200,
-  });
-  return { rows };
+  const status = url.searchParams.get("status") ?? "";
+  const [rows, facets] = await Promise.all([
+    listItems({
+      q: url.searchParams.get("q") ?? undefined,
+      type: url.searchParams.get("type") ?? undefined,
+      register: url.searchParams.get("register") ?? undefined,
+      status,
+      limit: 200,
+    }),
+    getFacetCounts(status),
+  ]);
+  return { rows, facets };
 }
 
-const TYPES = [
-  { v: "", label: "Semua tipe" },
+/** Filter baris chip — scroll horizontal, tanpa dropdown. */
+const TYPE_CHIPS = [
+  { v: "", label: "Semua" },
   { v: "word", label: "Kata" },
-  { v: "phrasal_verb", label: "Phrasal verb" },
+  { v: "phrasal_verb", label: "Phrasal" },
   { v: "idiom", label: "Idiom" },
-  { v: "collocation", label: "Collocation" },
+  { v: "collocation", label: "Colloc" },
   { v: "slang", label: "Slang" },
   { v: "reaction", label: "Reaksi" },
   { v: "sentence", label: "Kalimat" },
 ];
-
-const REGISTERS = [
-  { v: "", label: "Semua register" },
+const REGISTER_CHIPS = [
+  { v: "", label: "Semua" },
   { v: "formal", label: "Formal" },
   { v: "neutral", label: "Netral" },
   { v: "informal", label: "Informal" },
   { v: "slang", label: "Slang" },
 ];
 
-/** Tab status — default "Belajar" (learning saja), "Semua" = learning+hafal. */
+/** Tab status — satu-satunya filter baris: bersih, nggak tumpang tindih. */
 const STATUS_TABS = [
   { v: "", label: "Belajar" },
   { v: "known", label: "Hafal" },
@@ -50,7 +54,7 @@ const STATUS_TABS = [
 ];
 
 export default function Library() {
-  const { rows } = useLoaderData<typeof loader>();
+  const { rows, facets } = useLoaderData<typeof loader>();
   const [params, setParams] = useSearchParams();
   const toast = useToast();
   const [selected, setSelected] = useState<Set<number>>(new Set());
@@ -61,6 +65,12 @@ export default function Library() {
   const type = params.get("type") ?? "";
   const register = params.get("register") ?? "";
   const status = params.get("status") ?? "";
+
+  // Total dalam tab aktif (tanpa filter tipe/register) — buat chip "Semua".
+  const totalInStatus = useMemo(
+    () => Object.values(facets.byType).reduce((a, b) => a + b, 0),
+    [facets.byType],
+  );
 
   const setParam = (key: string, value: string) => {
     const next = new URLSearchParams(params);
@@ -112,6 +122,8 @@ export default function Library() {
 
   return (
     <div className="space-y-3">
+      {/* Toolbar sticky: search + tab + chip filter — nggak ikut ke-scroll */}
+      <div className="sticky top-[52px] z-10 -mx-4 space-y-2 bg-zinc-50/95 px-4 pb-2 pt-1 backdrop-blur dark:bg-zinc-950/95">
       {/* Search */}
       <form role="search" onSubmit={(e) => e.preventDefault()}>
         <div className="relative">
@@ -143,19 +155,59 @@ export default function Library() {
             </Link>
           ))}
         </div>
-        <span className="flex-1" />
-        <FilterDropdown
-          label={TYPES.find((t) => t.v === type)?.label ?? "Tipe"}
-          active={Boolean(type)}
-          options={TYPES}
-          onPick={(v) => setParam("type", v)}
-        />
-        <FilterDropdown
-          label={REGISTERS.find((r) => r.v === register)?.label ?? "Register"}
-          active={Boolean(register)}
-          options={REGISTERS}
-          onPick={(v) => setParam("register", v)}
-        />
+      </div>
+
+      {/* Filter tipe + register — satu baris chip, scroll horizontal, ada count */}
+      <div className="no-scrollbar -mx-4 flex gap-1.5 overflow-x-auto px-4 pb-0.5">
+        {TYPE_CHIPS.map((c) => {
+          const n = c.v === "" ? totalInStatus : facets.byType[c.v] ?? 0;
+          return (
+            <button
+              key={`t-${c.v}`}
+              className={`chip min-h-8 shrink-0 gap-1 px-2.5 text-[11px] ${type === c.v ? "chip-active" : ""}`}
+              onClick={() => setParam("type", c.v)}
+            >
+              {c.label}
+              {n > 0 ? (
+                <span
+                  className={`rounded-full px-1.5 text-[10px] tabular-nums ${
+                    type === c.v
+                      ? "bg-white/20 dark:bg-black/20"
+                      : "bg-zinc-100 text-zinc-500 dark:bg-zinc-800 dark:text-zinc-400"
+                  }`}
+                >
+                  {n}
+                </span>
+              ) : null}
+            </button>
+          );
+        })}
+        <span className="mx-1 w-px shrink-0 self-stretch bg-zinc-200 dark:bg-zinc-800" />
+        {REGISTER_CHIPS.map((c) => {
+          const n = c.v === "" ? totalInStatus : facets.byRegister[c.v] ?? 0;
+          return (
+            <button
+              key={`r-${c.v}`}
+              className={`chip min-h-8 shrink-0 gap-1 px-2.5 text-[11px] ${register === c.v ? "chip-active" : ""}`}
+              onClick={() => setParam("register", c.v)}
+            >
+              {c.label}
+              {n > 0 ? (
+                <span
+                  className={`rounded-full px-1.5 text-[10px] tabular-nums ${
+                    register === c.v
+                      ? "bg-white/20 dark:bg-black/20"
+                      : "bg-zinc-100 text-zinc-500 dark:bg-zinc-800 dark:text-zinc-400"
+                  }`}
+                >
+                  {n}
+                </span>
+              ) : null}
+            </button>
+          );
+        })}
+      </div>
+
       </div>
 
       {/* Aksi massal */}
@@ -233,51 +285,6 @@ export default function Library() {
           ))}
         </ul>
       )}
-    </div>
-  );
-}
-
-function FilterDropdown({
-  label,
-  active,
-  options,
-  onPick,
-}: {
-  label: string;
-  active: boolean;
-  options: { v: string; label: string }[];
-  onPick: (v: string) => void;
-}) {
-  const [open, setOpen] = useState(false);
-  return (
-    <div className="relative">
-      <button
-        className={`chip min-h-9 gap-1 ${active ? "chip-active" : ""}`}
-        onClick={() => setOpen((o) => !o)}
-      >
-        {label} <ChevronDown className="h-3.5 w-3.5" />
-      </button>
-      {open ? (
-        <>
-          <div className="fixed inset-0 z-20" onClick={() => setOpen(false)} />
-          <div className="absolute right-0 z-30 mt-1 w-44 overflow-hidden rounded-xl border border-zinc-200 bg-white shadow-lg dark:border-zinc-800 dark:bg-zinc-900">
-            {options.map((o) => (
-              <button
-                key={o.v}
-                className={`block w-full px-3.5 py-2 text-left text-sm hover:bg-zinc-100 dark:hover:bg-zinc-800 ${
-                  o.v === "" ? "border-t border-zinc-100 text-zinc-500 dark:border-zinc-800" : ""
-                }`}
-                onClick={() => {
-                  onPick(o.v);
-                  setOpen(false);
-                }}
-              >
-                {o.label}
-              </button>
-            ))}
-          </div>
-        </>
-      ) : null}
     </div>
   );
 }

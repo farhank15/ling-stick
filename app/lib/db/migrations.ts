@@ -136,6 +136,23 @@ export const MIGRATIONS: string[] = [
     created_at INTEGER NOT NULL
   );
 
+  CREATE TABLE IF NOT EXISTS chat_sessions (
+    id         INTEGER PRIMARY KEY,
+    title      TEXT NOT NULL DEFAULT 'Obrolan baru',
+    created_at INTEGER NOT NULL,
+    updated_at INTEGER NOT NULL
+  );
+
+  CREATE TABLE IF NOT EXISTS chat_messages (
+    id              INTEGER PRIMARY KEY,
+    session_id      INTEGER NOT NULL REFERENCES chat_sessions(id) ON DELETE CASCADE,
+    role            TEXT NOT NULL,
+    content         TEXT NOT NULL,
+    suggestions_json TEXT,
+    created_at      INTEGER NOT NULL
+  );
+  CREATE INDEX IF NOT EXISTS chat_messages_session_idx ON chat_messages(session_id);
+
   CREATE TABLE IF NOT EXISTS quiz_answers (
     id             INTEGER PRIMARY KEY,
     set_id         INTEGER NOT NULL,

@@ -1,4 +1,4 @@
-import type { ActionFunctionArgs, LoaderFunctionArgs } from "react-router";
+import type { ActionFunctionArgs, LoaderFunctionArgs, MetaFunction } from "react-router";
 import { Link, useFetcher, useLoaderData, useRevalidator } from "react-router";
 import { useEffect, useRef, useState } from "react";
 import { ArrowLeft, CheckCircle2, Loader2, Sparkles } from "lucide-react";
@@ -10,7 +10,8 @@ import { and, asc, eq, inArray } from "drizzle-orm";
 import { saveExploreRow } from "~/lib/items.server";
 import { useToast } from "~/components/Toast";
 
-export const handle = { title: "Explore" };
+export const handle = { title: "Explore", ownHeader: true };
+export const meta: MetaFunction = () => [{ title: "Explore — LingStick" }];
 
 /** Lock anti dobel-generate per kategori (StrictMode / multi-tab). */
 const genLocks = new Map<string, number>();
@@ -96,14 +97,12 @@ export async function action({ request, params }: ActionFunctionArgs) {
       variant,
     );
 
+    // Duplikat dicek via Set dari query yang sama (tanpa query tambahan).
+    const existingSet = new Set(existingRows.map((r) => r.text));
+
     let added = 0;
     for (const e of data.expressions) {
-      const before = await db
-        .select({ id: exploreItems.id })
-        .from(exploreItems)
-        .where(and(eq(exploreItems.category, category), eq(exploreItems.text, e.text)))
-        .limit(1);
-      if (before.length > 0) continue;
+      if (existingSet.has(e.text)) continue;
       await saveExploreRow({
         category,
         text: e.text,
@@ -113,6 +112,7 @@ export async function action({ request, params }: ActionFunctionArgs) {
         useWhenId: e.use_when_id ?? "",
         examplesJson: JSON.stringify(e.examples ?? []),
       });
+      existingSet.add(e.text);
       added++;
     }
 
@@ -247,6 +247,23 @@ export default function ExploreCategory() {
         </Link>
         <h1 className="flex-1 text-xl font-bold tracking-tight">{label}</h1>
         <span className="text-xs text-zinc-400">{rows.length} ekspresi</span>
+      </div>
+
+      {/* Pindah kategori — chip scroll sticky, kategori aktif disorot */}
+      <div className="sticky top-[52px] z-10 -mx-4 bg-zinc-50/95 px-4 py-2 backdrop-blur dark:bg-zinc-950/95">
+        <div className="no-scrollbar flex gap-1.5 overflow-x-auto">
+          {EXPLORE_CATEGORIES.map((c) => (
+            <Link
+              key={c.slug}
+              to={`/explore/${c.slug}`}
+              className={`chip min-h-8 shrink-0 px-2.5 text-[11px] ${
+                c.slug === category ? "chip-active" : ""
+              }`}
+            >
+              {c.label}
+            </Link>
+          ))}
+        </div>
       </div>
 
       {empty && generating ? (

@@ -121,6 +121,26 @@ export default function ExploreIndex() {
 
   return (
     <div className="space-y-5">
+      {/* Kategori — chip scroll sticky, langsung lompat ke kategori mana pun */}
+      <div className="sticky top-[52px] z-10 -mx-4 bg-zinc-50/95 px-4 py-2 backdrop-blur dark:bg-zinc-950/95">
+        <div className="no-scrollbar flex gap-1.5 overflow-x-auto">
+          {categories.map((c) => (
+            <Link
+              key={c.slug}
+              to={`/explore/${c.slug}`}
+              className="chip min-h-8 shrink-0 gap-1 px-2.5 text-[11px]"
+            >
+              {c.label}
+              {c.total > 0 ? (
+                <span className="rounded-full bg-zinc-100 px-1.5 text-[10px] tabular-nums text-zinc-500 dark:bg-zinc-800 dark:text-zinc-400">
+                  {c.total}
+                </span>
+              ) : null}
+            </Link>
+          ))}
+        </div>
+      </div>
+
       {/* Expression of the day */}
       <section>
         <div className="mb-2 flex items-center justify-between">

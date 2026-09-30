@@ -12,6 +12,7 @@ import {
   Compass,
   Languages,
   Library,
+  MessageCircle,
   Plus,
   Repeat,
   Settings,
@@ -27,6 +28,7 @@ export async function loader({ request }: LoaderFunctionArgs) {
 const NAV: { to: string; label: string; icon: LucideIcon }[] = [
   { to: "/", label: "Tambah", icon: Plus },
   { to: "/library", label: "Library", icon: Library },
+  { to: "/chat", label: "Chat", icon: MessageCircle },
   { to: "/review", label: "Review", icon: Repeat },
   { to: "/explore", label: "Explore", icon: Compass },
 ];
@@ -36,7 +38,7 @@ export default function AppLayout() {
   const nav = useNavigation();
   const matches = useMatches() as UIMatch[];
   const leaf = matches[matches.length - 1];
-  const handle = (leaf?.handle ?? {}) as { title?: string };
+  const handle = (leaf?.handle ?? {}) as { title?: string; ownHeader?: boolean };
 
   // Notifikasi beneran: dropdown list (latihan hari ini + riwayat), dot kalau belum selesai.
   const [quizPending, setQuizPending] = useState<{ total: number; done: number; completed: boolean } | null>(null);
@@ -75,7 +77,7 @@ export default function AppLayout() {
 
   return (
     <div className="mx-auto flex min-h-dvh max-w-md flex-col">
-      <header className="sticky top-0 z-20 flex items-center justify-between border-b border-zinc-200 bg-zinc-50/90 px-4 py-3 backdrop-blur dark:border-zinc-800 dark:bg-zinc-950/90">
+      <header className="sticky top-0 z-20 flex items-center justify-between bg-zinc-50/80 px-4 py-3 backdrop-blur-md dark:bg-zinc-950/80">
         <Link to="/" className="flex items-center gap-2 font-bold tracking-tight">
           <img
             src="/lingstick.png"
@@ -169,29 +171,38 @@ export default function AppLayout() {
         </div>
       </header>
 
-      <main className={`flex-1 px-4 pb-28 pt-4 ${nav.state !== "idle" ? "opacity-60 transition-opacity" : ""}`}>
-        {handle.title ? (
+      <main className={`flex-1 px-4 pb-36 pt-4 ${nav.state !== "idle" ? "opacity-60 transition-opacity" : ""}`}>
+        {/* Halaman dgn header sendiri (mis. detail explore) pasang h1-nya sendiri */}
+        {handle.title && !handle.ownHeader ? (
           <h1 className="mb-4 text-xl font-bold tracking-tight">{handle.title}</h1>
         ) : null}
         <Outlet />
       </main>
 
-      <nav className="fixed inset-x-0 bottom-0 z-20 mx-auto max-w-md border-t border-zinc-200 bg-white/95 pb-[env(safe-area-inset-bottom)] backdrop-blur dark:border-zinc-800 dark:bg-zinc-950/95">
-        <div className="grid grid-cols-4">
-          {NAV.map((n) => (
-            <Link
-              key={n.to}
-              to={n.to}
-              className={`flex min-h-14 flex-col items-center justify-center gap-0.5 text-[11px] font-medium transition-colors ${
-                isActive(n.to)
-                  ? "text-teal-600 dark:text-teal-400"
-                  : "text-zinc-500 dark:text-zinc-500"
-              }`}
-            >
-              <n.icon className="h-5 w-5" strokeWidth={1.75} />
-              {n.label}
-            </Link>
-          ))}
+      {/* Floating bottom nav — bar melayang rounded + pill di item aktif */}
+      <nav className="fixed inset-x-0 bottom-0 z-30 px-4 pb-[calc(env(safe-area-inset-bottom)+12px)]">
+        <div className="mx-auto grid max-w-md grid-cols-5 gap-1 rounded-2xl border border-zinc-200/80 bg-white/90 p-1.5 shadow-lg shadow-zinc-900/5 backdrop-blur-md dark:border-zinc-800 dark:bg-zinc-900/90 dark:shadow-black/20">
+          {NAV.map((n) => {
+            const active = isActive(n.to);
+            return (
+              <Link
+                key={n.to}
+                to={n.to}
+                aria-current={active ? "page" : undefined}
+                className={`flex min-h-14 flex-col items-center justify-center gap-0.5 rounded-xl text-[11px] font-medium transition-all ${
+                  active
+                    ? "bg-teal-50 text-teal-700 dark:bg-teal-950/70 dark:text-teal-400"
+                    : "text-zinc-500 hover:text-zinc-700 dark:hover:text-zinc-300"
+                }`}
+              >
+                <n.icon
+                  className={`h-5 w-5 transition-transform ${active ? "scale-110" : ""}`}
+                  strokeWidth={active ? 2 : 1.75}
+                />
+                {n.label}
+              </Link>
+            );
+          })}
         </div>
       </nav>
     </div>

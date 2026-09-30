@@ -1,4 +1,4 @@
-import type { ActionFunctionArgs, LoaderFunctionArgs } from "react-router";
+import type { ActionFunctionArgs, LoaderFunctionArgs, MetaFunction } from "react-router";
 import { Form, Link, useFetcher, useLoaderData, useNavigation } from "react-router";
 import { ArrowLeft, CheckCircle2, Lightbulb, TriangleAlert } from "lucide-react";
 import { useState } from "react";
@@ -6,6 +6,8 @@ import { ConfirmModal } from "~/components/ConfirmModal";
 import { requireUser } from "~/lib/auth.server";
 import { deleteItem, getItemDetail, markLearning, updateItem } from "~/lib/items.server";
 import { redirect } from "react-router";
+
+export const meta: MetaFunction = () => [{ title: "Detail Item — LingStick" }];
 
 export async function loader({ request, params }: LoaderFunctionArgs) {
   await requireUser(request);

@@ -287,20 +287,64 @@ export async function listItems(filters: LibraryFilters): Promise<LibraryRow[]> 
     .limit(limit)
     .offset(offset);
 
-  return Promise.all(rows.map(async (r) => {
-    const [ex] = await db
-      .select({ en: examples.en, idText: examples.idText, register: examples.register })
-      .from(examples)
-      .where(eq(examples.itemId, r.id))
-      .orderBy(examples.id)
-      .limit(1);
+  // Contoh pertama semua item diambil SEKALIGUS (hindari N+1: 1 query, bukan N).
+  const ids = rows.map((r) => r.id);
+  const firsts = ids.length
+    ? await db
+        .select({
+          itemId: examples.itemId,
+          en: examples.en,
+          idText: examples.idText,
+          register: examples.register,
+        })
+        .from(examples)
+        .where(inArray(examples.itemId, ids))
+        .orderBy(examples.id)
+    : [];
+  const firstMap = new Map<number, (typeof firsts)[number]>();
+  for (const f of firsts) {
+    if (!firstMap.has(f.itemId)) firstMap.set(f.itemId, f);
+  }
+
+  return rows.map((r) => {
+    const ex = firstMap.get(r.id);
     return {
       ...r,
       firstExampleEn: ex?.en ?? null,
       firstExampleId: ex?.idText ?? null,
       firstExampleRegister: ex?.register ?? null,
     } satisfies LibraryRow;
-  }));
+  });
+}
+
+/**
+ * Facet count untuk chip filter Library — dihitung dalam batas status aktif
+ * (tab Belajar/Hafal/Semua), abaikan filter tipe/register lain biar stabil.
+ * Satu query GROUP BY, bukan N+1.
+ */
+export async function getFacetCounts(status?: string): Promise<{
+  byType: Record<string, number>;
+  byRegister: Record<string, number>;
+}> {
+  const conds: SQLWrapper[] = [];
+  if (status === "all") conds.push(sql`${items.status} IN ('learning', 'known')`);
+  else if (status) conds.push(eq(items.status, status));
+  else conds.push(eq(items.status, "learning"));
+
+  const rows = await db
+    .select({ type: items.type, register: items.register, total: sql<number>`count(*)` })
+    .from(items)
+    .where(and(...conds))
+    .groupBy(items.type, items.register);
+
+  const byType: Record<string, number> = {};
+  const byRegister: Record<string, number> = {};
+  for (const r of rows) {
+    const n = Number(r.total);
+    byType[r.type] = (byType[r.type] ?? 0) + n;
+    byRegister[r.register] = (byRegister[r.register] ?? 0) + n;
+  }
+  return { byType, byRegister };
 }
 
 function ftsEscape(q: string): string {
@@ -349,18 +393,13 @@ function mapLibraryRow(r: {
 export async function getItemDetail(id: number) {
   const [item] = await db.select().from(items).where(eq(items.id, id)).limit(1);
   if (!item) return null;
-  const exs = await db
-    .select()
-    .from(examples)
-    .where(eq(examples.itemId, id))
-    .orderBy(examples.id);
-  const alts = await db
-    .select()
-    .from(alternatives)
-    .where(eq(alternatives.itemId, id))
-    .orderBy(alternatives.id);
-  const [card] = await db.select().from(cards).where(eq(cards.itemId, id)).limit(1);
-  return { item, examples: exs, alternatives: alts, card: card ?? null };
+  // 3 query independen dijalankan paralel (Turso remote = hemat latency).
+  const [exs, alts, cardRow] = await Promise.all([
+    db.select().from(examples).where(eq(examples.itemId, id)).orderBy(examples.id),
+    db.select().from(alternatives).where(eq(alternatives.itemId, id)).orderBy(alternatives.id),
+    db.select().from(cards).where(eq(cards.itemId, id)).limit(1),
+  ]);
+  return { item, examples: exs, alternatives: alts, card: cardRow[0] ?? null };
 }
 
 export async function updateItem(
@@ -393,7 +432,11 @@ export async function updateItem(
 }
 
 export async function deleteItem(id: number) {
-  await db.delete(items).where(eq(items.id, id));
+  // review_logs tak punya FK cascade → dibersihkan manual sekalian.
+  await db.transaction(async (tx) => {
+    await tx.delete(reviewLogs).where(eq(reviewLogs.itemId, id));
+    await tx.delete(items).where(eq(items.id, id));
+  });
 }
 
 /* ── Review queue ───────────────────────────────────────────── */

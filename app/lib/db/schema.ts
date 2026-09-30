@@ -161,6 +161,28 @@ export const settings = sqliteTable("settings", {
   value: text("value").notNull(),
 });
 
+export const chatSessions = sqliteTable("chat_sessions", {
+  id: integer("id").primaryKey({ autoIncrement: true }),
+  title: text("title").notNull().default("Obrolan baru"),
+  createdAt: integer("created_at").notNull(),
+  updatedAt: integer("updated_at").notNull(),
+});
+
+export const chatMessages = sqliteTable(
+  "chat_messages",
+  {
+    id: integer("id").primaryKey({ autoIncrement: true }),
+    sessionId: integer("session_id")
+      .notNull()
+      .references(() => chatSessions.id, { onDelete: "cascade" }),
+    role: text("role").notNull(), // user | assistant
+    content: text("content").notNull(),
+    suggestionsJson: text("suggestions_json"), // JSON saran kata saat itu
+    createdAt: integer("created_at").notNull(),
+  },
+  (t) => [index("chat_messages_session_idx").on(t.sessionId)],
+);
+
 export const quizSets = sqliteTable("quiz_sets", {
   id: integer("id").primaryKey({ autoIncrement: true }),
   day: text("day").notNull().unique(), // YYYY-MM-DD

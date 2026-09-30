@@ -2,8 +2,8 @@ import type { ActionFunctionArgs } from "react-router";
 import { inArray } from "drizzle-orm";
 import { requireUser } from "~/lib/auth.server";
 import { db } from "~/lib/db/client.server";
-import { items } from "~/lib/db/schema";
-import { deleteItem, markKnown, markLearning } from "~/lib/items.server";
+import { items, reviewLogs } from "~/lib/db/schema";
+import { markKnown, markLearning } from "~/lib/items.server";
 
 /**
  * POST /api/items/bulk { action: "known"|"learning"|"delete", ids: number[] }
@@ -30,7 +30,12 @@ export async function action({ request }: ActionFunctionArgs) {
       await db.update(items).set({ status: "learning" }).where(inArray(items.id, ids));
       break;
     case "delete":
-      for (const id of ids) await deleteItem(id);
+      // Satu transaction: hapus log review + item (cascade ke examples/cards dst).
+      // Dulu loop per-id = N round-trip ke Turso; sekarang cukup 2 query.
+      await db.transaction(async (tx) => {
+        await tx.delete(reviewLogs).where(inArray(reviewLogs.itemId, ids));
+        await tx.delete(items).where(inArray(items.id, ids));
+      });
       break;
     default:
       void markKnown;
