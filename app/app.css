@@ -1,0 +1,80 @@
+@import "tailwindcss";
+
+/* Dark mode ikut sistem — default Tailwind v4 (prefers-color-scheme) */
+
+@theme {
+  --font-sans:
+    ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue",
+    Arial, "Noto Sans", sans-serif;
+  /* Satu warna aksen: teal */
+  --color-accent: oklch(0.7 0.12 195);
+  --color-accent-strong: oklch(0.55 0.12 195);
+}
+
+html {
+  -webkit-tap-highlight-color: transparent;
+}
+
+body {
+  @apply bg-zinc-50 text-zinc-900 antialiased dark:bg-zinc-950 dark:text-zinc-100;
+}
+
+:where(a, button, input, select, textarea):focus-visible {
+  outline: 2px solid var(--color-accent);
+  outline-offset: 2px;
+}
+
+/* Komponen kecil reusable — tetap minimalis.
+   Catatan: Tailwind v4 tidak bisa @apply class custom, jadi utilitas dasar
+   (.btn) ditulis ulang di tiap varian. */
+@layer components {
+  .btn,
+  .btn-primary,
+  .btn-secondary,
+  .btn-ghost,
+  .btn-danger {
+    @apply inline-flex min-h-11 items-center justify-center gap-1.5 rounded-xl px-4
+      text-sm font-medium transition-colors select-none
+      disabled:pointer-events-none disabled:opacity-40;
+  }
+  .btn-primary {
+    @apply bg-teal-600 text-white hover:bg-teal-700 active:bg-teal-800
+      dark:bg-teal-500 dark:hover:bg-teal-600;
+  }
+  .btn-secondary {
+    @apply border border-zinc-200 bg-white text-zinc-700 hover:bg-zinc-100
+      dark:border-zinc-800 dark:bg-zinc-900 dark:text-zinc-300 dark:hover:bg-zinc-800;
+  }
+  .btn-ghost {
+    @apply text-zinc-600 hover:bg-zinc-100 dark:text-zinc-400 dark:hover:bg-zinc-900;
+  }
+  .btn-danger {
+    @apply border border-red-200 bg-white text-red-600 hover:bg-red-50
+      dark:border-red-900 dark:bg-zinc-900 dark:text-red-400 dark:hover:bg-red-950;
+  }
+  .card {
+    @apply rounded-2xl border border-zinc-200 bg-white p-4
+      dark:border-zinc-800 dark:bg-zinc-900;
+  }
+  .input {
+    @apply min-h-11 w-full rounded-xl border border-zinc-200 bg-white px-3.5 text-base
+      placeholder:text-zinc-400 focus:border-teal-500 focus:outline-none
+      dark:border-zinc-800 dark:bg-zinc-900 dark:placeholder:text-zinc-600;
+  }
+  .chip {
+    @apply inline-flex min-h-8 items-center gap-1 rounded-full border border-zinc-200
+      px-3 text-xs font-medium text-zinc-600 transition-colors
+      hover:border-teal-500 hover:text-teal-700
+      dark:border-zinc-800 dark:text-zinc-400 dark:hover:text-teal-400;
+  }
+  .chip-active {
+    @apply border-teal-600 bg-teal-600 text-white hover:text-white
+      dark:border-teal-500 dark:bg-teal-500;
+  }
+  .badge {
+    @apply inline-flex items-center rounded-md px-1.5 py-0.5 text-[11px] font-medium;
+  }
+  .label {
+    @apply text-xs font-medium uppercase tracking-wide text-zinc-500 dark:text-zinc-500;
+  }
+}

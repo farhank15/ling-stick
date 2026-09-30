@@ -1,0 +1,48 @@
+{
+  "name": "lingstick",
+  "private": true,
+  "sideEffects": false,
+  "type": "module",
+  "engines": {
+    "node": ">=20.0.0"
+  },
+  "scripts": {
+    "dev": "react-router dev",
+    "build": "react-router build",
+    "start": "react-router-serve ./build/server/index.js",
+    "typecheck": "react-router typegen && tsc --noEmit"
+  },
+  "dependencies": {
+    "@react-router/node": "^8.4.0",
+    "@react-router/serve": "^8.4.0",
+    "@tailwindcss/vite": "^4.3.3",
+    "@translated/lara": "^1.16.0",
+    "better-sqlite3": "^13.0.3",
+    "drizzle-orm": "^0.45.3",
+    "isbot": "^5.2.2",
+    "lucide-react": "^1.49.0",
+    "react": "^19.3.0",
+    "react-dom": "^19.3.0",
+    "react-router": "^8.4.0",
+    "react-router-dom": "^7.18.4",
+    "tailwindcss": "^4.3.3",
+    "ts-fsrs": "^5.4.2",
+    "zod": "^4.6.5"
+  },
+  "devDependencies": {
+    "@react-router/dev": "^8.4.0",
+    "@types/better-sqlite3": "^9.6.0",
+    "@types/node": "^26.6.3",
+    "@types/react": "^19.3.0",
+    "@types/react-dom": "^19.3.0",
+    "react-router-devtools": "^6.2.3",
+    "typescript": "^5.9.3",
+    "vite": "^7.3.6",
+    "vite-tsconfig-paths": "^6.1.1"
+  },
+  "allowScripts": {
+    "better-sqlite3@13.0.3": true,
+    "esbuild@0.28.2": true,
+    "fsevents@2.3.3": true
+  }
+}
