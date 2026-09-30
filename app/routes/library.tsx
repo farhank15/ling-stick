@@ -4,6 +4,7 @@ import { useEffect, useState } from "react";
 import { BadgeCheck, CheckSquare, ChevronDown, Search, Square, Trash2 } from "lucide-react";
 import { requireUser } from "~/lib/auth.server";
 import { listItems } from "~/lib/items.server";
+import { ConfirmModal } from "~/components/ConfirmModal";
 import { useToast } from "~/components/Toast";
 
 export const meta: MetaFunction = () => [{ title: "Library — LingStick" }];
@@ -54,6 +55,7 @@ export default function Library() {
   const toast = useToast();
   const [selected, setSelected] = useState<Set<number>>(new Set());
   const [busy, setBusy] = useState(false);
+  const [confirmDelete, setConfirmDelete] = useState(false);
 
   const q = params.get("q") ?? "";
   const type = params.get("type") ?? "";
@@ -77,7 +79,6 @@ export default function Library() {
 
   const bulk = async (action: "known" | "learning" | "delete") => {
     if (selected.size === 0 || busy) return;
-    if (action === "delete" && !confirm(`Hapus ${selected.size} item?`)) return;
     setBusy(true);
     try {
       const res = await fetch("/api/items/bulk", {
@@ -95,6 +96,7 @@ export default function Library() {
               : `${selected.size} item dipelajari lagi`,
         );
         setSelected(new Set());
+        setConfirmDelete(false);
         setParams(params, { preventScrollReset: true });
       } else {
         toast("Gagal: " + (data.error ?? "?"));
@@ -166,11 +168,24 @@ export default function Library() {
           <button className="btn-secondary min-h-9" disabled={busy} onClick={() => void bulk("learning")}>
             Ulang
           </button>
-          <button className="btn-danger min-h-9" disabled={busy} onClick={() => void bulk("delete")}>
+          <button
+            className="btn-danger min-h-9"
+            disabled={busy}
+            onClick={() => setConfirmDelete(true)}
+          >
             <Trash2 className="h-4 w-4" /> Hapus
           </button>
         </div>
       ) : null}
+
+      <ConfirmModal
+        open={confirmDelete}
+        title="Hapus item terpilih?"
+        message={`${selected.size} item beserta kartu reviewnya akan dihapus permanen.`}
+        busy={busy}
+        onConfirm={() => void bulk("delete")}
+        onCancel={() => setConfirmDelete(false)}
+      />
 
       {rows.length === 0 ? (
         <p className="py-12 text-center text-sm text-zinc-500">

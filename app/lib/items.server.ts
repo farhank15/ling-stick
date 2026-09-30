@@ -81,8 +81,8 @@ export async function saveItem(input: SaveItemInput): Promise<number> {
   const existing = await findItemIdByText(input.text);
   if (existing) throw new DuplicateItemError(existing);
 
-  const id = db.transaction(() => {
-    const result = db
+  const id = await db.transaction(async (tx) => {
+    const result = await tx
       .insert(items)
       .values({
         text: input.text.trim(),
@@ -96,25 +96,23 @@ export async function saveItem(input: SaveItemInput): Promise<number> {
         status: input.status ?? "learning",
         createdAt: now,
       })
-      .returning({ id: items.id })
-      .all();
+      .returning({ id: items.id });
     const item = result[0];
 
     if (input.examples.length > 0) {
-      db.insert(examples).values(
+      await tx.insert(examples).values(
         input.examples.map((ex) => ({
           itemId: item.id,
           senseLabel: ex.senseLabel || null,
           register: ex.register,
           en: ex.en.trim(),
           idText: ex.idText.trim(),
-          isContext: ex.isContext ? 1 : 0,
+        isContext: ex.isContext ? 1 : 0,
         })),
-      ).run();
+      );
     }
-
     if (input.alternatives && input.alternatives.length > 0) {
-      db.insert(alternatives).values(
+      await tx.insert(alternatives).values(
         input.alternatives.map((a) => ({
           itemId: item.id,
           text: a.text.trim(),
@@ -122,38 +120,35 @@ export async function saveItem(input: SaveItemInput): Promise<number> {
           nuanceId: a.nuanceId || null,
           useWhenId: a.useWhenId || null,
         })),
-      ).run();
+      );
     }
-
     if (input.tagNames && input.tagNames.length > 0) {
       for (const name of input.tagNames) {
         const clean = name.trim();
         if (!clean) continue;
-        db.insert(tags).values({ name: clean }).onConflictDoNothing().run();
-        const [tag] = db.select().from(tags).where(eq(tags.name, clean)).all();
+        await tx.insert(tags).values({ name: clean }).onConflictDoNothing();
+        const [tag] = await tx.select().from(tags).where(eq(tags.name, clean));
         if (tag) {
-          db.insert(itemTags).values({ itemId: item.id, tagId: tag.id }).onConflictDoNothing().run();
+          await tx.insert(itemTags).values({ itemId: item.id, tagId: tag.id }).onConflictDoNothing();
         }
       }
     }
 
     // Kartu review dibuat langsung, due: hari ini (BLUEPRINT §4).
     const card = newCardRow(item.id, now);
-    db.insert(cards)
-      .values({
-        itemId: item.id,
-        due: card.due,
-        stability: card.stability,
-        difficulty: card.difficulty,
-        elapsedDays: card.elapsedDays,
-        scheduledDays: card.scheduledDays,
-        reps: card.reps,
-        lapses: card.lapses,
-        state: card.state,
-        learningSteps: card.learningSteps,
-        lastReview: card.lastReview,
-      })
-      .run();
+    await tx.insert(cards).values({
+      itemId: item.id,
+      due: card.due,
+      stability: card.stability,
+      difficulty: card.difficulty,
+      elapsedDays: card.elapsedDays,
+      scheduledDays: card.scheduledDays,
+      reps: card.reps,
+      lapses: card.lapses,
+      state: card.state,
+      learningSteps: card.learningSteps,
+      lastReview: card.lastReview,
+    });
 
     return item.id;
   });
@@ -167,7 +162,7 @@ export async function addExamplesToItem(
   newExamples: SaveItemInput["examples"],
 ) {
   if (newExamples.length === 0) return;
-  db.insert(examples)
+  await db.insert(examples)
     .values(
       newExamples.map((ex) => ({
         itemId,
@@ -177,8 +172,7 @@ export async function addExamplesToItem(
         idText: ex.idText.trim(),
         isContext: ex.isContext ? 1 : 0,
       })),
-    )
-    .run();
+    );
 }
 
 export type LibraryFilters = {
@@ -217,7 +211,7 @@ export async function listItems(filters: LibraryFilters): Promise<LibraryRow[]> 
   // Full-text search via FTS5 (BLUEPRINT §5).
   if (filters.q && filters.q.trim()) {
     const ftsQuery = ftsEscape(filters.q);
-    const rows = db.all<{
+    const rows = await db.all<{
         id: number;
         text: string;
         type: string;
@@ -263,12 +257,11 @@ export async function listItems(filters: LibraryFilters): Promise<LibraryRow[]> 
 
   let idsByTag: number[] | null = null;
   if (filters.tag) {
-    const rows = db
+    const rows = await db
       .select({ itemId: itemTags.itemId })
       .from(itemTags)
       .innerJoin(tags, eq(tags.id, itemTags.tagId))
-      .where(eq(tags.name, filters.tag))
-      .all();
+      .where(eq(tags.name, filters.tag));
     idsByTag = rows.map((r) => r.itemId);
     if (idsByTag.length === 0) return [];
     conds.push(inArray(items.id, idsByTag));
@@ -500,8 +493,8 @@ export async function applyReview(
     lastReview: number | null;
   },
 ) {
-  db.transaction((tx) => {
-    tx.update(cards)
+  await db.transaction(async (tx) => {
+    await tx.update(cards)
       .set({
         due: next.due,
         stability: next.stability,
@@ -513,16 +506,15 @@ export async function applyReview(
         state: next.state,
         lastReview: next.lastReview,
       })
-      .where(eq(cards.itemId, itemId))
-      .run();
-    tx.insert(reviewLogs).values({
+      .where(eq(cards.itemId, itemId));
+    await tx.insert(reviewLogs).values({
       itemId,
       rating,
       mode,
       reviewedAt: Date.now(),
       state: next.state,
       due: next.due,
-    }).run();
+    });
   });
 }
 
@@ -552,8 +544,7 @@ export async function saveExploreRow(row: {
   register: string;
   meaningId: string;
   useWhenId: string;
-  exampleEn: string;
-  exampleId: string;
+  examplesJson: string; // JSON {en,id}[] — 3–5 contoh
 }) {
   await db
     .insert(exploreItems)
@@ -564,8 +555,7 @@ export async function saveExploreRow(row: {
       register: row.register,
       meaningId: row.meaningId,
       useWhenId: row.useWhenId,
-      exampleEn: row.exampleEn,
-      exampleId: row.exampleId,
+      examplesJson: row.examplesJson,
       hidden: 0,
       createdAt: Date.now(),
     })

@@ -52,7 +52,15 @@ export async function loader({ request, params }: LoaderFunctionArgs) {
     category,
     label: cat.label,
     rows: rows.map((r) => ({
-      ...r,
+      id: r.id,
+      text: r.text,
+      type: r.type,
+      register: r.register,
+      meaningId: r.meaningId,
+      useWhenId: r.useWhenId,
+      exampleEn: r.exampleEn,
+      exampleId: r.exampleId,
+      examplesJson: r.examplesJson,
       saved: savedNorms.has(r.text.trim().toLowerCase()),
     })),
     autoGenStarted: Boolean(autoMarker),
@@ -103,8 +111,7 @@ export async function action({ request, params }: ActionFunctionArgs) {
         register: e.register,
         meaningId: e.meaning_id,
         useWhenId: e.use_when_id ?? "",
-        exampleEn: e.example_en,
-        exampleId: e.example_id,
+        examplesJson: JSON.stringify(e.examples ?? []),
       });
       added++;
     }
@@ -135,6 +142,7 @@ type Row = {
   useWhenId: string | null;
   exampleEn: string | null;
   exampleId: string | null;
+  examplesJson: string | null;
   saved: boolean;
 };
 
@@ -195,6 +203,7 @@ export default function ExploreCategory() {
           source: `Explore — ${label}`,
           exampleEn: r.exampleEn ?? "",
           exampleId: r.exampleId ?? "",
+          examples: parsedExamples(r.examplesJson),
         }),
       });
       const data = await res.json();
@@ -222,6 +231,13 @@ export default function ExploreCategory() {
   };
 
   const isSaved = (r: Row) => r.saved || savedTexts.has(r.text);
+
+  // Contoh kalimat 3–5 (dari examples_json); fallback 1 contoh lama bila kosong.
+  const examplesOf = (r: Row): { en: string; id: string }[] => {
+    const list = parsedExamples(r.examplesJson);
+    if (list.length > 0) return list;
+    return r.exampleEn ? [{ en: r.exampleEn, id: r.exampleId ?? "" }] : [];
+  };
 
   return (
     <div className="space-y-4">
@@ -276,9 +292,16 @@ export default function ExploreCategory() {
                 Kapan dipakai: {r.useWhenId}
               </p>
             ) : null}
-            {r.exampleEn ? <p className="mt-1.5 text-sm italic">“{r.exampleEn}”</p> : null}
-            {r.exampleId ? (
-              <p className="text-xs text-zinc-500 dark:text-zinc-400">{r.exampleId}</p>
+            {examplesOf(r).length > 0 ? (
+              <div className="mt-2 space-y-1.5 border-t border-zinc-100 pt-2 dark:border-zinc-800">
+                <p className="label">Contoh</p>
+                {examplesOf(r).map((ex, i) => (
+                  <div key={i}>
+                    <p className="text-sm">{ex.en}</p>
+                    <p className="text-xs text-zinc-500 dark:text-zinc-400">{ex.id}</p>
+                  </div>
+                ))}
+              </div>
             ) : null}
             <div className="mt-1.5 flex gap-1">
               {r.register ? (
@@ -334,6 +357,24 @@ export default function ExploreCategory() {
       ) : null}
     </div>
   );
+}
+
+/** Parse aman kolom examples_json → {en,id}[]. */
+function parsedExamples(json: string | null): { en: string; id: string }[] {
+  if (!json) return [];
+  try {
+    const arr = JSON.parse(json) as unknown;
+    if (!Array.isArray(arr)) return [];
+    return arr
+      .filter(
+        (x): x is { en: string; id: string } =>
+          typeof (x as { en?: unknown })?.en === "string" &&
+          typeof (x as { id?: unknown })?.id === "string",
+      )
+      .slice(0, 5);
+  } catch {
+    return [];
+  }
 }
 
 function SkeletonCard() {

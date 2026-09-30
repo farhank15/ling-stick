@@ -234,7 +234,7 @@ export async function llmExplore(
     exploreSystem(cat.label),
     user,
     exploreOutputSchema,
-    "explore:v1",
+    "explore:v2",
     `${categorySlug}|v${variant}`,
   );
 }

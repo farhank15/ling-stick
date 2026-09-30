@@ -1,6 +1,8 @@
 import type { ActionFunctionArgs, LoaderFunctionArgs } from "react-router";
 import { Form, Link, useFetcher, useLoaderData, useNavigation } from "react-router";
-import { ArrowLeft, CheckCircle2, Lightbulb, Pencil, TriangleAlert } from "lucide-react";
+import { ArrowLeft, CheckCircle2, Lightbulb, TriangleAlert } from "lucide-react";
+import { useState } from "react";
+import { ConfirmModal } from "~/components/ConfirmModal";
 import { requireUser } from "~/lib/auth.server";
 import { deleteItem, getItemDetail, markLearning, updateItem } from "~/lib/items.server";
 import { redirect } from "react-router";
@@ -23,17 +25,6 @@ export async function action({ request, params }: ActionFunctionArgs) {
     await deleteItem(id);
     return redirect("/library", 303);
   }
-  if (intent === "update") {
-    await updateItem(id, {
-      text: String(form.get("text") ?? ""),
-      type: String(form.get("type") ?? "word"),
-      register: String(form.get("register") ?? "neutral"),
-      meaningId: String(form.get("meaningId") ?? ""),
-      notesId: String(form.get("notesId") ?? ""),
-      source: String(form.get("source") ?? ""),
-    });
-    return redirect(`/library/${id}`, 303);
-  }
   if (intent === "toggle-hide-meaning") {
     const detail = await getItemDetail(id);
     await updateItem(id, { hideMeaning: detail?.item.hideMeaning ? 0 : 1 });
@@ -50,6 +41,7 @@ export default function ItemDetail() {
   const { item, examples, alternatives, card } = useLoaderData<typeof loader>();
   const nav = useNavigation();
   const fetcher = useFetcher();
+  const [confirming, setConfirming] = useState(false);
 
   const busy = nav.state !== "idle" || fetcher.state !== "idle";
   const checkResult = (fetcher.data as { result?: CheckResult } | undefined)?.result;
@@ -224,58 +216,23 @@ export default function ItemDetail() {
         ) : null}
       </section>
 
-      {/* Edit */}
-      <details className="card">
-        <summary className="flex cursor-pointer items-center gap-1.5 text-sm font-medium">
-          <Pencil className="h-4 w-4" strokeWidth={1.75} /> Edit item
-        </summary>
-        <Form method="post" className="mt-3 space-y-2">
-          <input type="hidden" name="intent" value="update" />
-          <input className="input" name="text" defaultValue={item.text} required />
-          <div className="grid grid-cols-2 gap-2">
-            <select className="input" name="type" defaultValue={item.type}>
-              {["word", "phrasal_verb", "idiom", "collocation", "slang", "reaction", "sentence"].map(
-                (t) => (
-                  <option key={t} value={t}>
-                    {t}
-                  </option>
-                ),
-              )}
-            </select>
-            <select className="input" name="register" defaultValue={item.register}>
-              {["formal", "neutral", "informal", "slang"].map((r) => (
-                <option key={r} value={r}>
-                  {r}
-                </option>
-              ))}
-            </select>
-          </div>
-          <input className="input" name="meaningId" placeholder="Arti" defaultValue={item.meaningId ?? ""} />
-          <textarea
-            className="input min-h-16"
-            name="notesId"
-            placeholder="Catatan"
-            defaultValue={item.notesId ?? ""}
-          />
-          <input className="input" name="source" placeholder="Sumber" defaultValue={item.source ?? ""} />
-          <button className="btn-primary w-full" type="submit" disabled={busy}>
-            Simpan perubahan
-          </button>
-        </Form>
-      </details>
-
       {/* Hapus */}
-      <Form
-        method="post"
-        onSubmit={(e) => {
-          if (!confirm("Hapus item ini beserta kartu reviewnya?")) e.preventDefault();
+      <button className="btn-danger w-full" type="button" onClick={() => setConfirming(true)}>
+        Hapus item
+      </button>
+
+      <ConfirmModal
+        open={confirming}
+        title="Hapus item ini?"
+        message={`“${item.text}” beserta kartu reviewnya akan dihapus permanen.`}
+        busy={busy}
+        onConfirm={() => {
+          const fd = new FormData();
+          fd.set("intent", "delete");
+          fetcher.submit(fd, { method: "post" });
         }}
-      >
-        <input type="hidden" name="intent" value="delete" />
-        <button className="btn-danger w-full" type="submit">
-          Hapus item
-        </button>
-      </Form>
+        onCancel={() => setConfirming(false)}
+      />
     </div>
   );
 }

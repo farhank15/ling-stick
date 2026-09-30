@@ -51,11 +51,13 @@ export function exploreSystem(categoryLabel: string): string {
 Return ONLY valid JSON. No prose, no markdown fences.
 Rules:
 - 10 to 14 expressions that native speakers actually use today.
-- Every expression MUST have register, a casual Indonesian meaning, when to use it, and ONE natural English example with an Indonesian translation.
+- Every expression MUST have register, a casual Indonesian meaning, and when to use it.
+- EVERY expression MUST include 3 to 5 natural, varied English example sentences showing real-life usage (short chat message, spoken conversation, work/social situation — mix them), each with an Indonesian translation.
+- ALL explanations — "meaning_id", "use_when_id", every "id" translation — MUST be in casual, clear INDONESIAN.
 - Vary the expressions; avoid extremely obsolete slang.
 
 JSON shape:
-{ "expressions": [{ "text": string, "type": string, "register": string, "meaning_id": string, "use_when_id": string, "example_en": string, "example_id": string }] }`;
+{ "expressions": [{ "text": string, "type": string, "register": string, "meaning_id": string, "use_when_id": string, "examples": [{ "en": string, "id": string }] }] }`;
 }
 
 export { EXPLORE_CATEGORIES };

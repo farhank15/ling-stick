@@ -99,18 +99,16 @@ export async function translateWithLara(
   const translation = result.translation;
 
   const chars = clean.length;
-  db.transaction((tx) => {
-    tx.insert(llmCache)
+  await db.transaction(async (tx) => {
+    await tx.insert(llmCache)
       .values({ key: cacheKey, response: JSON.stringify({ translation }), createdAt: Date.now() })
-      .onConflictDoNothing()
-      .run();
-    tx.insert(laraUsage)
+      .onConflictDoNothing();
+    await tx.insert(laraUsage)
       .values({ month: monthStr(), chars })
       .onConflictDoUpdate({
         target: laraUsage.month,
         set: { chars: sql`${laraUsage.chars} + ${chars}` },
-      })
-      .run();
+      });
   });
 
   return { translation, cached: false, via: "lara" };

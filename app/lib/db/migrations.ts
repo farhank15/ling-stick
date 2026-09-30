@@ -1,8 +1,8 @@
-import type Database from "better-sqlite3";
+import type { Client } from "@libsql/client";
 
 /**
- * DDL lengkap (BLUEPRINT §6 + sessions + llm_usage).
- * Idempotent — aman dipanggil tiap start.
+ * DDL lengkap (BLUEPRINT §6 + sessions + llm_usage + quiz).
+ * Idempotent — aman dijalankan ulang tiap start, juga di Turso remote.
  */
 export const MIGRATIONS: string[] = [
   `
@@ -89,6 +89,7 @@ export const MIGRATIONS: string[] = [
     use_when_id  TEXT,
     example_en   TEXT,
     example_id   TEXT,
+    examples_json TEXT,
     hidden       INTEGER DEFAULT 0,
     created_at   INTEGER NOT NULL,
     UNIQUE(category, text)
@@ -115,7 +116,9 @@ export const MIGRATIONS: string[] = [
   CREATE TABLE IF NOT EXISTS llm_usage (
     day   TEXT PRIMARY KEY,
     calls INTEGER NOT NULL DEFAULT 0
-  );  CREATE TABLE IF NOT EXISTS settings (
+  );
+
+  CREATE TABLE IF NOT EXISTS settings (
     key   TEXT PRIMARY KEY,
     value TEXT NOT NULL
   );
@@ -143,7 +146,9 @@ export const MIGRATIONS: string[] = [
     answered_at    INTEGER NOT NULL,
     UNIQUE(set_id, question_index)
   );
-
+  `,
+  // FTS5 — jalan setelah tabel items ada. Turso mendukung FTS5.
+  `
   CREATE VIRTUAL TABLE IF NOT EXISTS items_fts USING fts5(
     text, meaning_id, content='items', content_rowid='id'
   );
@@ -167,11 +172,24 @@ export const MIGRATIONS: string[] = [
   `,
 ];
 
-export function runMigrations(db: Database.Database) {
-  db.pragma("journal_mode = WAL");
-  db.pragma("foreign_keys = ON");
-  const migrate = db.transaction(() => {
-    for (const ddl of MIGRATIONS) db.exec(ddl);
-  });
-  migrate();
+/**
+ * ALTER yang tidak idempotent (SQLite tak punya ADD COLUMN IF NOT EXISTS).
+ * Dijalankan best-effort — error "duplicate column" diabaikan.
+ */
+const TOLERANT_MIGRATIONS: string[] = [
+  `ALTER TABLE explore_items ADD COLUMN examples_json TEXT`,
+];
+
+/** Jalankan semua migrasi via libsql (async). Sekali per proses. */
+export async function runMigrations(client: Client): Promise<void> {
+  for (const ddl of MIGRATIONS) {
+    await client.executeMultiple(ddl);
+  }
+  for (const ddl of TOLERANT_MIGRATIONS) {
+    try {
+      await client.execute(ddl);
+    } catch {
+      /* kolom sudah ada — abaikan */
+    }
+  }
 }

@@ -36,6 +36,7 @@ export async function action({ request }: ActionFunctionArgs) {
     source?: string;
     exampleEn?: string;
     exampleId?: string;
+    examples?: { en?: string; id?: string }[];
   }>(request);
 
   // Submit form biasa (non-JS) → redirect balik, jangan balikin JSON mentah.
@@ -53,15 +54,23 @@ export async function action({ request }: ActionFunctionArgs) {
     ? body.register!
     : "informal";
 
-  const examples = (body.exampleEn ?? "").trim()
-    ? [
-        {
-          register: "neutral",
-          en: body.exampleEn!.trim(),
-          idText: (body.exampleId ?? "").trim() || "(belum ada terjemahan)",
-        },
-      ]
-    : [];
+  // Contoh: array 3–5 dari Explore; fallback ke 1 contoh lama (exampleEn/exampleId).
+  const fromList = (body.examples ?? [])
+    .map((e) => ({ en: (e?.en ?? "").trim(), id: (e?.id ?? "").trim() }))
+    .filter((e) => e.en)
+    .slice(0, 5)
+    .map((e) => ({ register: "neutral", en: e.en, idText: e.id || "(belum ada terjemahan)" }));
+  const examples = fromList.length
+    ? fromList
+    : (body.exampleEn ?? "").trim()
+      ? [
+          {
+            register: "neutral",
+            en: body.exampleEn!.trim(),
+            idText: (body.exampleId ?? "").trim() || "(belum ada terjemahan)",
+          },
+        ]
+      : [];
 
   // Sudah ada? Tambahkan contoh baru ke item lama (kalau ada), jangan duplikat.
   const existingId = await findItemIdByText(text);

@@ -99,27 +99,39 @@ export default function Translate() {
     setSaved(false);
   };
 
-  const loadUsage = async () => {
-    if (usageBusy || !result) return;
+  // Cara baca + contoh dimuat OTOMATIS begitu hasil terjemahan muncul — tanpa klik.
+  const usageKey = useRef("");
+  useEffect(() => {
+    if (!result) return;
+    const english = (from === "en" ? text : result.translation ?? "").trim();
+    if (!english) return;
+    const key = `${from}:${english.slice(0, 300)}`;
+    if (usageKey.current === key) return;
+    usageKey.current = key;
+    let alive = true;
     setUsageBusy(true);
-    try {
-      const res = await fetch("/api/usage-examples", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          text: text.trim().slice(0, 300),
-          direction: from === "en" ? "en2id" : "id2en",
-        }),
-      });
-      const data = await res.json();
-      if (data.result) setUsage(data.result);
-      else toast(data.error ?? "Gagal memuat contoh");
-    } catch {
-      toast("Gagal memuat contoh");
-    } finally {
-      setUsageBusy(false);
-    }
-  };
+    void (async () => {
+      try {
+        const res = await fetch("/api/usage-examples", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            text: english.slice(0, 300),
+            direction: from === "en" ? "en2id" : "id2en",
+          }),
+        });
+        const data = await res.json();
+        if (alive && data.result) setUsage(data.result);
+      } catch {
+        /* diam — cara baca bersifat opsional */
+      } finally {
+        if (alive) setUsageBusy(false);
+      }
+    })();
+    return () => {
+      alive = false;
+    };
+  }, [result, from, text]);
 
   const speak = (s: string, lang: string) => {
     if (typeof window === "undefined" || !window.speechSynthesis) return;
@@ -153,7 +165,8 @@ export default function Translate() {
     }
   };
 
-  const translatedToEn = from === "id"; // hasil di sisi EN kalau arah ID→EN
+  // Teks di sisi Inggris: input (EN→ID) atau hasil terjemahan (ID→EN).
+  const englishSide = from === "en" ? text.trim() : result?.translation?.trim() ?? "";
 
   return (
     <div className="space-y-3">
@@ -232,15 +245,32 @@ export default function Translate() {
               <p className="whitespace-pre-wrap text-xl leading-relaxed font-medium">
                 {result.translation}
               </p>
+              {/* Cara baca — langsung tampil otomatis untuk teks Inggris */}
+              {englishSide ? (
+                <div className="mt-2 flex min-h-6 items-center gap-1.5">
+                  {usage ? (
+                    <>
+                      <span className="text-sm text-zinc-600 dark:text-zinc-400">
+                        {usage.pronunciation}
+                      </span>
+                      <button
+                        className="rounded-full p-0.5"
+                        onClick={() => speak(englishSide, "en-US")}
+                        title="Dengarkan"
+                        aria-label="Dengarkan"
+                      >
+                        <Volume2 className="h-4 w-4 text-teal-600 dark:text-teal-400" />
+                      </button>
+                    </>
+                  ) : (
+                    <span className="inline-flex items-center gap-1.5 text-xs text-zinc-400">
+                      <Loader2 className="h-3 w-3 animate-spin" /> memuat cara baca…
+                    </span>
+                  )}
+                </div>
+              ) : null}
+
               <div className="mt-3 flex items-center gap-1 border-t border-zinc-100 pt-2.5 dark:border-zinc-800">
-                <button
-                  className="btn-ghost min-h-9 px-2.5"
-                  onClick={() => speak(result.translation, from === "en" ? "id-ID" : "en-US")}
-                  title="Dengarkan"
-                  aria-label="Dengarkan"
-                >
-                  <Volume2 className="h-4 w-4" strokeWidth={1.75} />
-                </button>
                 <button
                   className="btn-ghost min-h-9 px-2.5"
                   onClick={() => {
@@ -271,53 +301,20 @@ export default function Translate() {
                 </button>
               </div>
 
-              {/* Cara baca + contoh penggunaan (AI) */}
-              <div className="mt-3 border-t border-zinc-100 pt-3 dark:border-zinc-800">
-                {usage ? (
-                  <div className="space-y-3">
-                    <div>
-                      <p className="label mb-1">Cara baca</p>
-                      <p className="inline-flex items-center gap-1.5 text-sm text-zinc-700 dark:text-zinc-300">
-                        {usage.pronunciation}
-                        <button
-                          onClick={() => speak(usage.pronunciation, "en-US")}
-                          title="Dengarkan cara baca"
-                          aria-label="Dengarkan cara baca"
-                        >
-                          <Volume2 className="h-4 w-4 text-teal-600 dark:text-teal-400" />
-                        </button>
-                      </p>
-                    </div>
-                    <div>
-                      <p className="label mb-1">Contoh penggunaan</p>
-                      <ul className="space-y-2">
-                        {usage.examples.map((ex, i) => (
-                          <li key={i} className="text-sm">
-                            <span className="block text-zinc-800 dark:text-zinc-200">{ex.en}</span>
-                            <span className="block text-xs text-zinc-500 dark:text-zinc-400">
-                              {ex.id}
-                            </span>
-                          </li>
-                        ))}
-                      </ul>
-                    </div>
-                  </div>
-                ) : (
-                  <button
-                    className="btn-secondary w-full text-xs"
-                    onClick={() => void loadUsage()}
-                    disabled={usageBusy}
-                  >
-                    {usageBusy ? (
-                      <>
-                        <Loader2 className="h-4 w-4 animate-spin" /> Menyusun contoh…
-                      </>
-                    ) : (
-                      "Contoh cara pakai & cara baca (AI)"
-                    )}
-                  </button>
-                )}
-              </div>
+              {/* Contoh penggunaan — ikut termuat otomatis */}
+              {usage?.examples.length ? (
+                <div className="mt-3 border-t border-zinc-100 pt-3 dark:border-zinc-800">
+                  <p className="label mb-1">Contoh penggunaan</p>
+                  <ul className="space-y-2">
+                    {usage.examples.map((ex, i) => (
+                      <li key={i} className="text-sm">
+                        <span className="block text-zinc-800 dark:text-zinc-200">{ex.en}</span>
+                        <span className="block text-xs text-zinc-500 dark:text-zinc-400">{ex.id}</span>
+                      </li>
+                    ))}
+                  </ul>
+                </div>
+              ) : null}
             </>
           )}
         </div>

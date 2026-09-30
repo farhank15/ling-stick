@@ -123,6 +123,7 @@ export const exploreItems = sqliteTable(
     useWhenId: text("use_when_id"),
     exampleEn: text("example_en"),
     exampleId: text("example_id"),
+    examplesJson: text("examples_json"), // JSON {en,id}[] — 3–5 contoh kalimat
     hidden: integer("hidden").notNull().default(0),
     createdAt: integer("created_at").notNull(),
   },

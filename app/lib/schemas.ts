@@ -76,8 +76,10 @@ export const exploreOutputSchema = z.object({
         register: z.string().default("informal"),
         meaning_id: z.string().min(1),
         use_when_id: z.string().default(""),
-        example_en: z.string().min(1),
-        example_id: z.string().min(1),
+        examples: z
+          .array(z.object({ en: z.string().min(1), id: z.string().min(1) }))
+          .min(3)
+          .max(5),
       }),
     )
     .min(1)

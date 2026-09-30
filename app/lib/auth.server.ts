@@ -1,6 +1,6 @@
 import { eq, lt } from "drizzle-orm";
 import { createCookie, redirect } from "react-router";
-import { db } from "./db/client.server";
+import { db, ensureDbReady } from "./db/client.server";
 import { sessions } from "./db/schema";
 import { env } from "./env.server";
 import { randomToken } from "./utils.shared";
@@ -17,6 +17,8 @@ const cookie = createCookie(COOKIE_NAME, {
 });
 
 export async function requireUser(request: Request): Promise<string> {
+  // Cold start (Vercel): tunggu migrasi DB selesai sebelum query pertama.
+  await ensureDbReady();
   const sid = await cookie.parse(request.headers.get("Cookie"));
   if (typeof sid !== "string" || !sid) {
     throw redirect("/login", 303);
@@ -44,6 +46,7 @@ export async function isAuthenticated(request: Request): Promise<boolean> {
 }
 
 export async function login(password: string): Promise<string | null> {
+  await ensureDbReady();
   if (!env.APP_PASSWORD) {
     return "APP_PASSWORD belum diset di .env";
   }

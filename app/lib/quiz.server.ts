@@ -210,28 +210,25 @@ export async function answerQuestion(day: string, index: number, correct: boolea
   const questions = JSON.parse(set.questions) as QuizQuestion[];
   const order = JSON.parse(set.order) as number[];
 
-  db.transaction((tx) => {
-    tx.insert(quizAnswers)
+  await db.transaction(async (tx) => {
+    await tx.insert(quizAnswers)
       .values({ setId: set.id, day, questionIndex: index, itemId: questions[index]?.itemId ?? 0, correct: correct ? 1 : 0, answeredAt: Date.now() })
-      .onConflictDoNothing()
-      .run();
-    tx.update(quizSets)
+      .onConflictDoNothing();
+    await tx.update(quizSets)
       .set({
         done: set.done + 1,
         correct: set.correct + (correct ? 1 : 0),
       })
-      .where(eq(quizSets.id, set.id))
-      .run();
+      .where(eq(quizSets.id, set.id));
 
     if (!correct) {
       // Selipkan ulang soal yang salah ±5 posisi dari posisi sekarang.
       const reinsertAt = Math.min(order.length, index + 1 + 4 + Math.floor(Math.random() * 3));
       const nextOrder = [...order];
       nextOrder.splice(reinsertAt, 0, index);
-      tx.update(quizSets)
+      await tx.update(quizSets)
         .set({ order: JSON.stringify(nextOrder) })
-        .where(eq(quizSets.id, set.id))
-        .run();
+        .where(eq(quizSets.id, set.id));
     }
   });
 

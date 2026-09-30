@@ -23,7 +23,7 @@ Lengkap: detail & arsitektur ada di [BLUEPRINT.md](./BLUEPRINT.md).
 
 ## Stack
 
-React Router v7 (framework mode) · TypeScript · Tailwind CSS v4 · SQLite (better-sqlite3)
+React Router v7 (framework mode) · TypeScript · Tailwind CSS v4 · Turso/libSQL (drizzle-orm)
 + Drizzle ORM · FTS5 · ts-fsrs · Poolside (OpenAI-compatible) · Lara Translate · Zod.
 
 ## Setup

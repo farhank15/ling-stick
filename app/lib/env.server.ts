@@ -1,6 +1,5 @@
 import fs from "node:fs";
 import path from "node:path";
-
 // Loader .env ringan (tanpa dependency) — jalan untuk `npm run dev` maupun `npm start`.
 // Nilai process.env yang sudah ada selalu menang.
 function loadDotEnv(file = ".env") {
@@ -38,6 +37,7 @@ function int(key: string, fallback: number): number {
 export const env = {
   APP_PASSWORD: str("APP_PASSWORD"),
   DATABASE_URL: str("DATABASE_URL", "file:./data/app.db"),
+  DATABASE_AUTH_TOKEN: str("DATABASE_AUTH_TOKEN"),
   // LLM utama: Groq (cepat) → fallback Poolside
   GROQ_API_KEY: str("GROQ_API_KEY"),
   GROQ_BASE_URL: str("GROQ_BASE_URL", "https://api.groq.com/openai/v1"),
@@ -54,9 +54,6 @@ export const env = {
   SESSION_TTL_DAYS: int("SESSION_TTL_DAYS", 30),
 };
 
-export function resolveDbPath(databaseUrl: string): string {
-  const raw = databaseUrl.replace(/^file:/, "");
-  const p = path.resolve(process.cwd(), raw);
-  fs.mkdirSync(path.dirname(p), { recursive: true });
-  return p;
+export function isRemoteDb(url: string): boolean {
+  return !url.startsWith("file:");
 }

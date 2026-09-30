@@ -6,7 +6,7 @@ type UsageResult = { pronunciation: string; examples: { en: string; id: string }
 
 /**
  * Terjemah cepat di dashboard: auto-translate 0.8s, swap ala DeepL, tombol clear,
- * cara baca + tombol suara untuk hasil EN, link ke halaman Terjemah bawa teks.
+ * cara baca auto-tampil + tombol suara untuk hasil EN, link ke halaman Terjemah bawa teks.
  */
 export function QuickTranslate() {
   const [text, setText] = useState("");
@@ -17,6 +17,7 @@ export function QuickTranslate() {
   const [error, setError] = useState<string | null>(null);
   const debounce = useRef<ReturnType<typeof setTimeout> | null>(null);
   const seq = useRef(0);
+  const pronKey = useRef("");
 
   useEffect(() => {
     if (debounce.current) clearTimeout(debounce.current);
@@ -83,24 +84,40 @@ export function QuickTranslate() {
     setError(null);
   };
 
-  // Cara baca + contoh via LLM (untuk hasil EN, atau input EN sebelum diswap).
-  const loadPron = async () => {
-    if (pron) return;
-    try {
-      const res = await fetch("/api/usage-examples", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          text: (from === "en" ? text : result?.translation ?? "").trim().slice(0, 300),
-          direction: from === "en" ? "en2id" : "id2en",
-        }),
-      });
-      const data = await res.json();
-      if (data.result?.pronunciation) setPron(data.result.pronunciation);
-    } catch {
-      /* diam */
-    }
-  };
+  const shown = result && !busy ? result.translation : null;
+
+  // Cara baca dimuat OTOMATIS untuk teks di sisi Inggris — tanpa klik.
+  // Dipicu saat hasil terjemahan muncul supaya tidak fetch di tiap ketikan.
+  const englishSide = from === "en" ? text.trim() : shown?.trim() ?? "";
+  useEffect(() => {
+    if (!shown) return;
+    const english = (from === "en" ? text : shown).trim();
+    if (!english) return;
+    const key = `${from}:${english.slice(0, 300)}`;
+    if (pronKey.current === key) return;
+    pronKey.current = key;
+    setPron(null);
+    let alive = true;
+    void (async () => {
+      try {
+        const res = await fetch("/api/usage-examples", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            text: english.slice(0, 300),
+            direction: from === "en" ? "en2id" : "id2en",
+          }),
+        });
+        const data = await res.json();
+        if (alive && data.result?.pronunciation) setPron(data.result.pronunciation);
+      } catch {
+        /* diam — cara baca bersifat opsional */
+      }
+    })();
+    return () => {
+      alive = false;
+    };
+  }, [shown, from, text]);
 
   const speak = (s: string, lang: string) => {
     if (typeof window === "undefined" || !window.speechSynthesis) return;
@@ -109,9 +126,6 @@ export function QuickTranslate() {
     window.speechSynthesis.cancel();
     window.speechSynthesis.speak(u);
   };
-
-  const englishSide = from === "en" ? text.trim() : result?.translation?.trim() ?? "";
-  const shown = result && !busy ? result.translation : null;
 
   return (
     <section className="card">
@@ -178,24 +192,23 @@ export function QuickTranslate() {
         <div className="mt-2 rounded-xl bg-zinc-50 p-3 dark:bg-zinc-800/60">
           <p className="whitespace-pre-wrap text-sm">{shown}</p>
           {englishSide ? (
-            <button
-              className="mt-1.5 inline-flex items-center gap-1 text-[11px] text-teal-700 hover:underline dark:text-teal-400"
-              onClick={async () => {
-                await loadPron();
-                setPron((p) => p ?? null);
-              }}
-              title="Tampilkan cara baca"
-            >
-              <Volume2 className="h-3.5 w-3.5" /> cara baca
-            </button>
-          ) : null}
-          {pron ? (
-            <p className="mt-1 inline-flex items-center gap-1.5 text-xs text-zinc-600 dark:text-zinc-400">
-              {pron}
-              <button onClick={() => speak(englishSide, "en-US")} aria-label="Dengarkan">
-                <Volume2 className="h-3.5 w-3.5 text-teal-600 dark:text-teal-400" />
-              </button>
-            </p>
+            <div className="mt-1 flex min-h-5 items-center gap-1.5">
+              {pron ? (
+                <>
+                  <span className="text-xs text-zinc-600 dark:text-zinc-400">{pron}</span>
+                  <button
+                    className="rounded-full p-0.5"
+                    onClick={() => speak(englishSide, "en-US")}
+                    title="Dengarkan"
+                    aria-label="Dengarkan"
+                  >
+                    <Volume2 className="h-3.5 w-3.5 text-teal-600 dark:text-teal-400" />
+                  </button>
+                </>
+              ) : (
+                <span className="text-[11px] text-zinc-400">memuat cara baca…</span>
+              )}
+            </div>
           ) : null}
         </div>
       ) : null}

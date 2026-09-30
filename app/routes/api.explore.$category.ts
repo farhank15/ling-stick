@@ -28,8 +28,7 @@ export async function loader({ request, params }: LoaderFunctionArgs) {
           register: e.register,
           meaningId: e.meaning_id,
           useWhenId: e.use_when_id ?? "",
-          exampleEn: e.example_en,
-          exampleId: e.example_id,
+          examplesJson: JSON.stringify(e.examples ?? []),
         });
       }
       rows = await getExploreCategory(category);
