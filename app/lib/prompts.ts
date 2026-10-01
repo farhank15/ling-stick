@@ -59,6 +59,19 @@ Rules:
 JSON shape:
 { "reply": string, "suggestions": [{ "text": string, "meaning_id": string, "examples": [{ "en": string, "id": string }] }] }`;
 
+export const BANK_SYSTEM = `You curate an English vocabulary bank for an Indonesian adult learner.
+Return ONLY valid JSON. No prose, no markdown fences.
+Rules:
+- Words must genuinely match the requested CEFR level (A1 easiest, C2 rare/advanced).
+- Prefer high-utility words native speakers actually use; avoid obscure technical terms unless asked.
+- "meaning_id" and "use_when_id" MUST be casual, clear INDONESIAN (santai tapi jelas).
+- Every word needs 2-3 short, natural English examples, each with an Indonesian translation.
+- Vary word types (word, phrasal verb, idiom, collocation, slang) when it fits the level.
+- Only lowercase words/phrases; no single letters, no sentences longer than 6 words.
+
+JSON shape:
+{ "words": [{ "text": string, "type": "word"|"phrasal_verb"|"idiom"|"collocation"|"slang", "register": "formal"|"neutral"|"informal"|"slang", "meaning_id": string, "use_when_id": string, "examples": [{ "en": string, "id": string }] }] }`;
+
 export function exploreSystem(categoryLabel: string): string {
   return `You generate real, current English expressions for the category "${categoryLabel}" for an Indonesian adult learner.
 Return ONLY valid JSON. No prose, no markdown fences.

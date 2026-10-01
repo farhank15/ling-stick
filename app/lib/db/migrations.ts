@@ -125,7 +125,8 @@ export const MIGRATIONS: string[] = [
 
   CREATE TABLE IF NOT EXISTS quiz_sets (
     id         INTEGER PRIMARY KEY,
-    day        TEXT NOT NULL UNIQUE,
+    day        TEXT NOT NULL,
+    mode       TEXT NOT NULL DEFAULT 'daily',
     title      TEXT NOT NULL,
     questions  TEXT NOT NULL,
     order_json TEXT NOT NULL,
@@ -133,7 +134,8 @@ export const MIGRATIONS: string[] = [
     done       INTEGER NOT NULL DEFAULT 0,
     correct    INTEGER NOT NULL DEFAULT 0,
     completed  INTEGER NOT NULL DEFAULT 0,
-    created_at INTEGER NOT NULL
+    created_at INTEGER NOT NULL,
+    UNIQUE(day, mode)
   );
 
   CREATE TABLE IF NOT EXISTS chat_sessions (
@@ -163,6 +165,24 @@ export const MIGRATIONS: string[] = [
     answered_at    INTEGER NOT NULL,
     UNIQUE(set_id, question_index)
   );
+
+  CREATE TABLE IF NOT EXISTS wordbank (
+    id          INTEGER PRIMARY KEY,
+    text        TEXT NOT NULL,
+    text_norm   TEXT NOT NULL UNIQUE,
+    type        TEXT NOT NULL DEFAULT 'word',
+    register    TEXT NOT NULL DEFAULT 'neutral',
+    cefr        TEXT NOT NULL DEFAULT 'B1',
+    meaning_id  TEXT NOT NULL,
+    use_when_id TEXT,
+    examples_json TEXT NOT NULL DEFAULT '[]',
+    status      TEXT NOT NULL DEFAULT 'new',
+    item_id     INTEGER,
+    source      TEXT NOT NULL DEFAULT 'seed',
+    created_at  INTEGER NOT NULL
+  );
+  CREATE INDEX IF NOT EXISTS wordbank_cefr_idx ON wordbank(cefr);
+  CREATE INDEX IF NOT EXISTS wordbank_status_idx ON wordbank(status);
   `,
   // FTS5 — jalan setelah tabel items ada. Turso mendukung FTS5.
   `
@@ -197,6 +217,62 @@ const TOLERANT_MIGRATIONS: string[] = [
   `ALTER TABLE explore_items ADD COLUMN examples_json TEXT`,
 ];
 
+/** Seed awal Bank Kata — jalan sekali (skip kalau bank sudah berisi). */
+const SEED_BANK: {
+  text: string;
+  type: string;
+  register: string;
+  cefr: string;
+  meaning: string;
+  useWhen: string;
+  examples: { en: string; id: string }[];
+}[] = [
+  { text: "eat", type: "word", register: "neutral", cefr: "A1", meaning: "makan", useWhen: "kapan pun bahas makanan", examples: [{ en: "I eat rice every day.", id: "Aku makan nasi tiap hari." }, { en: "Let's eat something.", id: "Kita makan sesuatu yuk." }] },
+  { text: "sleep", type: "word", register: "neutral", cefr: "A1", meaning: "tidur", useWhen: "bahas istirahat", examples: [{ en: "I sleep at 10 pm.", id: "Aku tidur jam 10 malam." }, { en: "Did you sleep well?", id: "Tidurmu nyenyak?" }] },
+  { text: "friend", type: "word", register: "neutral", cefr: "A1", meaning: "teman", useWhen: "bahas relasi sosial", examples: [{ en: "He is my best friend.", id: "Dia sahabatku." }, { en: "I'm meeting a friend later.", id: "Aku ketemu teman nanti." }] },
+  { text: "water", type: "word", register: "neutral", cefr: "A1", meaning: "air", useWhen: "kapan pun", examples: [{ en: "Can I have some water?", id: "Boleh minta air?" }, { en: "Drink more water.", id: "Minum airnya ditambah." }] },
+  { text: "borrow", type: "word", register: "neutral", cefr: "A2", meaning: "pinjam (dari orang)", useWhen: "bedain sama 'lend' yang kasih pinjam", examples: [{ en: "Can I borrow your pen?", id: "Boleh pinjam pulpenmu?" }, { en: "I borrowed a book from the library.", id: "Aku pinjam buku dari perpustakaan." }] },
+  { text: "cheap", type: "word", register: "neutral", cefr: "A2", meaning: "murah", useWhen: "bahas harga", examples: [{ en: "This shirt is cheap.", id: "Baju ini murah." }, { en: "Food is cheap here.", id: "Makanan di sini murah." }] },
+  { text: "hurry up", type: "phrasal_verb", register: "informal", cefr: "A2", meaning: "cepatan / buruan", useWhen: "suruh orang ngebut, santai", examples: [{ en: "Hurry up, we're late!", id: "Buruan, kita telat!" }, { en: "Hurry up, the movie starts soon.", id: "Cepatan, filmnya mau mulai." }] },
+  { text: "weather", type: "word", register: "neutral", cefr: "A2", meaning: "cuaca", useWhen: "small talk klasik", examples: [{ en: "The weather is nice today.", id: "Cuacanya enak hari ini." }, { en: "What's the weather like there?", id: "Cuaca di sana gimana?" }] },
+  { text: "afford", type: "word", register: "neutral", cefr: "B1", meaning: "cukup dana buat beli", useWhen: "sering pakai 'can't afford'", examples: [{ en: "I can't afford a new phone.", id: "Aku gak mampu beli HP baru." }, { en: "We can afford a short trip.", id: "Kita sanggup dana liburan singkat." }] },
+  { text: "reliable", type: "word", register: "neutral", cefr: "B1", meaning: "bisa diandalkan", useWhen: "puji orang/barang", examples: [{ en: "She's a reliable friend.", id: "Dia teman yang bisa diandalkan." }, { en: "This car is reliable.", id: "Mobil ini awet dan bisa diandalkan." }] },
+  { text: "look forward to", type: "phrasal_verb", register: "neutral", cefr: "B1", meaning: "nggak sabar nunggu sesuatu", useWhen: "email formal juga aman; diikuti kata kerja -ing", examples: [{ en: "I look forward to seeing you.", id: "Aku nggak sabar ketemu kamu." }, { en: "I'm looking forward to the weekend.", id: "Aku nggak sabar nunggu weekend." }] },
+  { text: "on purpose", type: "idiom", register: "informal", cefr: "B1", meaning: "sengaja", useWhen: "bahas niat", examples: [{ en: "He did it on purpose.", id: "Dia nglakuin itu sengaja." }, { en: "I didn't break it on purpose.", id: "Aku gak sengaja ngerusaknya." }] },
+  { text: "come across", type: "phrasal_verb", register: "neutral", cefr: "B2", meaning: "nggak sengaja nemu", useWhen: "nemu sesuatu pas lagi ngelakuin hal lain", examples: [{ en: "I came across an old photo.", id: "Aku nggak sengaja nemu foto lama." }, { en: "You might come across this word often.", id: "Kamu bakal sering nemu kata ini." }] },
+  { text: "inevitable", type: "word", register: "formal", cefr: "B2", meaning: "gak bisa dihindari", useWhen: "bahas hal pasti terjadi", examples: [{ en: "Change is inevitable.", id: "Perubahan itu gak bisa dihindari." }, { en: "The delay was inevitable.", id: "Keterlambatannya udah pasti terjadi." }] },
+  { text: "put off", type: "phrasal_verb", register: "neutral", cefr: "B2", meaning: "menunda", useWhen: "nunda kerjaan (jangan ditiru terus)", examples: [{ en: "Don't put off your homework.", id: "Jangan nunda PR-mu." }, { en: "We put off the meeting to Friday.", id: "Kita nunda meetingnya ke Jumat." }] },
+  { text: "strike a balance", type: "collocation", register: "formal", cefr: "B2", meaning: "nemuin titik tengah antara dua hal", useWhen: "work-life, keputusan", examples: [{ en: "Try to strike a balance between work and rest.", id: "Coba cari keseimbangan antara kerja dan istirahat." }, { en: "The plan strikes a balance between cost and quality.", id: "Rencananya seimbang antara biaya dan kualitas." }] },
+  { text: "get carried away", type: "idiom", register: "informal", cefr: "C1", meaning: "kebawa suasana sampe berlebihan", useWhen: "shopping, ngomong, kerja", examples: [{ en: "I got carried away shopping.", id: "Aku kebawa suasana sampe belanja berlebihan." }, { en: "Sorry, I got carried away.", id: "Maaf, aku kebablasan ngomongnya." }] },
+  { text: "prudent", type: "word", register: "formal", cefr: "C1", meaning: "bijak & hati-hati (dalam keputusan)", useWhen: "teks formal, laporan, berita", examples: [{ en: "It's prudent to save money.", id: "Bijak kalau nyimpan duit." }, { en: "A prudent decision saved the company.", id: "Keputusan yang bijak nyelametin perusahaan." }] },
+  { text: "hindsight", type: "word", register: "neutral", cefr: "C1", meaning: "pandangan belakang — sadar setelah kejadian", useWhen: "idiom 'in hindsight' (kalau dipikir-pikir)", examples: [{ en: "In hindsight, it was a mistake.", id: "Kalau dipikir-pikir, itu kesalahan." }, { en: "With hindsight, I'd do it differently.", id: "Dengan sadar setelahnya, aku bakal beda cara." }] },
+  { text: "quintessential", type: "word", register: "formal", cefr: "C2", meaning: "contoh paling khas dari sesuatu", useWhen: "tulisan sastra/jurnalistik", examples: [{ en: "She's the quintessential New Yorker.", id: "Dia contoh paling khas orang New York." }, { en: "This dish is quintessential Italian food.", id: "Masakan ini adalah makanan Italia yang paling khas." }] },
+  { text: "ubiquitous", type: "word", register: "formal", cefr: "C2", meaning: "ada di mana-mana", useWhen: "esai, berita teknologi", examples: [{ en: "Smartphones are ubiquitous.", id: "HP pintar ada di mana-mana." }, { en: "The logo is ubiquitous in the city.", id: "Logonya ada dimana-mana di kota ini." }] },
+];
+
+async function seedWordbank(client: Client): Promise<void> {
+  const cnt = await client.execute("SELECT COUNT(*) AS c FROM wordbank");
+  if (Number(cnt.rows[0]?.c ?? 0) > 0) return;
+  const now = Date.now();
+  for (const w of SEED_BANK) {
+    await client.execute({
+      sql: `INSERT INTO wordbank (text, text_norm, type, register, cefr, meaning_id, use_when_id, examples_json, status, source, created_at)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, 'new', 'seed', ?)`,
+      args: [
+        w.text,
+        w.text.toLowerCase(),
+        w.type,
+        w.register,
+        w.cefr,
+        w.meaning,
+        w.useWhen,
+        JSON.stringify(w.examples),
+        now,
+      ],
+    });
+  }
+}
+
 /** Jalankan semua migrasi via libsql (async). Sekali per proses. */
 export async function runMigrations(client: Client): Promise<void> {
   for (const ddl of MIGRATIONS) {
@@ -209,4 +285,33 @@ export async function runMigrations(client: Client): Promise<void> {
       /* kolom sudah ada — abaikan */
     }
   }
+
+  // Rebuild quiz_sets jika kolom mode belum ada (UNIQUE(day) lama → UNIQUE(day, mode)).
+  const cols = await client.execute("PRAGMA table_info(quiz_sets)");
+  const hasMode = cols.rows.some((r) => r.name === "mode");
+  if (!hasMode) {
+    await client.executeMultiple(`
+      ALTER TABLE quiz_sets RENAME TO quiz_sets_legacy;
+      CREATE TABLE quiz_sets (
+        id         INTEGER PRIMARY KEY,
+        day        TEXT NOT NULL,
+        mode       TEXT NOT NULL DEFAULT 'daily',
+        title      TEXT NOT NULL,
+        questions  TEXT NOT NULL,
+        order_json TEXT NOT NULL,
+        total      INTEGER NOT NULL,
+        done       INTEGER NOT NULL DEFAULT 0,
+        correct    INTEGER NOT NULL DEFAULT 0,
+        completed  INTEGER NOT NULL DEFAULT 0,
+        created_at INTEGER NOT NULL,
+        UNIQUE(day, mode)
+      );
+      INSERT INTO quiz_sets (id, day, mode, title, questions, order_json, total, done, correct, completed, created_at)
+        SELECT id, day, 'daily', title, questions, order_json, total, done, correct, completed, created_at FROM quiz_sets_legacy;
+      DROP TABLE quiz_sets_legacy;
+    `);
+  }
+
+  // Seed awal Bank Kata sekali di awal.
+  await seedWordbank(client);
 }

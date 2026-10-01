@@ -82,7 +82,7 @@ function extractJsonText(raw: string): string {
   return (fence ? fence[1] : raw).trim();
 }
 
-async function chatJson<T>(
+export async function chatJson<T>(
   system: string,
   user: string,
   schema: { safeParse: (v: unknown) => { success: boolean; data?: T; error?: unknown } },

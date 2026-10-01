@@ -3,15 +3,26 @@ import { requireUser } from "~/lib/auth.server";
 import {
   answerQuestion,
   getHistory,
+  getSetById,
+  getSetForDay,
   getTodaySet,
   pendingToday,
+  localDayStr,
+  createExtraSet,
+  answerQuestionById,
+  type QuizMode,
   type QuizQuestion,
 } from "~/lib/quiz.server";
 
 /**
- * GET /api/quiz            → set hari ini (dengan progres tersimpan)
- * GET /api/quiz?status=1   → ringkasan untuk bel notifikasi
- * GET /api/quiz?history=1  → riwayat set latihan
+ * GET /api/quiz                → set daily hari ini
+ * GET /api/quiz?mode=typing    → set harian per mode
+ * GET /api/quiz?status=1       → ringkasan untuk bel notifikasi
+ * GET /api/quiz?history=1      → riwayat set latihan
+ * POST { setId, index, correct }        → jawab soal (semua mode)
+ * POST { index, correct }               → kompat: jawab set daily hari ini
+ * POST { action: "known", itemId }      → tandai sudah hafal
+ * POST { action: "create", mode, count, level?, topic? } → generate set tambahan manual
  */
 export async function loader({ request }: LoaderFunctionArgs) {
   await requireUser(request);
@@ -27,13 +38,39 @@ export async function loader({ request }: LoaderFunctionArgs) {
     return Response.json({ history });
   }
 
-  const set = await getTodaySet();
-  if (!set) return Response.json({ questions: [], set: null });
+  const modeParam = url.searchParams.get("mode");
+  const level = url.searchParams.get("level") ?? undefined;
+  const mode: QuizMode = ["daily", "extra", "typing", "intens"].includes(modeParam ?? "")
+    ? (modeParam as QuizMode)
+    : "daily";
+  const setIdParam = url.searchParams.get("setId");
 
+  if (setIdParam) {
+    const set = await getSetById(Number(setIdParam));
+    if (!set) return Response.json({ questions: [], set: null });
+    return setResponse(set);
+  }
+
+  const set =
+    mode === "daily"
+      ? await getTodaySet()
+      : await getSetForDay(mode, localDayStr(), envLimit(mode), {
+          bankLevel: level,
+        });
+  if (!set) return Response.json({ questions: [], set: null });
+  return setResponse(set);
+}
+
+function envLimit(mode: QuizMode): number {
+  return mode === "intens" ? 25 : mode === "typing" ? 15 : 20;
+}
+
+function setResponse(set: NonNullable<Awaited<ReturnType<typeof getSetById>>>) {
   return Response.json({
     set: {
       id: set.id,
       day: set.day,
+      mode: set.mode,
       title: set.title,
       total: JSON.parse(set.order).length as number,
       done: set.done,
@@ -49,10 +86,16 @@ export async function loader({ request }: LoaderFunctionArgs) {
 export async function action({ request }: ActionFunctionArgs) {
   await requireUser(request);
   const body = (await request.json().catch(() => ({}))) as {
+    setId?: number;
     index?: number;
     correct?: boolean;
     action?: string;
     itemId?: number;
+    mode?: string;
+    count?: number;
+    level?: string;
+    topic?: string;
+    typed?: string;
   };
 
   if (body.action === "known" && Number.isInteger(body.itemId)) {
@@ -61,20 +104,42 @@ export async function action({ request }: ActionFunctionArgs) {
     return Response.json({ ok: true });
   }
 
-  const day = new Date(
-    new Date().toLocaleString("en-US", { timeZone: "Asia/Jakarta" }),
-  )
-    .toISOString()
-    .slice(0, 10);
+  if (body.action === "create") {
+    const mode = ["extra", "typing", "intens"].includes(body.mode ?? "")
+      ? (body.mode as Exclude<QuizMode, "daily">)
+      : "extra";
+    const count = Math.min(30, Math.max(5, Number(body.count) || 10));
+    const level = body.level && body.level !== "all" ? body.level : undefined;
+    const set = await createExtraSet(mode, count, { bankLevel: level });
+    if (!set) return Response.json({ error: "Tidak ada kosakata untuk dibuat soal" }, { status: 400 });
+    return Response.json({ ok: true, setId: set.id });
+  }
+
+  const day = localDayStr();
   if (!Number.isInteger(body.index) || typeof body.correct !== "boolean") {
     return Response.json({ error: "index & correct wajib" }, { status: 400 });
   }
+
+  if (Number.isInteger(body.setId)) {
+    const result = await answerQuestionById(body.setId!, body.index!, body.correct, body.typed);
+    if (!result.ok) return Response.json({ error: result.error }, { status: 400 });
+    return Response.json({
+      ok: true,
+      done: result.set.done,
+      correct: result.set.correct,
+      order: JSON.parse(result.set.order) as number[],
+      finished: result.finished,
+    });
+  }
+
+  // Kompatibilitas: tanpa setId → set daily hari ini.
   const result = await answerQuestion(day, body.index!, body.correct);
   if (!result.ok) return Response.json({ error: result.error }, { status: 400 });
   return Response.json({
     ok: true,
     done: result.set.done,
     correct: result.set.correct,
+    order: JSON.parse(result.set.order) as number[],
     finished: result.finished,
   });
 }

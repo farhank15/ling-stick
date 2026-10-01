@@ -67,6 +67,26 @@ export const checkSentenceOutputSchema = z.object({
 
 export type CheckSentenceOutput = z.infer<typeof checkSentenceOutputSchema>;
 
+export const bankWordSchema = z.object({
+  text: z.string().min(1).max(60),
+  type: z.enum(["word", "phrasal_verb", "idiom", "collocation", "slang"]).catch("word"),
+  register: z
+    .enum(["formal", "neutral", "informal", "slang"])
+    .catch("neutral"),
+  meaning_id: z.string().min(1),
+  use_when_id: z.string().catch("").optional(),
+  examples: z
+    .array(z.object({ en: z.string().min(1), id: z.string().min(1) }))
+    .max(4)
+    .catch([]),
+});
+
+export const bankOutputSchema = z.object({
+  words: z.array(bankWordSchema).min(1).max(40),
+});
+
+export type BankOutput = z.infer<typeof bankOutputSchema>;
+
 export const exploreOutputSchema = z.object({
   expressions: z
     .array(

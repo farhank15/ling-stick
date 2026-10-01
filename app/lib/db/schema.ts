@@ -183,18 +183,23 @@ export const chatMessages = sqliteTable(
   (t) => [index("chat_messages_session_idx").on(t.sessionId)],
 );
 
-export const quizSets = sqliteTable("quiz_sets", {
-  id: integer("id").primaryKey({ autoIncrement: true }),
-  day: text("day").notNull().unique(), // YYYY-MM-DD
-  title: text("title").notNull(),
-  questions: text("questions").notNull(), // JSON QuizQuestion[]
-  order: text("order_json").notNull(), // JSON number[] urutan soal (bisa bertambah)
-  total: integer("total").notNull(),
-  done: integer("done").notNull().default(0),
-  correct: integer("correct").notNull().default(0),
-  completed: integer("completed").notNull().default(0),
-  createdAt: integer("created_at").notNull(),
-});
+export const quizSets = sqliteTable(
+  "quiz_sets",
+  {
+    id: integer("id").primaryKey({ autoIncrement: true }),
+    day: text("day").notNull(), // YYYY-MM-DD
+    mode: text("mode").notNull().default("daily"), // daily|extra|typing|intens
+    title: text("title").notNull(),
+    questions: text("questions").notNull(), // JSON QuizQuestion[]
+    order: text("order_json").notNull(), // JSON number[] urutan soal (bisa bertambah)
+    total: integer("total").notNull(),
+    done: integer("done").notNull().default(0),
+    correct: integer("correct").notNull().default(0),
+    completed: integer("completed").notNull().default(0),
+    createdAt: integer("created_at").notNull(),
+  },
+  (t) => [uniqueIndex("quiz_sets_day_mode_uq").on(t.day, t.mode)],
+);
 
 export const quizAnswers = sqliteTable(
   "quiz_answers",
@@ -208,4 +213,25 @@ export const quizAnswers = sqliteTable(
     answeredAt: integer("answered_at").notNull(),
   },
   (t) => [uniqueIndex("quiz_answers_set_idx_uq").on(t.setId, t.questionIndex)],
+);
+
+/** Bank Kata: katalog kosakata per level CEFR + status belajar. */
+export const wordbank = sqliteTable(
+  "wordbank",
+  {
+    id: integer("id").primaryKey({ autoIncrement: true }),
+    text: text("text").notNull(),
+    textNorm: text("text_norm").notNull().unique(),
+    type: text("type").notNull().default("word"),
+    register: text("register").notNull().default("neutral"),
+    cefr: text("cefr").notNull().default("B1"), // A1|A2|B1|B2|C1|C2
+    meaningId: text("meaning_id").notNull(),
+    useWhenId: text("use_when_id"),
+    examplesJson: text("examples_json").notNull().default("[]"),
+    status: text("status").notNull().default("new"), // new|learning|known
+    itemId: integer("item_id"),
+    source: text("source").notNull().default("seed"),
+    createdAt: integer("created_at").notNull(),
+  },
+  (t) => [index("wordbank_cefr_idx").on(t.cefr), index("wordbank_status_idx").on(t.status)],
 );

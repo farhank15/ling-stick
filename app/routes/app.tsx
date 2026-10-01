@@ -16,6 +16,7 @@ import {
   Plus,
   Repeat,
   Settings,
+  BookMarked,
   type LucideIcon,
 } from "lucide-react";
 import { requireUser } from "~/lib/auth.server";
@@ -28,6 +29,7 @@ export async function loader({ request }: LoaderFunctionArgs) {
 const NAV: { to: string; label: string; icon: LucideIcon }[] = [
   { to: "/", label: "Tambah", icon: Plus },
   { to: "/library", label: "Library", icon: Library },
+  { to: "/bank", label: "Bank", icon: BookMarked },
   { to: "/chat", label: "Chat", icon: MessageCircle },
   { to: "/review", label: "Review", icon: Repeat },
   { to: "/explore", label: "Explore", icon: Compass },
@@ -181,7 +183,7 @@ export default function AppLayout() {
 
       {/* Floating bottom nav — bar melayang rounded + pill di item aktif */}
       <nav className="fixed inset-x-0 bottom-0 z-30 px-4 pb-[calc(env(safe-area-inset-bottom)+12px)]">
-        <div className="mx-auto grid max-w-md grid-cols-5 gap-1 rounded-2xl border border-zinc-200/80 bg-white/90 p-1.5 shadow-lg shadow-zinc-900/5 backdrop-blur-md dark:border-zinc-800 dark:bg-zinc-900/90 dark:shadow-black/20">
+        <div className="mx-auto grid max-w-md grid-cols-6 gap-1 rounded-2xl border border-zinc-200/80 bg-white/90 p-1.5 shadow-lg shadow-zinc-900/5 backdrop-blur-md dark:border-zinc-800 dark:bg-zinc-900/90 dark:shadow-black/20">
           {NAV.map((n) => {
             const active = isActive(n.to);
             return (

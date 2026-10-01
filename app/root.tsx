@@ -9,8 +9,7 @@ export const links: LinksFunction = () => [
   { rel: "icon", href: "/lingstick.png", type: "image/png", sizes: "32x32" },
   {
     rel: "apple-touch-icon",
-    href: "/lingstick.png",
-    sizes: "180x180",
+    href: "/lingstick-reactangle.png",
   },
 ];
 
