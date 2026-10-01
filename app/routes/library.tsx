@@ -1,6 +1,6 @@
 import type { LoaderFunctionArgs, MetaFunction } from "react-router";
-import { Link, useLoaderData, useSearchParams } from "react-router";
-import { useEffect, useMemo, useState } from "react";
+import { Link, useLoaderData, useRevalidator, useSearchParams } from "react-router";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { BadgeCheck, CheckCircle2, Circle, Search, Trash2 } from "lucide-react";
 import { requireUser } from "~/lib/auth.server";
 import { getFacetCounts, listItems } from "~/lib/items.server";
@@ -120,6 +120,53 @@ export default function Library() {
     setSelected(new Set());
   }, [q, type, register, status]);
 
+  /* ── Swipe kartu: kanan = hafal, kiri = pelajari lagi ── */
+  const revalidator = useRevalidator();
+  const [swipeId, setSwipeId] = useState<number | null>(null);
+  const [swipeDx, setSwipeDx] = useState(0);
+  const swipeStartX = useRef(0);
+  const swiping = useRef(false);
+  const swipeMoved = useRef(false);
+
+  const swipeCommit = async (id: number, action: "known" | "learning") => {
+    try {
+      const res = await fetch("/api/review", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ itemId: id, action }),
+      });
+      if (!res.ok) throw new Error();
+      toast(action === "known" ? "Ditandai hafal" : "Dipelajari lagi");
+      navigator.vibrate?.(15);
+      revalidator.revalidate();
+    } catch {
+      toast("Gagal menyimpan");
+    }
+  };
+
+  const onRowSwipeStart = (id: number, clientX: number) => {
+    swipeStartX.current = clientX;
+    swiping.current = true;
+    swipeMoved.current = false;
+    setSwipeId(id);
+    setSwipeDx(0);
+  };
+  const onRowSwipeMove = (clientX: number) => {
+    if (!swiping.current) return;
+    const dx = clientX - swipeStartX.current;
+    if (Math.abs(dx) > 6) swipeMoved.current = true;
+    setSwipeDx(dx);
+  };
+  const onRowSwipeEnd = (id: number) => {
+    if (!swiping.current) return;
+    swiping.current = false;
+    const dx = swipeDx;
+    setSwipeDx(0);
+    setSwipeId(null);
+    if (dx > 90) void swipeCommit(id, "known");
+    else if (dx < -90) void swipeCommit(id, "learning");
+  };
+
   return (
     <div className="space-y-3">
       {/* Toolbar sticky: search + tab + chip filter — nggak ikut ke-scroll */}
@@ -138,23 +185,21 @@ export default function Library() {
         </div>
       </form>
 
-      {/* Tab status + dropdown filter — minimalis */}
-      <div className="flex items-center gap-2">
-        <div className="flex rounded-xl bg-zinc-100 p-0.5 dark:bg-zinc-900">
-          {STATUS_TABS.map((t) => (
-            <Link
-              key={`tab-${t.v}`}
-              to={buildUrl(params, "status", t.v)}
-              className={`rounded-lg px-2.5 py-1.5 text-xs font-medium transition-colors ${
-                status === t.v
-                  ? "bg-white text-zinc-900 shadow-sm dark:bg-zinc-800 dark:text-zinc-100"
-                  : "text-zinc-500 hover:text-zinc-700 dark:hover:text-zinc-300"
-              }`}
-            >
-              {t.label}
-            </Link>
-          ))}
-        </div>
+      {/* Tab status — segmented control full width (Belajar | Hafal | Semua) */}
+      <div className="grid w-full grid-cols-3 rounded-xl bg-zinc-100 p-0.5 dark:bg-zinc-900">
+        {STATUS_TABS.map((t) => (
+          <Link
+            key={`tab-${t.v}`}
+            to={buildUrl(params, "status", t.v)}
+            className={`rounded-lg px-2.5 py-1.5 text-center text-xs font-medium transition-colors ${
+              status === t.v
+                ? "bg-white text-zinc-900 shadow-sm dark:bg-zinc-800 dark:text-zinc-100"
+                : "text-zinc-500 hover:text-zinc-700 dark:hover:text-zinc-300"
+            }`}
+          >
+            {t.label}
+          </Link>
+        ))}
       </div>
 
       {/* Filter tipe + register — satu baris chip, scroll horizontal, ada count */}
@@ -208,27 +253,34 @@ export default function Library() {
         })}
       </div>
 
+        {/* Aksi massal — nempel di bawah chip filter, warna menyatu dgn tema */}
+        {selected.size > 0 ? (
+          <div className="flex items-center gap-2 rounded-xl bg-teal-600 px-3 py-2 text-sm text-white">
+            <span className="font-medium">{selected.size} dipilih</span>
+            <button
+              className="ml-auto rounded-lg bg-white/15 px-2.5 py-1.5 text-xs font-medium hover:bg-white/25"
+              disabled={busy}
+              onClick={() => void bulk("known")}
+            >
+              <BadgeCheck className="mr-1 inline h-3.5 w-3.5" /> Hafal
+            </button>
+            <button
+              className="rounded-lg bg-white/15 px-2.5 py-1.5 text-xs font-medium hover:bg-white/25"
+              disabled={busy}
+              onClick={() => void bulk("learning")}
+            >
+              Ulang
+            </button>
+            <button
+              className="rounded-lg bg-red-500/90 px-2.5 py-1.5 text-xs font-medium hover:bg-red-500"
+              disabled={busy}
+              onClick={() => setConfirmDelete(true)}
+            >
+              <Trash2 className="mr-1 inline h-3.5 w-3.5" /> Hapus
+            </button>
+          </div>
+        ) : null}
       </div>
-
-      {/* Aksi massal */}
-      {selected.size > 0 ? (
-        <div className="sticky top-16 z-10 flex items-center gap-2 rounded-xl bg-zinc-900 px-3 py-2 text-sm text-white dark:bg-zinc-100 dark:text-zinc-900">
-          <span className="font-medium">{selected.size} dipilih</span>
-          <button className="btn-secondary ml-auto min-h-9" disabled={busy} onClick={() => void bulk("known")}>
-            <BadgeCheck className="h-4 w-4" /> Hafal
-          </button>
-          <button className="btn-secondary min-h-9" disabled={busy} onClick={() => void bulk("learning")}>
-            Ulang
-          </button>
-          <button
-            className="btn-danger min-h-9"
-            disabled={busy}
-            onClick={() => setConfirmDelete(true)}
-          >
-            <Trash2 className="h-4 w-4" /> Hapus
-          </button>
-        </div>
-      ) : null}
 
       <ConfirmModal
         open={confirmDelete}
@@ -262,8 +314,32 @@ export default function Library() {
                   <Circle className="h-5 w-5" />
                 )}
               </button>
+              {/* Overlay swipe */}
+              <div
+                className="pointer-events-none absolute inset-0 z-10 flex items-center rounded-xl border-2 border-amber-400 bg-amber-50/95 px-4 dark:bg-amber-950/90"
+                style={{ opacity: swipeId === r.id && swipeDx < -10 ? Math.min(1, -swipeDx / 90) : 0 }}
+              >
+                <span className="rounded-lg bg-amber-500 px-2 py-1 text-[10px] font-bold text-white">
+                  PELAJARI LAGI
+                </span>
+              </div>
+              <div
+                className="pointer-events-none absolute inset-0 z-10 flex items-center justify-end rounded-xl border-2 border-teal-400 bg-teal-50/95 px-4 dark:bg-teal-950/90"
+                style={{ opacity: swipeId === r.id && swipeDx > 10 ? Math.min(1, swipeDx / 90) : 0 }}
+              >
+                <span className="rounded-lg bg-teal-600 px-2 py-1 text-[10px] font-bold text-white">
+                  HAFAL
+                </span>
+              </div>
               <Link
                 to={`/library/${r.id}`}
+                onClick={(e) => {
+                  if (swipeMoved.current) e.preventDefault();
+                }}
+                style={{
+                  transform: swipeId === r.id ? `translateX(${swipeDx}px)` : undefined,
+                  transition: swiping.current && swipeId === r.id ? "none" : "transform 160ms ease",
+                }}
                 className="card block py-3 pl-10 transition-colors hover:border-teal-500 dark:hover:border-teal-500"
               >
                 <div className="flex items-center justify-between gap-2">

@@ -1,5 +1,5 @@
 import { eq, sql } from "drizzle-orm";
-import { db } from "./db/client.server";
+import { db, getRawClient } from "./db/client.server";
 import { llmCache, llmUsage } from "./db/schema";
 import { env } from "./env.server";
 import {
@@ -75,6 +75,23 @@ function apiUrl(base: string, path: string): string {
 }
 
 class LlmError extends Error {}
+
+/**
+ * Rumah tangga llm_cache: buang entri >60 hari + sisakan 2000 terbaru.
+ * Dipanggil dengan peluang kecil tiap kali cache ditulis — biaya ~0, cache gak bengkak.
+ */
+export async function pruneLlmCache(): Promise<void> {
+  const client = getRawClient();
+  const cutoff = Date.now() - 60 * 86_400_000;
+  await client.execute({ sql: "DELETE FROM llm_cache WHERE created_at < ?", args: [cutoff] });
+  await client.execute({
+    sql: "DELETE FROM llm_cache WHERE key NOT IN (SELECT key FROM llm_cache ORDER BY created_at DESC LIMIT 2000)",
+  });
+}
+
+function maybePruneLlmCache() {
+  if (Math.random() < 0.05) void pruneLlmCache().catch(() => {});
+}
 
 function extractJsonText(raw: string): string {
   // Tahan kalau model membungkus JSON dalam ```json ... ```
@@ -155,6 +172,7 @@ export async function chatJson<T>(
               .insert(llmCache)
               .values({ key: cacheKey, response: JSON.stringify(data), createdAt: Date.now() })
               .onConflictDoNothing();
+            maybePruneLlmCache();
           }
           return { data, cached: false, provider: p.name };
         }
@@ -380,6 +398,7 @@ export async function llmTranslate(
         .insert(llmCache)
         .values({ key: cacheKey, response: JSON.stringify({ translation: out }), createdAt: Date.now() })
         .onConflictDoNothing();
+      maybePruneLlmCache();
       return { translation: out, cached: false };
     } catch (e) {
       lastError = e instanceof Error ? e.message : String(e);

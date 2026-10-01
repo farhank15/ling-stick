@@ -7,7 +7,6 @@ import {
   Layers,
   Loader2,
   Plus,
-  RotateCcw,
   Search,
   Sparkles,
   Volume2,
@@ -42,10 +41,7 @@ type Entry = {
 };
 type Stats = {
   byLevel: Record<string, number>;
-  byStatus: Record<string, number>;
   total: number;
-  learning: number;
-  known: number;
 };
 
 const LEVELS = ["A1", "A2", "B1", "B2", "C1", "C2"] as const;
@@ -68,29 +64,9 @@ const LEVEL_ACTIVE: Record<string, string> = {
   C2: "border-rose-500 bg-rose-50 dark:bg-rose-950/60",
 };
 
-const STATUS_OPTIONS = [
-  { v: "all", label: "Semua status" },
-  { v: "new", label: "Baru" },
-  { v: "learning", label: "Dipelajari" },
-  { v: "known", label: "Sudah tahu" },
-] as const;
-
-const STATUS_BADGE: Record<Entry["status"], { label: string; cls: string } | null> = {
-  learning: {
-    label: "Dipelajari",
-    cls: "bg-teal-100 text-teal-700 dark:bg-teal-950 dark:text-teal-300",
-  },
-  known: {
-    label: "Sudah tahu",
-    cls: "bg-zinc-100 text-zinc-500 dark:bg-zinc-800 dark:text-zinc-400",
-  },
-  new: null,
-};
-
 const ACTION_LABEL: Record<string, string> = {
-  learn: "Masuk daftar pelajari",
+  learn: "Masuk Library — siap dilatihan",
   know: "Ditandai sudah tahu",
-  reset: "Status direset",
 };
 
 export async function loader({ request }: { request: Request }) {
@@ -102,7 +78,6 @@ export default function BankPage() {
   const [entries, setEntries] = useState<Entry[]>([]);
   const [stats, setStats] = useState<Stats | null>(null);
   const [level, setLevel] = useState<string>("all");
-  const [statusFilter, setStatusFilter] = useState<string>("all");
   const [query, setQuery] = useState("");
   const [expanded, setExpanded] = useState<number | null>(null);
   const [loading, setLoading] = useState(true);
@@ -112,34 +87,24 @@ export default function BankPage() {
   const [genCount, setGenCount] = useState(10);
   const [genTopic, setGenTopic] = useState("");
   const [genBusy, setGenBusy] = useState(false);
-  const [statusOpen, setStatusOpen] = useState(false);
-  const statusRef = useRef<HTMLDivElement | null>(null);
   const toast = useToast();
 
-  // Tutup popover filter kalau tap di luar.
-  useEffect(() => {
-    if (!statusOpen) return;
-    const onDown = (e: MouseEvent | TouchEvent) => {
-      if (statusRef.current && !statusRef.current.contains(e.target as Node)) setStatusOpen(false);
-    };
-    document.addEventListener("mousedown", onDown);
-    document.addEventListener("touchstart", onDown);
-    return () => {
-      document.removeEventListener("mousedown", onDown);
-      document.removeEventListener("touchstart", onDown);
-    };
-  }, [statusOpen]);
+  // Swipe kiri/kanan per kartu
+  const [dragId, setDragId] = useState<number | null>(null);
+  const [drag, setDrag] = useState(0);
+  const dragStartX = useRef(0);
+  const dragging = useRef(false);
+  const moved = useRef(false);
 
-  const refresh = useCallback(async (nextLevel: string, nextStatus: string) => {
+  const refresh = useCallback(async (nextLevel: string) => {
     setLoading(true);
     try {
       const params = new URLSearchParams();
       if (nextLevel !== "all") params.set("cefr", nextLevel);
-      if (nextStatus !== "all") params.set("status", nextStatus);
       const r = await fetch(`/api/bank?${params.toString()}`);
       const d = await r.json();
       setEntries(d.entries ?? []);
-      setStats(d.stats ?? null);
+      setStats(d.stats ? { byLevel: d.stats.byLevel ?? {}, total: d.stats.total ?? 0 } : null);
     } catch {
       /* biarkan data lama */
     } finally {
@@ -148,10 +113,11 @@ export default function BankPage() {
   }, []);
 
   useEffect(() => {
-    refresh("all", "all");
+    refresh("all");
   }, [refresh]);
 
-  const setStatus = async (id: number, action: "learn" | "know" | "reset") => {
+  /** Aksi sukses → entri langsung hilang dari bank (udah pindah ke Library / ditandai tahu). */
+  const setStatus = async (id: number, action: "learn" | "know") => {
     setBusyId(id);
     try {
       const r = await fetch("/api/bank", {
@@ -161,35 +127,19 @@ export default function BankPage() {
       });
       const d = await r.json();
       if (!r.ok || !d.ok) throw new Error(d.error || "Gagal menyimpan");
-      setEntries((list) =>
-        list.map((e) =>
-          e.id === id
-            ? {
-                ...e,
-                status: action === "learn" ? ("learning" as const) : action === "know" ? ("known" as const) : ("new" as const),
-              }
-            : e,
-        ),
-      );
+      const done = entries.find((e) => e.id === id);
+      setEntries((list) => list.filter((e) => e.id !== id));
       setStats((s) =>
         s
           ? {
-              ...s,
-              learning:
-                action === "learn"
-                  ? s.learning + 1
-                  : action === "know" && s.learning > 0
-                    ? s.learning - 1
-                    : s.learning,
-              known:
-                action === "know"
-                  ? s.known + 1
-                  : action === "learn" && s.known > 0
-                    ? s.known - 1
-                    : s.known,
+              total: Math.max(0, s.total - 1),
+              byLevel: done
+                ? { ...s.byLevel, [done.cefr]: Math.max(0, (s.byLevel[done.cefr] ?? 1) - 1) }
+                : s.byLevel,
             }
           : s,
       );
+      navigator.vibrate?.(15);
       toast(ACTION_LABEL[action]);
     } catch (e) {
       toast(e instanceof Error ? e.message : "Gagal menyimpan");
@@ -210,11 +160,38 @@ export default function BankPage() {
       if (!r.ok || !d.ok) throw new Error(d.error || "Generate gagal");
       toast(`${d.added} kata baru masuk bank${d.skipped ? ` (${d.skipped} duplikat dilewati)` : ""}`);
       setGenOpen(false);
-      refresh(genLevel, statusFilter);
+      refresh(genLevel);
     } catch (e) {
       toast(e instanceof Error ? e.message : "Generate gagal");
     } finally {
       setGenBusy(false);
+    }
+  };
+
+  /* ── Swipe handlers ── */
+  const onSwipeStart = (id: number, clientX: number) => {
+    dragStartX.current = clientX;
+    dragging.current = true;
+    moved.current = false;
+    setDragId(id);
+    setDrag(0);
+  };
+  const onSwipeMove = (clientX: number) => {
+    if (!dragging.current) return;
+    const dx = clientX - dragStartX.current;
+    if (Math.abs(dx) > 6) moved.current = true;
+    setDrag(dx);
+  };
+  const onSwipeEnd = (id: number) => {
+    if (!dragging.current) return;
+    dragging.current = false;
+    const dx = drag;
+    setDrag(0);
+    setDragId(null);
+    if (dx < -90) {
+      void setStatus(id, "learn");
+    } else if (dx > 90) {
+      void setStatus(id, "know");
     }
   };
 
@@ -228,9 +205,7 @@ export default function BankPage() {
         <div>
           <h1 className="text-xl font-bold tracking-tight">Bank Kata</h1>
           <p className="text-xs text-zinc-500">
-            {stats
-              ? `${stats.total} kata · ${stats.learning} dipelajari · ${stats.known} sudah tahu`
-              : "Katalog kosakata per level CEFR"}
+            {stats ? `${stats.total} kata siap dipelajari` : "Katalog kosakata per level CEFR"}
           </p>
         </div>
         <button className="btn-primary gap-1.5 text-sm" onClick={() => setGenOpen((o) => !o)}>
@@ -291,7 +266,7 @@ export default function BankPage() {
         <button
           onClick={() => {
             setLevel("all");
-            refresh("all", statusFilter);
+            refresh("all");
           }}
           className={`flex shrink-0 items-center gap-1.5 rounded-full border px-3 py-1.5 text-xs font-semibold transition-colors ${
             level === "all"
@@ -309,7 +284,7 @@ export default function BankPage() {
             key={l}
             onClick={() => {
               setLevel(l);
-              refresh(l, statusFilter);
+              refresh(l);
             }}
             className={`flex shrink-0 items-center gap-1.5 rounded-full border px-3 py-1.5 text-xs font-semibold transition-colors ${
               level === l
@@ -325,54 +300,14 @@ export default function BankPage() {
         ))}
       </div>
 
-      <div className="flex items-center gap-2">
-        <div className="relative flex-1">
-          <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-zinc-400" />
-          <input
-            className="input-area pl-9 text-sm"
-            placeholder="Cari kata di bank…"
-            value={query}
-            onChange={(e) => setQuery(e.target.value)}
-          />
-        </div>
-        <div className="relative" ref={statusRef}>
-          <button
-            className="input-area flex w-36 items-center justify-between gap-1.5 text-xs"
-            onClick={() => setStatusOpen((o) => !o)}
-            aria-haspopup="listbox"
-            aria-expanded={statusOpen}
-          >
-            <span className="truncate">
-              {STATUS_OPTIONS.find((o) => o.v === statusFilter)?.label ?? "Semua status"}
-            </span>
-            <ChevronDown className={`h-3.5 w-3.5 shrink-0 text-zinc-400 transition-transform ${statusOpen ? "rotate-180" : ""}`} />
-          </button>
-          {statusOpen ? (
-            <div
-              className="absolute right-0 z-30 mt-1 w-44 overflow-hidden rounded-xl border border-zinc-200 bg-white shadow-xl dark:border-zinc-800 dark:bg-zinc-900"
-              role="listbox"
-            >
-              {STATUS_OPTIONS.map((o) => (
-                <button
-                  key={o.v}
-                  role="option"
-                  aria-selected={statusFilter === o.v}
-                  className={`flex w-full items-center justify-between px-3 py-2.5 text-left text-sm hover:bg-zinc-50 dark:hover:bg-zinc-800 ${
-                    statusFilter === o.v ? "font-semibold text-teal-700 dark:text-teal-300" : ""
-                  }`}
-                  onClick={() => {
-                    setStatusFilter(o.v);
-                    setStatusOpen(false);
-                    refresh(level, o.v);
-                  }}
-                >
-                  {o.label}
-                  {statusFilter === o.v ? <CheckCircle2 className="h-4 w-4" /> : null}
-                </button>
-              ))}
-            </div>
-          ) : null}
-        </div>
+      <div className="relative">
+        <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-zinc-400" />
+        <input
+          className="input-area pl-9 text-sm"
+          placeholder="Cari kata di bank…"
+          value={query}
+          onChange={(e) => setQuery(e.target.value)}
+        />
       </div>
 
       {loading ? (
@@ -393,104 +328,122 @@ export default function BankPage() {
           </p>
         </div>
       ) : (
-        <ul className="space-y-2">
-          {visible.map((e) => {
-            const isOpen = expanded === e.id;
-            const badge = STATUS_BADGE[e.status];
-            return (
-              <li key={e.id} className="card overflow-hidden">
-                <button
-                  className="flex w-full items-center gap-2 p-4 text-left"
-                  onClick={() => setExpanded(isOpen ? null : e.id)}
-                >
-                  <span
-                    className={`shrink-0 rounded-md px-1.5 py-0.5 text-[10px] font-bold ${LEVEL_STYLE[e.cefr] ?? ""}`}
+        <>
+          <ul className="space-y-2">
+            {visible.map((e) => {
+              const isOpen = expanded === e.id;
+              const isDrag = dragId === e.id;
+              const dx = isDrag ? drag : 0;
+              return (
+                <li key={e.id} className="relative">
+                  {/* Overlay swipe */}
+                  <div
+                    className="pointer-events-none absolute inset-0 z-10 flex items-center rounded-2xl border-2 border-teal-400 bg-teal-50/95 px-4 dark:bg-teal-950/90"
+                    style={{ opacity: dx < -10 ? Math.min(1, -dx / 90) : 0 }}
                   >
-                    {e.cefr}
-                  </span>
-                  <span className="min-w-0 flex-1">
-                    <span className="block truncate font-semibold">{e.text}</span>
-                    <span className="block truncate text-xs text-zinc-500">{e.meaningId}</span>
-                  </span>
-                  {badge ? (
-                    <span className={`shrink-0 rounded-full px-2 py-0.5 text-[10px] font-medium ${badge.cls}`}>
-                      {badge.label}
+                    <span className="rounded-lg bg-teal-600 px-2 py-1 text-[10px] font-bold text-white">
+                      MAU DIPELAJARI
                     </span>
-                  ) : null}
-                  <ChevronDown
-                    className={`h-4 w-4 shrink-0 text-zinc-400 transition-transform ${isOpen ? "rotate-180" : ""}`}
-                  />
-                </button>
-
-                {isOpen ? (
-                  <div className="space-y-3 border-t border-zinc-100 px-4 pb-4 pt-3 dark:border-zinc-800">
-                    <div className="flex flex-wrap items-center gap-1.5 text-[11px] text-zinc-500">
-                      <span className="badge bg-zinc-100 dark:bg-zinc-800">{e.type}</span>
-                      <span className="badge bg-zinc-100 dark:bg-zinc-800">{e.register}</span>
-                      {e.useWhenId ? <span className="italic">{e.useWhenId}</span> : null}
-                    </div>
-                    {e.examples.length > 0 ? (
-                      <ul className="space-y-2">
-                        {e.examples.map((ex, i) => (
-                          <li key={i} className="rounded-xl bg-zinc-50 p-3 dark:bg-zinc-800/60">
-                            <div className="flex items-start gap-2">
-                              <p className="flex-1 text-sm font-medium">{ex.en}</p>
-                              <button
-                                className="shrink-0 rounded-lg p-1 text-zinc-400 hover:bg-zinc-200 hover:text-zinc-600 dark:hover:bg-zinc-700"
-                                title="Dengarkan"
-                                onClick={() => speak(ex.en)}
-                              >
-                                <Volume2 className="h-4 w-4" />
-                              </button>
-                            </div>
-                            <p className="mt-0.5 text-xs text-zinc-500">{ex.id}</p>
-                          </li>
-                        ))}
-                      </ul>
-                    ) : null}
-                    <div className="flex gap-2 pt-1">
-                      {e.status !== "learning" ? (
-                        <button
-                          className="btn-primary flex-1 gap-1.5 text-sm"
-                          disabled={busyId === e.id}
-                          onClick={() => setStatus(e.id, "learn")}
-                        >
-                          {busyId === e.id ? (
-                            <Loader2 className="h-4 w-4 animate-spin" />
-                          ) : (
-                            <Layers className="h-4 w-4" />
-                          )}
-                          Mau dipelajari
-                        </button>
-                      ) : (
-                        <button className="btn-secondary flex-1 gap-1.5 text-sm" disabled>
-                          <CheckCircle2 className="h-4 w-4" /> Sedang dipelajari
-                        </button>
-                      )}
-                      {e.status !== "known" ? (
-                        <button
-                          className="btn-secondary flex-1 gap-1.5 text-sm"
-                          disabled={busyId === e.id}
-                          onClick={() => setStatus(e.id, "know")}
-                        >
-                          <CheckCircle2 className="h-4 w-4" /> Sudah tahu
-                        </button>
-                      ) : (
-                        <button
-                          className="btn-secondary flex-1 gap-1.5 text-sm"
-                          disabled={busyId === e.id}
-                          onClick={() => setStatus(e.id, "reset")}
-                        >
-                          <RotateCcw className="h-4 w-4" /> Reset
-                        </button>
-                      )}
-                    </div>
                   </div>
-                ) : null}
-              </li>
-            );
-          })}
-        </ul>
+                  <div
+                    className="pointer-events-none absolute inset-0 z-10 flex items-center justify-end rounded-2xl border-2 border-zinc-400 bg-zinc-100/95 px-4 dark:bg-zinc-800/90"
+                    style={{ opacity: dx > 10 ? Math.min(1, dx / 90) : 0 }}
+                  >
+                    <span className="rounded-lg bg-zinc-600 px-2 py-1 text-[10px] font-bold text-white">
+                      SUDAH TAHU
+                    </span>
+                  </div>
+
+                  <div
+                    className="card cursor-pointer select-none overflow-hidden transition-transform"
+                    style={{
+                      transform: `translateX(${dx}px) rotate(${dx / 40}deg)`,
+                      transition: dragging.current && isDrag ? "none" : "transform 160ms ease",
+                    }}
+                    onTouchStart={(ev) => onSwipeStart(e.id, ev.touches[0].clientX)}
+                    onTouchMove={(ev) => onSwipeMove(ev.touches[0].clientX)}
+                    onTouchEnd={() => onSwipeEnd(e.id)}
+                  >
+                    <button
+                      className="flex w-full items-center gap-2 p-4 text-left"
+                      onClick={() => {
+                        if (moved.current) return;
+                        setExpanded(isOpen ? null : e.id);
+                      }}
+                    >
+                      <span
+                        className={`shrink-0 rounded-md px-1.5 py-0.5 text-[10px] font-bold ${LEVEL_STYLE[e.cefr] ?? ""}`}
+                      >
+                        {e.cefr}
+                      </span>
+                      <span className="min-w-0 flex-1">
+                        <span className="block truncate font-semibold">{e.text}</span>
+                        <span className="block truncate text-xs text-zinc-500">{e.meaningId}</span>
+                      </span>
+                      <ChevronDown
+                        className={`h-4 w-4 shrink-0 text-zinc-400 transition-transform ${isOpen ? "rotate-180" : ""}`}
+                      />
+                    </button>
+
+                    {isOpen ? (
+                      <div className="space-y-3 border-t border-zinc-100 px-4 pb-4 pt-3 dark:border-zinc-800">
+                        <div className="flex flex-wrap items-center gap-1.5 text-[11px] text-zinc-500">
+                          <span className="badge bg-zinc-100 dark:bg-zinc-800">{e.type}</span>
+                          <span className="badge bg-zinc-100 dark:bg-zinc-800">{e.register}</span>
+                          {e.useWhenId ? <span className="italic">{e.useWhenId}</span> : null}
+                        </div>
+                        {e.examples.length > 0 ? (
+                          <ul className="space-y-2">
+                            {e.examples.map((ex, i) => (
+                              <li key={i} className="rounded-xl bg-zinc-50 p-3 dark:bg-zinc-800/60">
+                                <div className="flex items-start gap-2">
+                                  <p className="flex-1 text-sm font-medium">{ex.en}</p>
+                                  <button
+                                    className="shrink-0 rounded-lg p-1 text-zinc-400 hover:bg-zinc-200 hover:text-zinc-600 dark:hover:bg-zinc-700"
+                                    title="Dengarkan"
+                                    onClick={() => speak(ex.en)}
+                                  >
+                                    <Volume2 className="h-4 w-4" />
+                                  </button>
+                                </div>
+                                <p className="mt-0.5 text-xs text-zinc-500">{ex.id}</p>
+                              </li>
+                            ))}
+                          </ul>
+                        ) : null}
+                        <div className="flex gap-2 pt-1">
+                          <button
+                            className="btn-primary flex-1 gap-1.5 text-sm"
+                            disabled={busyId === e.id}
+                            onClick={() => setStatus(e.id, "learn")}
+                          >
+                            {busyId === e.id ? (
+                              <Loader2 className="h-4 w-4 animate-spin" />
+                            ) : (
+                              <Layers className="h-4 w-4" />
+                            )}
+                            Mau dipelajari
+                          </button>
+                          <button
+                            className="btn-secondary flex-1 gap-1.5 text-sm"
+                            disabled={busyId === e.id}
+                            onClick={() => setStatus(e.id, "know")}
+                          >
+                            <CheckCircle2 className="h-4 w-4" /> Sudah tahu
+                          </button>
+                        </div>
+                      </div>
+                    ) : null}
+                  </div>
+                </li>
+              );
+            })}
+          </ul>
+          <p className="text-center text-xs text-zinc-400">
+            Swipe kiri = mau dipelajari · Swipe kanan = sudah tahu. Kata yang diproses otomatis
+            keluar dari bank.
+          </p>
+        </>
       )}
     </div>
   );

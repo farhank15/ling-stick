@@ -6,7 +6,7 @@ import { requireUser } from "~/lib/auth.server";
 import { db } from "~/lib/db/client.server";
 import { exploreItems, items } from "~/lib/db/schema";
 import { EXPLORE_CATEGORIES } from "~/lib/explore.categories";
-import { eq, inArray, sql } from "drizzle-orm";
+import { and, eq, inArray, sql } from "drizzle-orm";
 import { useToast } from "~/components/Toast";
 
 export const meta: MetaFunction = () => [{ title: "Explore — LingStick" }];
@@ -22,7 +22,13 @@ export async function loader({ request }: LoaderFunctionArgs) {
     db
       .select()
       .from(exploreItems)
-      .where(eq(exploreItems.hidden, 0))
+      .where(
+        and(
+          eq(exploreItems.hidden, 0),
+          // Ekspresi yang udah tersimpan di Library gak muncul lagi.
+          sql`NOT EXISTS (SELECT 1 FROM items i WHERE i.text_norm = trim(lower(${exploreItems.text})))`,
+        ),
+      )
       .orderBy(sql`((id * 2654435761) + ${dayNumber}) % 1000000007`)
       .limit(3),
     // Jumlah ekspresi tersimpan per kategori (yang belum di-hide).

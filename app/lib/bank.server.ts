@@ -164,28 +164,19 @@ export async function startLearning(bankId: number) {
     const now = Date.now();
     await db.insert(cards).values({ itemId, due: now, reps: 0, lapses: 0, state: 0, learningSteps: 0 });
   }
-  await db.update(wordbank).set({ status: "learning", itemId }).where(eq(wordbank.id, bankId));
+  // Sudah masuk Library → hapus dari bank (biar bank cuma isi katalog yang belum diproses).
+  await db.delete(wordbank).where(eq(wordbank.id, bankId));
   return itemId;
 }
 
-/** Tandai "sudah tahu": item di Library ikut di-known supaya keluar dari antrian. */
+/** Tandai "sudah tahu": item di Library ikut di-known lalu entri dihapus dari bank. */
 export async function markKnown(bankId: number) {
   const [entry] = await db.select().from(wordbank).where(eq(wordbank.id, bankId)).limit(1);
   if (!entry) throw new Error("Entri tidak ada");
-  await db.update(wordbank).set({ status: "known" }).where(eq(wordbank.id, bankId));
   if (entry.itemId) {
     await db.update(items).set({ status: "known" }).where(eq(items.id, entry.itemId));
   }
-}
-
-/** Undo ke status awal. */
-export async function resetStatus(bankId: number) {
-  const [entry] = await db.select().from(wordbank).where(eq(wordbank.id, bankId)).limit(1);
-  if (!entry) throw new Error("Entri tidak ada");
-  await db.update(wordbank).set({ status: "new" }).where(eq(wordbank.id, bankId));
-  if (entry.itemId) {
-    await db.update(items).set({ status: "learning" }).where(eq(items.id, entry.itemId));
-  }
+  await db.delete(wordbank).where(eq(wordbank.id, bankId));
 }
 
 /* ── Generate kata baru via LLM ─────────────────────────────── */

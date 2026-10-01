@@ -5,7 +5,6 @@ import {
   listBank,
   getBankStats,
   markKnown,
-  resetStatus,
   startLearning,
   isCefr,
 } from "~/lib/bank.server";
@@ -71,10 +70,6 @@ export async function action({ request }: ActionFunctionArgs) {
     if (body.action === "know") {
       await markKnown(body.id!);
       return Response.json({ ok: true, status: "known" });
-    }
-    if (body.action === "reset") {
-      await resetStatus(body.id!);
-      return Response.json({ ok: true, status: "new" });
     }
     return Response.json({ error: "action tidak dikenal" }, { status: 400 });
   } catch (e) {

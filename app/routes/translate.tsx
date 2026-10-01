@@ -31,7 +31,7 @@ export default function Translate() {
   const [text, setText] = useState(() => (params.get("text") ?? "").slice(0, 2000));
   const [from, setFrom] = useState<"en" | "id">(() => (params.get("from") === "id" ? "id" : "en"));
   const [preset, setPreset] = useState<"gaul" | "umum" | "formal">("umum");
-  const [result, setResult] = useState<{ translation: string } | null>(null);
+  const [result, setResult] = useState<{ translation: string; via?: string; cached?: boolean; note?: string } | null>(null);
   const [usage, setUsage] = useState<UsageResult | null>(null);
   const [usageBusy, setUsageBusy] = useState(false);
   const [busy, setBusy] = useState(false);
@@ -60,7 +60,7 @@ export default function Translate() {
             to: from === "en" ? "id" : "en",
             style: active.style,
             tone: active.tone || undefined,
-            prefer: "llm",
+            prefer: "lara",
           }),
         });
         const data = await res.json();
@@ -245,6 +245,23 @@ export default function Translate() {
               <p className="whitespace-pre-wrap text-xl leading-relaxed font-medium">
                 {result.translation}
               </p>
+              {/* Mesin penerjemah: Lara (hemat kuota AI) atau fallback AI */}
+              <div className="mt-1.5 flex items-center gap-1.5">
+                <span
+                  className={`badge text-[10px] ${
+                    result.via === "lara"
+                      ? "bg-teal-100 text-teal-700 dark:bg-teal-950 dark:text-teal-300"
+                      : "bg-zinc-100 text-zinc-500 dark:bg-zinc-800 dark:text-zinc-400"
+                  }`}
+                  title={result.note ?? undefined}
+                >
+                  {result.via === "lara" ? "via Lara" : "via AI"}
+                  {result.cached ? " · cache" : ""}
+                </span>
+                {result.note ? (
+                  <span className="text-[10px] text-zinc-400">Lara gagal: {result.note}</span>
+                ) : null}
+              </div>
               {/* Cara baca — langsung tampil otomatis untuk teks Inggris */}
               {englishSide ? (
                 <div className="mt-2 flex min-h-6 items-center gap-1.5">

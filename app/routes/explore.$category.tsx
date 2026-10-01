@@ -49,10 +49,14 @@ export async function loader({ request, params }: LoaderFunctionArgs) {
     .where(eq(settings.key, autoGenKey(category)))
     .limit(1);
 
+  // Ekspresi yang udah ada di Library (tersimpan) dibuang dari daftar —
+  // explore cuma nampilin yang belum diproses.
+  const shown = rows.filter((r) => !savedNorms.has(r.text.trim().toLowerCase()));
+
   return {
     category,
     label: cat.label,
-    rows: rows.map((r) => ({
+    rows: shown.map((r) => ({
       id: r.id,
       text: r.text,
       type: r.type,
@@ -209,6 +213,8 @@ export default function ExploreCategory() {
       const data = await res.json();
       if (data.ok) {
         setSavedTexts((s) => new Set(s).add(r.text));
+        // Hilangkan dari list — udah masuk Library, gak perlu muncul lagi di explore.
+        setHiddenIds((s) => new Set(s).add(r.id));
         toast(data.existed ? "Sudah ada di Library — contoh ditambah" : "Tersimpan ke Library");
       } else {
         toast("Gagal menyimpan");
@@ -246,7 +252,7 @@ export default function ExploreCategory() {
           <ArrowLeft className="h-5 w-5" strokeWidth={1.75} />
         </Link>
         <h1 className="flex-1 text-xl font-bold tracking-tight">{label}</h1>
-        <span className="text-xs text-zinc-400">{rows.length} ekspresi</span>
+        <span className="text-xs text-zinc-400">{visible.length} ekspresi</span>
       </div>
 
       {/* Pindah kategori — chip scroll sticky, kategori aktif disorot */}

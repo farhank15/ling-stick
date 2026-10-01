@@ -158,6 +158,7 @@ export default function AppLayout() {
           </div>
           <Link
             to="/translate"
+            prefetch="intent"
             className="rounded-lg px-2 py-1.5 text-zinc-500 hover:bg-zinc-100 hover:text-zinc-700 dark:text-zinc-400 dark:hover:bg-zinc-900 dark:hover:text-zinc-200"
             title="Terjemah"
           >
@@ -165,6 +166,7 @@ export default function AppLayout() {
           </Link>
           <Link
             to="/settings"
+            prefetch="intent"
             className="rounded-lg px-2 py-1.5 text-zinc-500 hover:bg-zinc-100 hover:text-zinc-700 dark:text-zinc-400 dark:hover:bg-zinc-900 dark:hover:text-zinc-200"
             title="Pengaturan"
           >
@@ -190,6 +192,7 @@ export default function AppLayout() {
               <Link
                 key={n.to}
                 to={n.to}
+                prefetch="intent"
                 aria-current={active ? "page" : undefined}
                 className={`flex min-h-14 flex-col items-center justify-center gap-0.5 rounded-xl text-[11px] font-medium transition-all ${
                   active

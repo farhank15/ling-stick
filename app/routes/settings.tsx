@@ -124,6 +124,10 @@ export default function Settings() {
           k="Kuota bulan ini"
           v={`${data.lara.used.toLocaleString("id-ID")} / ${data.lara.limit.toLocaleString("id-ID")} karakter`}
         />
+        <p className="text-[11px] text-zinc-400">
+          Kuota reset tiap awal bulan. Halaman Terjemah pakai Lara; translate otomatis di dashboard
+          pakai AI biar kuota Lara awet.
+        </p>
       </section>
 
       <section className="card space-y-1.5">

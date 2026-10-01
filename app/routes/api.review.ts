@@ -1,7 +1,7 @@
 import type { ActionFunctionArgs, LoaderFunctionArgs } from "react-router";
 import { requireUser } from "~/lib/auth.server";
 import { applyRating } from "~/lib/fsrs.server";
-import { applyReview, getReviewQueue, markKnown } from "~/lib/items.server";
+import { applyReview, getReviewQueue, markKnown, markLearning } from "~/lib/items.server";
 
 /**
  * GET /api/review/queue tidak dipisah — loader di sini mengembalikan antrian;
@@ -30,6 +30,11 @@ export async function action({ request }: ActionFunctionArgs) {
   if (body.action === "known") {
     await markKnown(itemId);
     return Response.json({ ok: true, known: true });
+  }
+
+  if (body.action === "learning") {
+    await markLearning(itemId);
+    return Response.json({ ok: true, learning: true });
   }
 
   const rating = Number(body.rating);
