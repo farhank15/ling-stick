@@ -244,77 +244,49 @@ export async function listItems(filters: LibraryFilters): Promise<LibraryRow[]> 
     return rows.map(mapLibraryRow);
   }
 
-  const conds: SQLWrapper[] = [];
-  // Default (tab "Belajar") = status learning saja — yang udah hafal ilang dari sini.
-  // "all" = learning + hafal (arsip dihapus dari UI).
-  if (filters.status === "all") conds.push(sql`${items.status} IN ('learning', 'known')`);
-  else if (filters.status) conds.push(eq(items.status, filters.status));
-  else conds.push(eq(items.status, "learning"));
-  if (filters.type) conds.push(eq(items.type, filters.type));
-  if (filters.register) conds.push(eq(items.register, filters.register));
-  if (filters.dateFrom) conds.push(gte(items.createdAt, filters.dateFrom));
-  if (filters.dateTo) conds.push(lte(items.createdAt, filters.dateTo));
-
-  let idsByTag: number[] | null = null;
-  if (filters.tag) {
-    const rows = await db
-      .select({ itemId: itemTags.itemId })
-      .from(itemTags)
-      .innerJoin(tags, eq(tags.id, itemTags.tagId))
-      .where(eq(tags.name, filters.tag));
-    idsByTag = rows.map((r) => r.itemId);
-    if (idsByTag.length === 0) return [];
-    conds.push(inArray(items.id, idsByTag));
-  }
-
-  const rows = await db
-    .select({
-      id: items.id,
-      text: items.text,
-      type: items.type,
-      register: items.register,
-      meaningId: items.meaningId,
-      notesId: items.notesId,
-      source: items.source,
-      confidence: items.confidence,
-      status: items.status,
-      hideMeaning: items.hideMeaning,
-      createdAt: items.createdAt,
-    })
-    .from(items)
-    .where(and(...conds))
-    .orderBy(desc(items.createdAt))
-    .limit(limit)
-    .offset(offset);
-
-  // Contoh pertama semua item diambil SEKALIGUS (hindari N+1: 1 query, bukan N).
-  const ids = rows.map((r) => r.id);
-  const firsts = ids.length
-    ? await db
-        .select({
-          itemId: examples.itemId,
-          en: examples.en,
-          idText: examples.idText,
-          register: examples.register,
-        })
-        .from(examples)
-        .where(inArray(examples.itemId, ids))
-        .orderBy(examples.id)
-    : [];
-  const firstMap = new Map<number, (typeof firsts)[number]>();
-  for (const f of firsts) {
-    if (!firstMap.has(f.itemId)) firstMap.set(f.itemId, f);
-  }
-
-  return rows.map((r) => {
-    const ex = firstMap.get(r.id);
-    return {
-      ...r,
-      firstExampleEn: ex?.en ?? null,
-      firstExampleId: ex?.idText ?? null,
-      firstExampleRegister: ex?.register ?? null,
-    } satisfies LibraryRow;
-  });
+  // Satu query saja (correlated subquery utk contoh pertama) — hemat 1 RTT
+  // dibanding dulu (SELECT items lalu SELECT examples berurutan).
+  const statusCond =
+    filters.status === "all"
+      ? sql`i.status IN ('learning', 'known')`
+      : sql`i.status = ${filters.status || "learning"}`;
+  const rows = await db.all<{
+    id: number;
+    text: string;
+    type: string;
+    register: string;
+    meaning_id: string | null;
+    notes_id: string | null;
+    source: string | null;
+    confidence: string | null;
+    status: string;
+    hide_meaning: number;
+    created_at: number;
+    first_en: string | null;
+    first_id: string | null;
+    first_reg: string | null;
+  }>(sql`
+    SELECT i.id, i.text, i.type, i.register, i.meaning_id, i.notes_id, i.source,
+           i.confidence, i.status, i.hide_meaning, i.created_at,
+           (SELECT en FROM examples WHERE item_id = i.id ORDER BY id LIMIT 1) AS first_en,
+           (SELECT id_text FROM examples WHERE item_id = i.id ORDER BY id LIMIT 1) AS first_id,
+           (SELECT register FROM examples WHERE item_id = i.id ORDER BY id LIMIT 1) AS first_reg
+    FROM items i
+    WHERE ${statusCond}
+      ${filters.type ? sql`AND i.type = ${filters.type}` : sql``}
+      ${filters.register ? sql`AND i.register = ${filters.register}` : sql``}
+      ${filters.dateFrom ? sql`AND i.created_at >= ${filters.dateFrom}` : sql``}
+      ${filters.dateTo ? sql`AND i.created_at <= ${filters.dateTo}` : sql``}
+      ${filters.tag
+        ? sql`AND EXISTS (
+              SELECT 1 FROM item_tags it JOIN tags t ON t.id = it.tag_id
+              WHERE it.item_id = i.id AND t.name = ${filters.tag}
+            )`
+        : sql``}
+    ORDER BY i.created_at DESC
+    LIMIT ${limit} OFFSET ${offset}
+  `);
+  return rows.map(mapLibraryRow);
 }
 
 /**

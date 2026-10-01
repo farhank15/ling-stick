@@ -17,12 +17,11 @@ export const handle = { title: "Pengaturan" };
 
 export async function loader({ request }: LoaderFunctionArgs) {
   await requireUser(request);
-  const [usage] = await db
-    .select()
-    .from(llmUsage)
-    .where(eq(llmUsage.day, todayStr()))
-    .limit(1);
-  const lara = await laraStatus();
+  // Paralel — hemat 1 round-trip Turso (dulu berurutan).
+  const [[usage], lara] = await Promise.all([
+    db.select().from(llmUsage).where(eq(llmUsage.day, todayStr())).limit(1),
+    laraStatus(),
+  ]);
   return {
     lara,
     llmCallsToday: usage?.calls ?? 0,

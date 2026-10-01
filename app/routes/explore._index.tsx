@@ -16,13 +16,22 @@ export async function loader({ request }: LoaderFunctionArgs) {
   await requireUser(request);
 
   // "Expression of the day": 3 ekspresi acak dari cache, urutan stabil per hari.
+  // Dijalankan paralel dengan query count kategori — hemat 1 round-trip Turso.
   const dayNumber = Math.floor(Date.now() / 86_400_000);
-  const eotdRaw = await db
-    .select()
-    .from(exploreItems)
-    .where(eq(exploreItems.hidden, 0))
-    .orderBy(sql`((id * 2654435761) + ${dayNumber}) % 1000000007`)
-    .limit(3);
+  const [eotdRaw, counts] = await Promise.all([
+    db
+      .select()
+      .from(exploreItems)
+      .where(eq(exploreItems.hidden, 0))
+      .orderBy(sql`((id * 2654435761) + ${dayNumber}) % 1000000007`)
+      .limit(3),
+    // Jumlah ekspresi tersimpan per kategori (yang belum di-hide).
+    db
+      .select({ category: exploreItems.category, total: sql<number>`count(*)` })
+      .from(exploreItems)
+      .where(eq(exploreItems.hidden, 0))
+      .groupBy(exploreItems.category),
+  ]);
 
   // Tandai yang sudah ada di Library.
   const savedNorms = new Set<string>();
@@ -38,12 +47,6 @@ export async function loader({ request }: LoaderFunctionArgs) {
     saved: savedNorms.has(r.text.trim().toLowerCase()),
   }));
 
-  // Jumlah ekspresi tersimpan per kategori (yang belum di-hide).
-  const counts = await db
-    .select({ category: exploreItems.category, total: sql<number>`count(*)` })
-    .from(exploreItems)
-    .where(eq(exploreItems.hidden, 0))
-    .groupBy(exploreItems.category);
   const countMap = Object.fromEntries(counts.map((c) => [c.category, Number(c.total)]));
 
   return {

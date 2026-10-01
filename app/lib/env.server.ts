@@ -52,6 +52,8 @@ export const env = {
   DAILY_QUIZ_SIZE: int("DAILY_QUIZ_SIZE", 20),
   DAILY_LLM_CALL_LIMIT: int("DAILY_LLM_CALL_LIMIT", 200),
   SESSION_TTL_DAYS: int("SESSION_TTL_DAYS", 30),
+  // Opsional: kunci HMAC sesi. Kosong = diturunkan dari APP_PASSWORD.
+  SESSION_SECRET: str("SESSION_SECRET"),
 };
 
 export function isRemoteDb(url: string): boolean {
