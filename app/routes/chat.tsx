@@ -1,4 +1,5 @@
 import type { LoaderFunctionArgs, MetaFunction } from "react-router";
+import { useLoaderData } from "react-router";
 import { useEffect, useMemo, useRef, useState } from "react";
 import {
   Bookmark,
@@ -14,6 +15,8 @@ import {
   Volume2,
 } from "lucide-react";
 import { requireUser } from "~/lib/auth.server";
+import { getTargetLang } from "~/lib/lang.server";
+import { JaText, hasJa } from "~/components/JaText";
 import { ConfirmModal } from "~/components/ConfirmModal";
 import { MarkdownLite } from "~/components/MarkdownLite";
 import { useToast } from "~/components/Toast";
@@ -21,7 +24,7 @@ import { useToast } from "~/components/Toast";
 export const meta: MetaFunction = () => [{ title: "Chat dengan Ling — LingStick" }];
 export const handle = { title: "Chat dengan Ling" };
 
-type Suggestion = { text: string; meaning_id: string; examples: { en: string; id: string }[] };
+type Suggestion = { text: string; reading?: string; meaning_id: string; examples: { en: string; id: string }[] };
 type Msg =
   | { role: "user"; content: string }
   | { role: "assistant"; content: string; suggestions?: Suggestion[] };
@@ -34,18 +37,30 @@ type SessionRow = {
 };
 type ConfirmState = { kind: "one" | "all"; id?: number; title?: string } | null;
 
-const OPENING: Msg = {
-  role: "assistant",
-  content:
-    "Hai! Aku **Ling**, temen belajar bahasa Inggrismu. Tanya apa aja:\n- Kata baru, idiom, phrasal verb\n- Grammar yang bikin bingung\n- Cara ngomong formal vs santai\n- Minta contoh percakapan\n\nKalau ada kosakata menarik, aku kasih tombol simpan langsung ke Library ya.",
-};
+/** Pesan pembuka sesuai bahasa target aktif — gak ngunci ke bahasa Inggris. */
+function openingFor(lang: string): Msg {
+  const content =
+    lang === "ja"
+      ? "Hai! Aku **Ling**, temen belajar bahasa Jepangmu. Tanya apa aja:\n- Kosakata & kanji baru\n- Partikel dan tata bahasa (bentuk て, bentuk た, keigo)\n- Cara ngomong formal vs santai\n- Minta contoh percakapan\n\nKalau ada kosakata menarik, aku kasih tombol simpan langsung ke Library ya."
+      : "Hai! Aku **Ling**, temen belajar bahasamu. Tanya apa aja:\n- Kata baru, idiom, phrasal verb\n- Grammar yang bikin bingung\n- Cara ngomong formal vs santai\n- Minta contoh percakapan\n\nKalau ada kosakata menarik, aku kasih tombol simpan langsung ke Library ya.";
+  return { role: "assistant", content };
+}
 
-const STARTERS = [
-  "Apa bedanya \"used to\" dan \"be used to\"?",
-  "Kasih 3 idiom buat ngobrol santai",
-  "Biar gaul: cara bilang \"saya nggak jadi\"",
-  "Kapan pakai \"affect\" vs \"effect\"?",
-];
+function startersFor(lang: string): string[] {
+  return lang === "ja"
+    ? [
+        "Apa bedanya は dan が?",
+        "Kasih 3 ekspresi buat ngobrol santai",
+        "Biar sopan: cara bilang \"saya nggak jadi\" dalam bahasa Jepang",
+        "Kapan pakai に dan へ?",
+      ]
+    : [
+        "Apa bedanya \"used to\" dan \"be used to\"?",
+        "Kasih 3 idiom buat ngobrol santai",
+        "Biar gaul: cara bilang \"saya nggak jadi\"",
+        "Kapan pakai \"affect\" vs \"effect\"?",
+      ];
+}
 
 function parseSuggestions(json: string | null): Suggestion[] | undefined {
   if (!json) return undefined;
@@ -61,7 +76,7 @@ import { ttsLang } from "~/lib/utils.shared";
 
 export async function loader({ request }: LoaderFunctionArgs) {
   await requireUser(request);
-  return null;
+  return { lang: await getTargetLang() };
 }
 
 function speak(s: string, lang?: string) {
@@ -73,10 +88,12 @@ function speak(s: string, lang?: string) {
 }
 
 export default function Chat() {
+  const { lang } = useLoaderData<typeof loader>();
+  const ja = lang === "ja";
   const toast = useToast();
   const [sessionId, setSessionId] = useState<number | null>(null);
   const [sessions, setSessions] = useState<SessionRow[]>([]);
-  const [msgs, setMsgs] = useState<Msg[]>([OPENING]);
+  const [msgs, setMsgs] = useState<Msg[]>(() => [openingFor(lang)]);
   const [input, setInput] = useState("");
   const [busy, setBusy] = useState(false);
   const [loadingSession, setLoadingSession] = useState(false);
@@ -112,13 +129,13 @@ export default function Chat() {
       .map((s) => s.text)
       .filter(Boolean);
     const unique = [...new Set(fromSuggestions)].slice(-2);
-    const starters = STARTERS.slice(0, 3 - Math.min(2, unique.length));
+    const starters = startersFor(lang).slice(0, 3 - Math.min(2, unique.length));
     return [...unique, ...starters].slice(0, 3);
-  }, [msgs]);
+  }, [msgs, lang]);
 
   const newChat = () => {
     setSessionId(null);
-    setMsgs([OPENING]);
+    setMsgs([openingFor(lang)]);
     setHistOpen(false);
   };
 
@@ -137,7 +154,7 @@ export default function Chat() {
             suggestions: parseSuggestions(m.suggestionsJson),
           }),
         );
-        setMsgs(loaded.length > 0 ? loaded : [OPENING]);
+        setMsgs(loaded.length > 0 ? loaded : [openingFor(lang)]);
       }
     } catch {
       toast("Gagal memuat obrolan");
@@ -367,7 +384,13 @@ export default function Chat() {
                       {m.suggestions.map((s) => (
                         <div key={s.text} className="rounded-xl bg-zinc-50 p-2.5 dark:bg-zinc-800/60">
                           <div className="flex items-start justify-between gap-2">
-                            <p className="font-semibold">{s.text}</p>
+                            {hasJa(s.text) ? (
+                              <p className="min-w-0 flex-1 font-semibold">
+                                <JaText text={s.text} reading={s.reading} className="font-semibold" />
+                              </p>
+                            ) : (
+                              <p className="font-semibold">{s.text}</p>
+                            )}
                             <button
                               className="btn-secondary min-h-7 shrink-0 gap-1 px-2 text-[11px]"
                               disabled={savedTexts.has(s.text) || saving === s.text}
@@ -391,7 +414,7 @@ export default function Chat() {
                               <span>“{s.examples[0].en}” — {s.examples[0].id}</span>
                               <button
                                 className="shrink-0 not-italic"
-                                onClick={() => speak(s.examples[0].en, "en-US")}
+                                onClick={() => speak(s.examples[0].en)}
                                 title="Dengarkan contoh"
                                 aria-label="Dengarkan contoh"
                               >

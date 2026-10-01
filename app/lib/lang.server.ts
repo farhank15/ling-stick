@@ -14,21 +14,29 @@ export type TargetLang = "en" | "ja";
 export const LANGS: TargetLang[] = ["en", "ja"];
 
 const KEY = "targetLang";
-let cached: TargetLang | null = null;
+/**
+ * Cache TTL pendek (2 detik) — bukan per-proses permanen. Dulu cache gak pernah
+ * basi: di produksi (Vercel, banyak instansi serverless) instansi lain yang udah
+ * sempat baca "en" bakal balikin "en" terus walau DB udah berganti — makanya
+ * tiap halaman harus di-reload manual. TTL 2 detik tetep nahan query ganda
+ * dalam satu render (beberapa loader paralel) tapi cepet ngikut perubahan.
+ */
+const TTL_MS = 2_000;
+let cached: { value: TargetLang; at: number } | null = null;
 
 export function isTargetLang(v: string | null | undefined): v is TargetLang {
   return v === "en" || v === "ja";
 }
 
 export async function getTargetLang(): Promise<TargetLang> {
-  if (cached) return cached;
+  if (cached && Date.now() - cached.at < TTL_MS) return cached.value;
   try {
     const [row] = await db.select().from(settings).where(eq(settings.key, KEY)).limit(1);
-    cached = isTargetLang(row?.value) ? row.value : "en";
+    cached = { value: isTargetLang(row?.value) ? row.value : "en", at: Date.now() };
   } catch {
-    cached = "en";
+    cached = { value: cached?.value ?? "en", at: Date.now() };
   }
-  return cached;
+  return cached.value;
 }
 
 /** Simpan pilihan bahasa. Dipanggil dari action Settings; cache ikut diperbarui. */
@@ -37,7 +45,7 @@ export async function setTargetLang(lang: TargetLang): Promise<void> {
     .insert(settings)
     .values({ key: KEY, value: lang })
     .onConflictDoUpdate({ target: settings.key, set: { value: lang } });
-  cached = lang;
+  cached = { value: lang, at: Date.now() };
 }
 
 /**

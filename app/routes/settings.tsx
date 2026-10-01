@@ -220,7 +220,20 @@ function LangPicker({ current }: { current: TargetLang }) {
   useEffect(() => {
     if (fetcher.state === "idle" && done) {
       toast("Bahasa diganti — Library, bank, quiz & statistik ikut bahasa baru");
-      window.location.reload(); // pastikan semua cache loader segar
+      // Bersihin semua cache (SW + cache storage) dulu biar gak ada aset/data lama
+      // yang nyangkut, baru reload — semua halaman langsung ikut bahasa baru.
+      const clearAndReload = () => {
+        if (typeof caches !== "undefined") {
+          caches
+            .keys()
+            .then((keys) => Promise.all(keys.map((k) => caches.delete(k))))
+            .catch(() => {})
+            .finally(() => window.location.reload());
+        } else {
+          window.location.reload();
+        }
+      };
+      setTimeout(clearAndReload, 350); // kasih toast sempat keliatan
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [fetcher.state, done]);

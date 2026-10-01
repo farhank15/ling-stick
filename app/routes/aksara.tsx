@@ -1,0 +1,454 @@
+import type { LoaderFunctionArgs, MetaFunction } from "react-router";
+import { Link, redirect, useLoaderData, useSearchParams } from "react-router";
+import { useEffect, useState } from "react";
+import {
+  ArrowRight,
+  BookOpenCheck,
+  CheckCircle2,
+  Eye,
+  Layers,
+  PencilLine,
+  RotateCcw,
+  Volume2,
+  XCircle,
+} from "lucide-react";
+import { requireUser } from "~/lib/auth.server";
+import { db } from "~/lib/db/client.server";
+import { wordbank } from "~/lib/db/schema";
+import { getTargetLang } from "~/lib/lang.server";
+import { and, eq, ne } from "drizzle-orm";
+import { ttsLang } from "~/lib/utils.shared";
+import { JaText, hasJa, splitReading } from "~/components/JaText";
+
+export const meta: MetaFunction = () => [{ title: "Aksara Jepang — LingStick" }];
+export const handle = { title: "Aksara Jepang" };
+
+function speak(s: string, lang?: string) {
+  if (typeof window === "undefined" || !window.speechSynthesis) return;
+  const u = new SpeechSynthesisUtterance(s);
+  u.lang = lang ?? ttsLang(s);
+  window.speechSynthesis.cancel();
+  window.speechSynthesis.speak(u);
+}
+
+/* ── Tabel kana (gojūon + dakuten/handakuten) ── */
+const HIRAGANA: [string, string][] = [
+  ["あ", "a"], ["い", "i"], ["う", "u"], ["え", "e"], ["お", "o"],
+  ["か", "ka"], ["き", "ki"], ["く", "ku"], ["け", "ke"], ["こ", "ko"],
+  ["さ", "sa"], ["し", "shi"], ["す", "su"], ["せ", "se"], ["そ", "so"],
+  ["た", "ta"], ["ち", "chi"], ["つ", "tsu"], ["て", "te"], ["と", "to"],
+  ["な", "na"], ["に", "ni"], ["ぬ", "nu"], ["ね", "ne"], ["の", "no"],
+  ["は", "ha"], ["ひ", "hi"], ["ふ", "fu"], ["へ", "he"], ["ほ", "ho"],
+  ["ま", "ma"], ["み", "mi"], ["む", "mu"], ["め", "me"], ["も", "mo"],
+  ["や", "ya"], ["ゆ", "yu"], ["よ", "yo"],
+  ["ら", "ra"], ["り", "ri"], ["る", "ru"], ["れ", "re"], ["ろ", "ro"],
+  ["わ", "wa"], ["を", "wo"], ["ん", "n"],
+  ["が", "ga"], ["ぎ", "gi"], ["ぐ", "gu"], ["げ", "ge"], ["ご", "go"],
+  ["ざ", "za"], ["じ", "ji"], ["ず", "zu"], ["ぜ", "ze"], ["ぞ", "zo"],
+  ["だ", "da"], ["ぢ", "ji"], ["づ", "zu"], ["で", "de"], ["ど", "do"],
+  ["ば", "ba"], ["び", "bi"], ["ぶ", "bu"], ["べ", "be"], ["ぼ", "bo"],
+  ["ぱ", "pa"], ["ぴ", "pi"], ["ぷ", "pu"], ["ぺ", "pe"], ["ぽ", "po"],
+];
+const KATAKANA: [string, string][] = [
+  ["ア", "a"], ["イ", "i"], ["ウ", "u"], ["エ", "e"], ["オ", "o"],
+  ["カ", "ka"], ["キ", "ki"], ["ク", "ku"], ["ケ", "ke"], ["コ", "ko"],
+  ["サ", "sa"], ["シ", "shi"], ["ス", "su"], ["セ", "se"], ["ソ", "so"],
+  ["タ", "ta"], ["チ", "chi"], ["ツ", "tsu"], ["テ", "te"], ["ト", "to"],
+  ["ナ", "na"], ["ニ", "ni"], ["ヌ", "nu"], ["ネ", "ne"], ["ノ", "no"],
+  ["ハ", "ha"], ["ヒ", "hi"], ["フ", "fu"], ["ヘ", "he"], ["ホ", "ho"],
+  ["マ", "ma"], ["ミ", "mi"], ["ム", "mu"], ["メ", "me"], ["モ", "mo"],
+  ["ヤ", "ya"], ["ユ", "yu"], ["ヨ", "yo"],
+  ["ラ", "ra"], ["リ", "ri"], ["ル", "ru"], ["レ", "re"], ["ロ", "ro"],
+  ["ワ", "wa"], ["ヲ", "wo"], ["ン", "n"],
+  ["ガ", "ga"], ["ギ", "gi"], ["グ", "gu"], ["ゲ", "ge"], ["ゴ", "go"],
+  ["ザ", "za"], ["ジ", "ji"], ["ズ", "zu"], ["ゼ", "ze"], ["ゾ", "zo"],
+  ["ダ", "da"], ["ヂ", "ji"], ["ヅ", "zu"], ["デ", "de"], ["ド", "do"],
+  ["バ", "ba"], ["ビ", "bi"], ["ブ", "bu"], ["ベ", "be"], ["ボ", "bo"],
+  ["パ", "pa"], ["ピ", "pi"], ["プ", "pu"], ["ペ", "pe"], ["ポ", "po"],
+];
+const KANA_TABLES: Record<"hiragana" | "katakana", [string, string][]> = {
+  hiragana: HIRAGANA,
+  katakana: KATAKANA,
+};
+
+const SCRIPTS = ["hiragana", "katakana", "kanji"] as const;
+type Script = (typeof SCRIPTS)[number];
+const SCRIPT_LABEL: Record<Script, string> = {
+  hiragana: "Hiragana",
+  katakana: "Katakana",
+  kanji: "Kanji",
+};
+const LEVELS = ["N5", "N4", "N3", "N2", "N1"] as const;
+
+const KANJI_RE = /[\u4e00-\u9faf\u3005\u3007]/;
+
+type AksaraWord = {
+  id: number;
+  text: string;
+  reading: string | null;
+  meaningId: string | null;
+};
+
+export async function loader({ request }: LoaderFunctionArgs) {
+  await requireUser(request);
+  const lang = await getTargetLang();
+  if (lang !== "ja") throw redirect("/"); // halaman khusus mode Jepang
+
+  const url = new URL(request.url);
+  const scriptParam = url.searchParams.get("script");
+  const script: Script = (SCRIPTS as readonly string[]).includes(scriptParam ?? "")
+    ? (scriptParam as Script)
+    : "hiragana";
+  const levelParam = url.searchParams.get("level");
+  const level = (LEVELS as readonly string[]).includes(levelParam ?? "") ? levelParam! : "N5";
+
+  // Kanji words per level (buat list & target latihan) + pool lintas level (distraktor MCQ).
+  const rows = await db
+    .select({ id: wordbank.id, text: wordbank.text, reading: wordbank.reading, meaningId: wordbank.meaningId, cefr: wordbank.cefr })
+    .from(wordbank)
+    .where(and(eq(wordbank.lang, "ja"), ne(wordbank.type, "kana")))
+    .limit(500);
+  const hasKanji = (r: { text: string; meaningId: string | null }) => KANJI_RE.test(r.text) && Boolean(r.meaningId);
+  const levelRows = rows.filter((r) => hasKanji(r) && r.cefr === level);
+  const poolRows = rows.filter(hasKanji);
+
+  return {
+    script,
+    level,
+    levelWords: levelRows.slice(0, 100) as AksaraWord[],
+    poolWords: poolRows.slice(0, 300) as AksaraWord[],
+  };}
+
+/* ── Latihan kanji: pilihan ganda (bacaan / arti) ── */
+type Method = "list" | "reading" | "arti";
+type Mcq = { word: AksaraWord; options: string[]; answer: number };
+
+function buildMcqs(words: AksaraWord[], pool: AksaraWord[], method: "reading" | "arti"): Mcq[] {
+  const keyOf = (w: AksaraWord) =>
+    method === "reading" ? splitReading(w.reading).kana || w.reading || "" : w.meaningId ?? "";
+  const src = words.length >= 4 ? words : pool;
+  if (src.length < 4) return [];
+  const bag = [...src].sort(() => Math.random() - 0.5);
+  const qs: Mcq[] = [];
+  for (const w of bag) {
+    if (qs.length >= 10) break;
+    const correct = keyOf(w);
+    if (!correct) continue;
+    const dis = [...new Set(pool.filter((o) => o.id !== w.id).map(keyOf))]
+      .filter((v) => v && v !== correct)
+      .sort(() => Math.random() - 0.5)
+      .slice(0, 3);
+    if (dis.length < 3) continue;
+    const options = [correct, ...dis].sort(() => Math.random() - 0.5);
+    qs.push({ word: w, options, answer: options.indexOf(correct) });
+  }
+  return qs;
+}
+
+function KanjiPractice({ words, pool, level }: { words: AksaraWord[]; pool: AksaraWord[]; level: string }) {
+  const [method, setMethod] = useState<Method>("list");
+  const [mcqs, setMcqs] = useState<Mcq[]>([]);
+  const [qi, setQi] = useState(0);
+  const [picked, setPicked] = useState<number | null>(null);
+  const [score, setScore] = useState(0);
+  const [showKey, setShowKey] = useState(false); // bantuan baca di mode list
+
+  useEffect(() => {
+    if (method === "list") {
+      setMcqs([]);
+      return;
+    }
+    setMcqs(buildMcqs(words, pool, method));
+    setQi(0);
+    setPicked(null);
+    setScore(0);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [method, level]);
+
+  const q = mcqs[qi];
+  const done = Boolean(mcqs.length) && qi >= mcqs.length;
+
+  if (method === "list") {
+    return (
+      <div className="space-y-3">
+        <div className="flex items-center justify-between gap-2">
+          <p className="text-xs text-zinc-500">
+            {words.length > 0 ? `${words.length} kosakata kanji level ${level}` : `Belum ada kanji level ${level}`}
+          </p>
+          <button className="btn-ghost inline-flex items-center gap-1 text-xs" onClick={() => setShowKey((v) => !v)}>
+            <Eye className="h-3.5 w-3.5" /> {showKey ? "Sembunyikan bacaan" : "Tampilkan bacaan"}
+          </button>
+        </div>
+        {words.length === 0 ? (
+          <div className="py-10 text-center">
+            <Layers className="mx-auto h-10 w-10 text-teal-600 dark:text-teal-400" strokeWidth={1.5} />
+            <p className="mt-3 font-medium">Belum ada kosakata kanji di level ini</p>
+            <p className="mt-1 text-sm text-zinc-500">
+              Generate kata di Bank Kata level {level} — nanti otomatis nongol di sini.
+            </p>
+            <Link to="/bank" className="btn-secondary mt-4 inline-flex">
+              Buka Bank Kata <ArrowRight className="h-4 w-4" />
+            </Link>
+          </div>
+        ) : (
+          <ul className="space-y-2">
+            {words.map((w) => (
+              <li key={w.id} className="card flex items-center gap-3 p-3.5">
+                <span className="min-w-0 flex-1">
+                  <JaText text={w.text} reading={w.reading} className="text-xl font-semibold" />
+                  {showKey && w.reading ? (
+                    <span className="mt-0.5 block text-xs text-zinc-400 dark:text-zinc-500">{w.reading}</span>
+                  ) : null}
+                  <span className="block truncate text-xs text-zinc-500">{w.meaningId}</span>
+                </span>
+                <button
+                  className="shrink-0 rounded-lg p-1.5 text-zinc-400 hover:bg-zinc-100 hover:text-teal-600 dark:hover:bg-zinc-800"
+                  title="Dengarkan"
+                  onClick={() => speak(w.text)}
+                >
+                  <Volume2 className="h-4.5 w-4.5" />
+                </button>
+                <Link
+                  to={`/write?level=${level}`}
+                  className="shrink-0 rounded-lg p-1.5 text-zinc-400 hover:bg-zinc-100 hover:text-teal-600 dark:hover:bg-zinc-800"
+                  title="Latihan nulis"
+                >
+                  <PencilLine className="h-4.5 w-4.5" />
+                </Link>
+              </li>
+            ))}
+          </ul>
+        )}
+      </div>
+    );
+  }
+
+  if (mcqs.length === 0) {
+    return (
+      <div className="py-10 text-center">
+        <BookOpenCheck className="mx-auto h-10 w-10 text-teal-600 dark:text-teal-400" strokeWidth={1.5} />
+        <p className="mt-3 font-medium">Kosakata belum cukup buat latihan</p>
+        <p className="mt-1 text-sm text-zinc-500">Minimal 4 kosakata kanji — tambah dari Bank Kata dulu ya.</p>
+        <button className="btn-secondary mt-4" onClick={() => setMethod("list")}>
+          Kembali ke daftar
+        </button>
+      </div>
+    );
+  }
+
+  if (done) {
+    return (
+      <div className="py-10 text-center">
+        <CheckCircle2 className="mx-auto h-12 w-12 text-teal-600 dark:text-teal-400" strokeWidth={1.5} />
+        <p className="mt-3 text-lg font-bold">Selesai!</p>
+        <p className="mt-1 text-sm text-zinc-500">
+          Benar {score} dari {mcqs.length} soal ({Math.round((score / mcqs.length) * 100)}%)
+        </p>
+        <div className="mt-5 flex justify-center gap-2">
+          <button
+            className="btn-secondary"
+            onClick={() => {
+              setMcqs(buildMcqs(words, pool, method));
+              setQi(0);
+              setPicked(null);
+              setScore(0);
+            }}
+          >
+            <RotateCcw className="h-4 w-4" /> Ulangi
+          </button>
+          <button className="btn-primary" onClick={() => setMethod("list")}>
+            Daftar kanji
+          </button>
+        </div>
+      </div>
+    );
+  }
+
+  const isReading = method === "reading";
+  return (
+    <div className="space-y-4">
+      <div className="flex items-center justify-between text-xs text-zinc-500">
+        <span>
+          Soal {qi + 1} / {mcqs.length} · benar {score}
+        </span>
+        <button className="btn-ghost text-xs" onClick={() => setMethod("list")}>
+          Keluar
+        </button>
+      </div>
+      <div className="h-1.5 overflow-hidden rounded-full bg-zinc-200 dark:bg-zinc-800">
+        <div
+          className="h-full bg-teal-600 transition-all dark:bg-teal-500"
+          style={{ width: `${(qi / mcqs.length) * 100}%` }}
+        />
+      </div>
+
+      <div className="card flex min-h-24 flex-col items-center justify-center gap-1 py-6">
+        {isReading ? (
+          /* Pilih bacaan: kanji TANPA furigana — itu latihannya */
+          <p className="text-4xl font-bold">{q.word.text}</p>
+        ) : (
+          <JaText text={q.word.text} reading={q.word.reading} className="text-4xl font-bold" />
+        )}
+        <p className="mt-1 text-xs text-zinc-400">
+          {isReading ? "Pilih cara baca yang tepat" : "Pilih arti yang tepat"}
+        </p>
+      </div>
+
+      <div className="space-y-2">
+        {q.options.map((opt, i) => {
+          const isAnswer = i === q.answer;
+          const isPicked = picked === i;
+          let cls = "btn-secondary w-full justify-start text-left";
+          if (picked !== null) {
+            if (isAnswer) cls += " !border-teal-500 !bg-teal-50 !text-teal-800 dark:!bg-teal-950 dark:!text-teal-300";
+            else if (isPicked) cls += " !border-red-300 !bg-red-50 !text-red-700 dark:!bg-red-950 dark:!text-red-300";
+            else cls += " opacity-50";
+          }
+          return (
+            <button
+              key={i}
+              className={cls}
+              disabled={picked !== null}
+              onClick={() => {
+                if (picked !== null) return;
+                setPicked(i);
+                if (i === q.answer) setScore((s) => s + 1);
+                if (isReading) speak(q.word.text);
+              }}
+            >
+              {opt}
+              {picked !== null && isAnswer ? (
+                <CheckCircle2 className="ml-auto h-4 w-4 shrink-0" />
+              ) : picked !== null && isPicked ? (
+                <XCircle className="ml-auto h-4 w-4 shrink-0" />
+              ) : null}
+            </button>
+          );
+        })}
+      </div>
+
+      {picked !== null ? (
+        <div className="space-y-3">
+          <div
+            className={`rounded-xl px-4 py-3 text-sm ${
+              picked === q.answer
+                ? "bg-teal-50 text-teal-800 dark:bg-teal-950 dark:text-teal-300"
+                : "bg-amber-50 text-amber-800 dark:bg-amber-950 dark:text-amber-300"
+            }`}
+          >
+            {picked === q.answer ? (
+              <span className="font-medium">Benar!</span>
+            ) : (
+              <span>
+                Jawaban yang tepat: <strong>{q.options[q.answer]}</strong>
+              </span>
+            )}
+            {q.word.meaningId ? (
+              <span className="block text-xs opacity-80">
+                {q.word.text} — {q.word.meaningId}
+              </span>
+            ) : null}
+          </div>
+          <button
+            className="btn-primary w-full"
+            onClick={() => {
+              setQi((i) => i + 1);
+              setPicked(null);
+            }}
+          >
+            Lanjut <ArrowRight className="h-4 w-4" />
+          </button>
+        </div>
+      ) : null}
+    </div>
+  );
+}
+
+export default function AksaraPage() {
+  const { script, level, levelWords, poolWords } = useLoaderData<typeof loader>();
+  const [params, setParams] = useSearchParams();
+
+  const go = (next: { script?: Script; level?: string }) => {
+    const p = new URLSearchParams(params);
+    if (next.script) p.set("script", next.script);
+    if (next.level) p.set("level", next.level);
+    setParams(p, { preventScrollReset: true });
+  };
+
+  return (
+    <div className="space-y-4">
+      {/* Tab aksara */}
+      <div className="grid grid-cols-3 gap-1.5">
+        {SCRIPTS.map((s) => (
+          <button
+            key={s}
+            onClick={() => go({ script: s })}
+            className={`rounded-xl border px-3 py-2 text-sm font-semibold transition-colors ${
+              script === s
+                ? "border-teal-500 bg-teal-50 text-teal-700 dark:bg-teal-950/60 dark:text-teal-300"
+                : "border-zinc-200 text-zinc-500 dark:border-zinc-800 dark:text-zinc-400"
+            }`}
+          >
+            {SCRIPT_LABEL[s]}
+          </button>
+        ))}
+      </div>
+
+      {script !== "kanji" ? (
+        <div className="space-y-2">
+          <p className="text-xs text-zinc-500">
+            Tap karakternya buat dengar cara bacanya — belajar 5 kolom per baris (gojūon), lanjut
+            dakuten/handakuten di bawah.
+          </p>
+          <div className="grid grid-cols-5 gap-1.5">
+            {KANA_TABLES[script].map(([kana, romaji]) => (
+              <button
+                key={kana}
+                onClick={() => speak(kana, "ja-JP")}
+                className="flex flex-col items-center gap-0.5 rounded-xl border border-zinc-200 bg-white py-2.5 transition-colors hover:border-teal-300 active:bg-teal-50 dark:border-zinc-800 dark:bg-zinc-900 dark:hover:border-teal-800 dark:active:bg-teal-950/60"
+              >
+                <span className="text-xl font-semibold">{kana}</span>
+                <span className="text-[10px] text-zinc-400">{romaji}</span>
+              </button>
+            ))}
+          </div>
+          <p className="pt-1 text-center text-xs text-zinc-400">
+            {script === "hiragana"
+              ? "Hiragana = bunyi asli bahasa Jepang: partikel & infleksi selalu pakai ini."
+              : "Katakana = kata serapan asing & onomatope, mis. コーヒー (koohii)."}
+          </p>
+        </div>
+      ) : (
+        <div className="space-y-4">
+          {/* Level kanji N5–N1 */}
+          <div className="no-scrollbar -mx-4 flex gap-1.5 overflow-x-auto px-4">
+            {LEVELS.map((l) => (
+              <button
+                key={l}
+                onClick={() => go({ level: l })}
+                className={`flex shrink-0 items-center gap-1.5 rounded-full border px-3 py-1.5 text-xs font-semibold transition-colors ${
+                  level === l
+                    ? "border-teal-500 bg-teal-50 text-teal-700 dark:bg-teal-950/60 dark:text-teal-300"
+                    : "border-zinc-200 bg-white text-zinc-600 dark:border-zinc-800 dark:bg-zinc-900 dark:text-zinc-300"
+                }`}
+              >
+                {l}
+              </button>
+            ))}
+          </div>
+
+          {/* Metode latihan */}
+          <KanjiPractice key={level} words={levelWords} pool={poolWords} level={level} />
+
+          <p className="text-center text-xs text-zinc-400">
+            Latihan nulis kanji ada di{" "}
+            <Link to={`/write?level=${level}`} className="font-medium text-teal-700 underline underline-offset-2 dark:text-teal-400">
+              /write?level={level}
+            </Link>{" "}
+            — coret di canvas dengan panduan samar.
+          </p>
+        </div>
+      )}
+    </div>
+  );
+}

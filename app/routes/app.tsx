@@ -2,6 +2,7 @@ import type { LoaderFunctionArgs, UIMatch } from "react-router";
 import {
   Link,
   Outlet,
+  useLoaderData,
   useLocation,
   useMatches,
   useNavigation,
@@ -10,24 +11,25 @@ import { useEffect, useRef, useState } from "react";
 import { Bell, CheckCircle2, ListChecks } from "lucide-react";
 import {
   Compass,
+  House,
   Languages,
   Library,
   MessageCircle,
-  Plus,
   Repeat,
   Settings,
   BookMarked,
   type LucideIcon,
 } from "lucide-react";
 import { requireUser } from "~/lib/auth.server";
+import { getTargetLang } from "~/lib/lang.server";
 
 export async function loader({ request }: LoaderFunctionArgs) {
   await requireUser(request);
-  return null;
+  return { lang: await getTargetLang() };
 }
 
 const NAV: { to: string; label: string; icon: LucideIcon }[] = [
-  { to: "/", label: "Tambah", icon: Plus },
+  { to: "/", label: "Home", icon: House },
   { to: "/library", label: "Library", icon: Library },
   { to: "/bank", label: "Bank", icon: BookMarked },
   { to: "/chat", label: "Chat", icon: MessageCircle },
@@ -41,6 +43,8 @@ export default function AppLayout() {
   const matches = useMatches() as UIMatch[];
   const leaf = matches[matches.length - 1];
   const handle = (leaf?.handle ?? {}) as { title?: string; ownHeader?: boolean };
+  const { lang } = useLoaderData<typeof loader>();
+  const isJa = lang === "ja";
 
   // Notifikasi beneran: dropdown list (latihan hari ini + riwayat), dot kalau belum selesai.
   const [quizPending, setQuizPending] = useState<{ total: number; done: number; completed: boolean } | null>(null);
@@ -103,14 +107,15 @@ export default function AppLayout() {
               onClick={() => setNotifOpen((o) => !o)}
             >
               <Bell className="h-5 w-5" strokeWidth={1.75} />
-              {/* Dot notif: latihan harian (teal), TOEFL mingguan (indigo), Uji Bulanan (amber) */}
+              {/* Dot notif: latihan harian (hijau). Mode JA: CUMA ini — tes periodik
+                  (JLPT) cukup diakses dari Review, gak perlu dot dobel yang bikin rame. */}
               {quizPending && !quizPending.completed ? (
-                <span className="absolute top-1.5 right-1.5 h-2 w-2 rounded-full bg-teal-500" />
+                <span className="absolute top-1.5 right-1.5 h-2 w-2 rounded-full bg-emerald-500" />
               ) : null}
-              {periodic?.toefl && !periodic.toefl.completed ? (
+              {!isJa && periodic?.toefl && !periodic.toefl.completed ? (
                 <span className="absolute top-1.5 right-4 h-2 w-2 rounded-full bg-indigo-500" />
               ) : null}
-              {periodic?.bulanan?.available && !periodic.bulanan.completed ? (
+              {!isJa && periodic?.bulanan?.available && !periodic.bulanan.completed ? (
                 <span className="absolute top-1.5 right-7 h-2 w-2 rounded-full bg-amber-500" />
               ) : null}
             </button>
@@ -172,23 +177,27 @@ export default function AppLayout() {
                     <span className="text-sm">
                       {periodic.bulanan.available && !periodic.bulanan.completed ? (
                         <>
-                          <span className="block font-medium">Uji Bulanan siap</span>
+                          <span className="block font-medium">{isJa ? "JLPT Bulanan siap" : "Uji Bulanan siap"}</span>
                           <span className="block text-xs text-zinc-500">
                             50 soal campuran — ngukur progres sebulan ini
                           </span>
                         </>
                       ) : !periodic.toefl.completed ? (
                         <>
-                          <span className="block font-medium">TOEFL Test minggu ini nunggu</span>
+                          <span className="block font-medium">
+                            {isJa ? "Tes JLPT minggu ini nunggu" : "TOEFL Test minggu ini nunggu"}
+                          </span>
                           <span className="block text-xs text-zinc-500">
-                            40 soal · 3 section · timer 25 menit
+                            {isJa ? "40 soal gaya JLPT · timer 25 menit" : "40 soal · 3 section · timer 25 menit"}
                           </span>
                         </>
                       ) : (
                         <>
                           <span className="block font-medium">Tes periodik aman</span>
                           <span className="block text-xs text-zinc-500">
-                            TOEFL minggu ini & Uji Bulanan sudah selesai
+                            {isJa
+                              ? "JLPT minggu ini & JLPT Bulanan sudah selesai"
+                              : "TOEFL minggu ini & Uji Bulanan sudah selesai"}
                           </span>
                         </>
                       )}

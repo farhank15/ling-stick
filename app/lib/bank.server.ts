@@ -1,4 +1,4 @@
-import { and, eq, inArray, sql } from "drizzle-orm";
+import { and, eq, ne, inArray, sql } from "drizzle-orm";
 import { db } from "~/lib/db/client.server";
 import { cards, examples, items, wordbank } from "~/lib/db/schema";
 import { getTargetLang, detectLang } from "~/lib/lang.server";
@@ -54,9 +54,12 @@ export function isCefr(v: string | null | undefined): v is Cefr {
   return !!v && (CEFR_LEVELS as readonly string[]).includes(v);
 }
 
-/** List entri bank; filter level & status. Contoh di-prefetch 1 query (anti N+1). Semua ter-scope bahasa aktif. */
+/** List entri bank; filter level & status. Contoh di-prefetch 1 query (anti N+1). Semua ter-scope bahasa aktif.
+ *  Mode JA: entri type "kana" gak ikut — aksara punya menu sendiri di Home (halaman Aksara). */
 export async function listBank(filter: { cefr?: string; status?: string } = {}) {
-  const conds = [eq(wordbank.lang, await getTargetLang())];
+  const lang = await getTargetLang();
+  const conds = [eq(wordbank.lang, lang)];
+  if (lang === "ja") conds.push(ne(wordbank.type, "kana"));
   if (isCefr(filter.cefr)) conds.push(eq(wordbank.cefr, filter.cefr));
   if (filter.status && ["new", "learning", "known"].includes(filter.status)) {
     conds.push(eq(wordbank.status, filter.status));
@@ -70,16 +73,20 @@ export async function listBank(filter: { cefr?: string; status?: string } = {}) 
   return rows.map(parseRow);
 }
 
-/** Badge count per level CEFR/JLPT + per status — 1 query GROUP BY. Ter-scope bahasa aktif. */
+/** Badge count per level CEFR/JLPT + per status — 1 query GROUP BY. Ter-scope bahasa aktif.
+ *  Mode JA kana di-exclude biar badge count = isi list Bank (kana dihitung di menu Aksara). */
 export async function getBankStats() {
+  const lang = await getTargetLang();
+  const statConds = lang === "ja" ? [eq(wordbank.lang, lang), ne(wordbank.type, "kana")] : [eq(wordbank.lang, lang)];
   const perLevel = await db
     .select({ cefr: wordbank.cefr, total: sql<number>`count(*)` })
     .from(wordbank)
-    .where(eq(wordbank.lang, await getTargetLang()))
+    .where(and(...statConds))
     .groupBy(wordbank.cefr);
   const perStatus = await db
     .select({ status: wordbank.status, total: sql<number>`count(*)` })
     .from(wordbank)
+    .where(and(...statConds))
     .groupBy(wordbank.status);
   const byLevel = Object.fromEntries(perLevel.map((r) => [r.cefr, Number(r.total)])) as Record<string, number>;
   const byStatus = Object.fromEntries(perStatus.map((r) => [r.status, Number(r.total)])) as Record<string, number>;
@@ -275,13 +282,8 @@ async function insertGeneratedJa(
       skipped++;
       continue;
     }
-    const meaningJa = [
-      w.reading ? w.reading : null,
-      w.romaji ? `(${w.romaji})` : null,
-      w.meaning_id,
-    ]
-      .filter(Boolean)
-      .join(" ");
+    // meaningId DIJAGA MURNI Indonesia — reading/romaji tersimpan terpisah di kolom
+    // `reading` ("かな (romaji)") biar UI bisa render furigana + toggle romaji.
     const examplesJa = (w.examples ?? []).slice(0, 4).map((e) => ({
       en: e.romaji ? `${e.en}\n${e.romaji}` : e.en,
       id: e.id,
@@ -292,7 +294,7 @@ async function insertGeneratedJa(
       type: w.type || "word",
       register: w.register || "neutral",
       cefr: level,
-      meaningId: meaningJa,
+      meaningId: w.meaning_id,
       useWhenId: w.use_when_id || null,
       examplesJson: JSON.stringify(examplesJa),
       status: "new",

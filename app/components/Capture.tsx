@@ -1,9 +1,10 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { Link } from "react-router";
 import { Bookmark, CheckCircle2, ClipboardPaste, Lightbulb, Loader2 } from "lucide-react";
+import { JaText, hasJa } from "~/components/JaText";
 import { useToast } from "~/components/Toast";
 
-type GenExample = { register: string; en: string; id: string };
+type GenExample = { register: string; en: string; id: string; romaji?: string };
 type GenSense = { label: string; examples: GenExample[] };
 type GenResult = {
   headword: string;
@@ -347,7 +348,19 @@ export function Capture() {
         <div ref={resultRef} className="space-y-4">
           <div className="card">
             <div className="flex items-start justify-between gap-2">
-              <h2 className="text-lg font-bold">{result.headword}</h2>
+              {hasJa(result.headword) || result.reading ? (
+                <h2 className="text-lg font-bold">
+                  {/* JA: furigana redup di atas kanji, romaji di-balik icon toggle */}
+                  <JaText
+                    text={result.headword}
+                    reading={result.reading}
+                    romaji={result.romaji}
+                    className="text-lg font-bold"
+                  />
+                </h2>
+              ) : (
+                <h2 className="text-lg font-bold">{result.headword}</h2>
+              )}
               <div className="flex shrink-0 flex-wrap gap-1">
                 <span className="badge bg-zinc-100 text-zinc-600 dark:bg-zinc-800 dark:text-zinc-400">
                   {TYPE_LABELS[result.type] ?? result.type}
@@ -365,8 +378,8 @@ export function Capture() {
                 ) : null}
               </div>
             </div>
-            {/* JA: kana redup di bawah kanji — bantu baca tanpa nimpa */}
-            {result.reading ? (
+            {/* JA non-kanji (pure kana): kana+romaji tetap ditampilin redup di bawah */}
+            {result.reading && !hasJa(result.headword) ? (
               <p className="mt-0.5 text-sm text-zinc-400 dark:text-zinc-500">
                 {result.reading}
                 {result.romaji ? <span className="ml-1.5 text-xs">({result.romaji})</span> : null}
@@ -438,8 +451,21 @@ export function Capture() {
                               checked={selected.has(key)}
                               onChange={() => toggle(key)}
                             />
-                            <span>
-                              <span className="block text-sm">{ex.en}</span>
+                            <span className="min-w-0 flex-1">
+                              {(() => {
+                                const jpLine = ex.en.split("\n")[0] ?? ex.en;
+                                const romajiLine = ex.en.includes("\n")
+                                  ? ex.en.split("\n").slice(1).join(" ")
+                                  : null;
+                                const romaji = ex.romaji || romajiLine || null;
+                                return hasJa(jpLine) ? (
+                                  <span className="block text-sm">
+                                    <JaText text={jpLine} romaji={romaji} className="text-sm" />
+                                  </span>
+                                ) : (
+                                  <span className="block text-sm">{ex.en}</span>
+                                );
+                              })()}
                               <span className="block text-xs text-zinc-500 dark:text-zinc-400">
                                 {ex.id}
                               </span>

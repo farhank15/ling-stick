@@ -15,6 +15,7 @@ import {
 import { requireUser } from "~/lib/auth.server";
 import { getTargetLang } from "~/lib/lang.server";
 import { ttsLang } from "~/lib/utils.shared";
+import { JaText, hasJa } from "~/components/JaText";
 import { useToast } from "~/components/Toast";
 
 function speak(s: string, lang?: string) {
@@ -228,7 +229,9 @@ export default function BankPage() {
         <div>
           <h1 className="text-xl font-bold tracking-tight">Bank Kata</h1>
           <p className="text-xs text-zinc-500">
-            {stats ? `${stats.total} kata siap dipelajari` : "Katalog kosakata per level CEFR"}
+            {stats
+              ? `${stats.total} kata siap dipelajari`
+              : `Katalog kosakata per level ${lang === "ja" ? "JLPT" : "CEFR"}`}
           </p>
         </div>
         <button className="btn-primary gap-1.5 text-sm" onClick={() => setGenOpen((o) => !o)}>
@@ -387,8 +390,11 @@ export default function BankPage() {
                     onTouchMove={(ev) => onSwipeMove(ev.touches[0].clientX)}
                     onTouchEnd={() => onSwipeEnd(e.id)}
                   >
-                    <button
-                      className="flex w-full items-center gap-2 p-4 text-left"
+                    {/* div (bukan button) biar toggle romaji di JaText bisa jadi button di dalamnya */}
+                    <div
+                      role="button"
+                      tabIndex={0}
+                      className="flex w-full cursor-pointer items-center gap-2 p-4 text-left"
                       onClick={() => {
                         if (moved.current) return;
                         setExpanded(isOpen ? null : e.id);
@@ -400,16 +406,20 @@ export default function BankPage() {
                         {e.cefr}
                       </span>
                       <span className="min-w-0 flex-1">
-                        <span className="block truncate font-semibold">{e.text}</span>
-                        {e.reading ? (
-                          <span className="block truncate text-xs text-zinc-400 dark:text-zinc-500">{e.reading}</span>
-                        ) : null}
+                        {hasJa(e.text) ? (
+                          /* JA: kanji + furigana redup di atas, romaji di-balik icon toggle */
+                          <span className="block font-semibold">
+                            <JaText text={e.text} reading={e.reading} className="font-semibold" />
+                          </span>
+                        ) : (
+                          <span className="block truncate font-semibold">{e.text}</span>
+                        )}
                         <span className="block truncate text-xs text-zinc-500">{e.meaningId}</span>
                       </span>
                       <ChevronDown
                         className={`h-4 w-4 shrink-0 text-zinc-400 transition-transform ${isOpen ? "rotate-180" : ""}`}
                       />
-                    </button>
+                    </div>
 
                     {isOpen ? (
                       <div className="space-y-3 border-t border-zinc-100 px-4 pb-4 pt-3 dark:border-zinc-800">
@@ -420,21 +430,36 @@ export default function BankPage() {
                         </div>
                         {e.examples.length > 0 ? (
                           <ul className="space-y-2">
-                            {e.examples.map((ex, i) => (
+                            {e.examples.map((ex, i) => {
+                              const jpLine = ex.en.split("\n")[0] ?? ex.en;
+                              const romajiLine = ex.en.includes("\n") ? ex.en.split("\n").slice(1).join(" ") : null;
+                              return (
                               <li key={i} className="rounded-xl bg-zinc-50 p-3 dark:bg-zinc-800/60">
                                 <div className="flex items-start gap-2">
-                                  <p className="flex-1 whitespace-pre-line text-sm font-medium">{ex.en}</p>
+                                  <div className="min-w-0 flex-1">
+                                    {hasJa(jpLine) ? (
+                                      /* JA: kalimat + furigana; romaji (baris ke-2) di-balik toggle */
+                                      <JaText
+                                        text={jpLine}
+                                        romaji={romajiLine}
+                                        className="text-sm font-medium"
+                                      />
+                                    ) : (
+                                      <p className="whitespace-pre-line text-sm font-medium">{ex.en}</p>
+                                    )}
+                                  </div>
                                   <button
                                     className="shrink-0 rounded-lg p-1 text-zinc-400 hover:bg-zinc-200 hover:text-zinc-600 dark:hover:bg-zinc-700"
                                     title="Dengarkan"
-                                    onClick={() => speak(ex.en)}
+                                    onClick={() => speak(jpLine)}
                                   >
                                     <Volume2 className="h-4 w-4" />
                                   </button>
                                 </div>
                                 <p className="mt-0.5 text-xs text-zinc-500">{ex.id}</p>
                               </li>
-                            ))}
+                              );
+                            })}
                           </ul>
                         ) : null}
                         <div className="flex gap-2 pt-1">

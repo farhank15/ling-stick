@@ -4,9 +4,9 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { ArrowRight, Eraser, Eye, EyeOff, PencilLine } from "lucide-react";
 import { requireUser } from "~/lib/auth.server";
 import { db } from "~/lib/db/client.server";
-import { cards, items } from "~/lib/db/schema";
+import { cards, items, wordbank } from "~/lib/db/schema";
 import { getTargetLang } from "~/lib/lang.server";
-import { and, eq, sql } from "drizzle-orm";
+import { and, eq, ne, sql } from "drizzle-orm";
 
 export const meta: MetaFunction = () => [{ title: "Latihan Nulis — LingStick" }];
 export const handle = { title: "Latihan Nulis" };
@@ -22,16 +22,36 @@ async function writeTargets(lang: string) {
     .limit(50);
 }
 
+/** Target dari Bank per level JLPT (?level=N5) — latihan kanji langsung dari katalog. */
+async function writeTargetsBank(level: string) {
+  return db
+    .select({ id: wordbank.id, text: wordbank.text, reading: wordbank.reading, meaningId: wordbank.meaningId })
+    .from(wordbank)
+    .where(
+      and(
+        eq(wordbank.lang, "ja"),
+        eq(wordbank.cefr, level),
+        ne(wordbank.type, "kana"),
+        sql`${wordbank.meaningId} IS NOT NULL`,
+      ),
+    )
+    .orderBy(wordbank.id)
+    .limit(50);
+}
+
 export async function loader({ request }: LoaderFunctionArgs) {
   await requireUser(request);
   const lang = await getTargetLang();
-  return { lang, targets: await writeTargets(lang) };
+  const level = new URL(request.url).searchParams.get("level");
+  const useBank = lang === "ja" && !!level && /^N[1-5]$/.test(level);
+  const targets = useBank ? await writeTargetsBank(level!) : await writeTargets(lang);
+  return { lang, level: useBank ? level : null, targets };
 }
 
 type Stroke = { x: number; y: number };
 
 export default function WritePage() {
-  const { lang, targets } = useLoaderData<typeof loader>();
+  const { lang, level, targets } = useLoaderData<typeof loader>();
   const [idx, setIdx] = useState(0);
   const [showGuide, setShowGuide] = useState(true); // bentuk samar di background
   const [showRomaji, setShowRomaji] = useState(false); // romaji hidden by default (belajar baca)
@@ -100,9 +120,11 @@ export default function WritePage() {
         <PencilLine className="mx-auto h-10 w-10 text-teal-600 dark:text-teal-400" strokeWidth={1.5} />
         <p className="mt-3 font-medium">Belum ada kosakata buat dilatih</p>
         <p className="mt-1 text-sm text-zinc-500">
-          {lang === "ja"
-            ? "Simpan kosakata Jepang dulu dari Tambah atau Bank Kata."
-            : "Latihan nulis paling cocok buat kosakata Jepang — ganti bahasa target di Pengaturan."}
+          {level
+            ? `Bank belum punya kosakata level ${level} — generate dulu di Bank Kata.`
+            : lang === "ja"
+              ? "Simpan kosakata Jepang dulu dari Tambah atau Bank Kata."
+              : "Latihan nulis paling cocok buat kosakata Jepang — ganti bahasa target di Pengaturan."}
         </p>
         <Link to="/bank" className="btn-secondary mt-4 inline-flex">
           Buka Bank Kata <ArrowRight className="h-4 w-4" />
@@ -115,6 +137,11 @@ export default function WritePage() {
 
   return (
     <div className="space-y-4">
+      {level ? (
+        <p className="text-xs text-zinc-400">
+          Target dari Bank Kata level <span className="font-semibold">{level}</span>
+        </p>
+      ) : null}
       <p className="text-sm text-zinc-500 dark:text-zinc-400">
         Coret karakternya di kotak pakai jari/stylus. Bentuk samar di belakang = panduan —
         matikan kalau udah mulai hafal.

@@ -25,6 +25,8 @@ import {
 } from "lucide-react";
 import { requireUser } from "~/lib/auth.server";
 import { env } from "~/lib/env.server";
+import { getTargetLang } from "~/lib/lang.server";
+import { JaText, hasJa } from "~/components/JaText";
 import { useToast } from "~/components/Toast";
 
 export const meta: MetaFunction = () => [{ title: "Review — LingStick" }];
@@ -32,7 +34,7 @@ export const handle = { title: "Review" };
 
 export async function loader({ request }: { request: Request }) {
   await requireUser(request);
-  return { dailyTarget: env.DAILY_QUIZ_SIZE };
+  return { dailyTarget: env.DAILY_QUIZ_SIZE, lang: await getTargetLang() };
 }
 
 import { ttsLang } from "~/lib/utils.shared";
@@ -122,6 +124,12 @@ const MODES: {
   { id: "match", label: "Match", icon: Puzzle, desc: "Minigame: pasangkan kata dengan artinya — per ronde", action: "start" },
 ];
 
+/** Override label/desc mode khusus Jepang. */
+const JA_MODE_TEXT: Partial<Record<string, { label?: string; desc?: string }>> = {
+  typing: { desc: "Ketik bahasa Jepangnya dari arti Indonesia" },
+  scramble: { desc: "Susun token jadi kalimat Jepang yang benar" },
+};
+
 const TYPE_META: Record<QuestionType, { label: string; icon: typeof Ear }> = {
   mcq_en_id: { label: "Arti dari frasa", icon: BookOpenCheck },
   mcq_id_en: { label: "Frasa yang tepat", icon: BookOpenCheck },
@@ -188,12 +196,14 @@ function ModePicker({
   onGenerate,
   genBusy,
   genMsg,
+  ja,
 }: {
   periodic: Periodic | null;
   onStart: (mode: Mode | "flash" | "match" | "toefl" | "bulanan") => void;
   onGenerate: (mode: "typing" | "intens") => void;
   genBusy: string | null;
   genMsg: string | null;
+  ja: boolean;
 }) {
   return (
     <div className="space-y-4">
@@ -203,24 +213,28 @@ function ModePicker({
         </div>
       ) : null}
 
-      {/* Tes periodik — TOEFL mingguan & Uji Bulanan */}
+      {/* Tes periodik — TOEFL mingguan & Uji Bulanan (JA: gaya JLPT) */}
       {periodic ? (
         <div className="space-y-2">
           <p className="label px-1">Tes periodik</p>
           <PeriodicCard
             kind="toefl"
-            title="TOEFL Test Mingguan"
+            title={ja ? "Tes JLPT Mingguan" : "TOEFL Test Mingguan"}
             badge="Mingguan"
             badgeCls="bg-indigo-100 text-indigo-700 dark:bg-indigo-950 dark:text-indigo-300"
             borderCls="border-indigo-300/70 dark:border-indigo-800"
-            desc="40 soal · 3 section gaya TOEFL (Structure → Vocabulary → Listening) · timer 25 menit · skor + estimasi level"
+            desc={
+              ja
+                ? "40 soal gaya JLPT (Tata Bahasa → Kosakata → Dengar) · timer 25 menit · skor + estimasi level"
+                : "40 soal · 3 section gaya TOEFL (Structure → Vocabulary → Listening) · timer 25 menit · skor + estimasi level"
+            }
             status={periodic.toefl}
             onStart={onStart}
           />
           {periodic.bulanan.available ? (
             <PeriodicCard
               kind="bulanan"
-              title="Uji Bulanan"
+              title={ja ? "JLPT Bulanan" : "Uji Bulanan"}
               badge="Bulanan"
               badgeCls="bg-amber-100 text-amber-800 dark:bg-amber-950 dark:text-amber-300"
               borderCls="border-amber-300/70 dark:border-amber-800"
@@ -234,7 +248,7 @@ function ModePicker({
                 <span className="rounded-full bg-zinc-100 px-2 py-0.5 text-[10px] font-bold uppercase tracking-wide text-zinc-500 dark:bg-zinc-800 dark:text-zinc-400">
                   Bulanan
                 </span>
-                <p className="font-semibold">Uji Bulanan</p>
+                <p className="font-semibold">{ja ? "JLPT Bulanan" : "Uji Bulanan"}</p>
               </div>
               <p className="mt-1 text-xs text-zinc-500">
                 Terbuka mulai tanggal 25 — akhir bulan, buat ngukur capaian sebulan penuh.
@@ -246,14 +260,17 @@ function ModePicker({
 
       <p className="label px-1">Latihan harian</p>
       <div className="space-y-2">
-        {MODES.map((m) => (
+        {MODES.map((m) => {
+          const label = ja ? (JA_MODE_TEXT[m.id]?.label ?? m.label) : m.label;
+          const desc = ja ? (JA_MODE_TEXT[m.id]?.desc ?? m.desc) : m.desc;
+          return (
           <div key={m.id} className="card flex items-center gap-3 p-4">
             <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-teal-50 text-teal-700 dark:bg-teal-950 dark:text-teal-300">
               <m.icon className="h-5 w-5" strokeWidth={1.75} />
             </span>
             <div className="min-w-0 flex-1">
-              <p className="font-semibold">{m.label}</p>
-              <p className="truncate text-xs text-zinc-500">{m.desc}</p>
+              <p className="font-semibold">{label}</p>
+              <p className="truncate text-xs text-zinc-500">{desc}</p>
             </div>
             {m.action === "start" ? (
               <button className="btn-primary shrink-0 text-sm" onClick={() => onStart(m.id)}>
@@ -274,11 +291,31 @@ function ModePicker({
               </button>
             )}
           </div>
-        ))}
+          );
+        })}
       </div>
       <p className="px-1 text-center text-xs text-zinc-400">
         Generate = bikin set soal tambahan baru di luar jadwal harian.
       </p>
+
+      {/* Latihan kanji multi-metode — khusus mode Jepang */}
+      {ja ? (
+        <Link
+          to="/aksara?script=kanji"
+          className="card flex items-center gap-3 p-4 transition-colors hover:border-teal-300 dark:hover:border-teal-800"
+        >
+          <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-teal-50 text-lg font-bold text-teal-700 dark:bg-teal-950 dark:text-teal-300">
+            漢
+          </span>
+          <div className="min-w-0 flex-1">
+            <p className="font-semibold">Latihan Kanji</p>
+            <p className="truncate text-xs text-zinc-500">
+              Kenalin, pilih bacaan &amp; arti per level N5–N1 — plus tabel hiragana/katakana
+            </p>
+          </div>
+          <ArrowRight className="h-4 w-4 shrink-0 text-zinc-400" />
+        </Link>
+      ) : null}
 
       {/* Latihan nulis kanji/kana — khusus mode Jepang */}
       <Link
@@ -346,7 +383,8 @@ function OptionList({
 }
 
 export default function ReviewPage() {
-  const { dailyTarget } = useLoaderData<typeof loader>();
+  const { dailyTarget, lang } = useLoaderData<typeof loader>();
+  const ja = lang === "ja";
   const toast = useToast();
   const [params, setParams] = useSearchParams();
   // Mode kesimpen di URL (?mode=toefl) — refresh gak balikin ke picker.
@@ -879,6 +917,7 @@ export default function ReviewPage() {
     return (
       <ModePicker
         periodic={periodic}
+        ja={ja}
         onStart={(m) =>
           m === "flash"
             ? startFlash()
@@ -933,10 +972,10 @@ export default function ReviewPage() {
           <span className="flex items-center gap-1">
             <button
               className="btn-ghost text-xs"
-              title="Balik arah kartu (EN→ID atau ID→EN)"
+              title={ja ? "Balik arah kartu (JP→ID atau ID→JP)" : "Balik arah kartu (EN→ID atau ID→EN)"}
               onClick={() => setReverse((v) => !v)}
             >
-              {reverse ? "ID → EN" : "EN → ID"}
+              {ja ? (reverse ? "ID → JP" : "JP → ID") : reverse ? "ID → EN" : "EN → ID"}
             </button>
             <button className="btn-ghost text-xs" onClick={() => backToPick()}>
               Selesai
@@ -987,10 +1026,15 @@ export default function ReviewPage() {
               }}
             >
               <p className="text-xs uppercase tracking-wide text-zinc-400">
-                {reverse ? "Apa bahasa Inggrisnya?" : c.reps > 0 ? "Ulangi kartu ini" : "Kartu baru"}
+                {reverse ? (ja ? "Apa bahasa Jepangnya?" : "Apa bahasa Inggrisnya?") : c.reps > 0 ? "Ulangi kartu ini" : "Kartu baru"}
               </p>
               <div className="flex items-center justify-center gap-2">
-                <p className="text-2xl font-bold">{reverse ? c.meaningId ?? "(tanpa arti)" : c.text}</p>
+                {reverse || !hasJa(c.text) ? (
+                  <p className="text-2xl font-bold">{reverse ? c.meaningId ?? "(tanpa arti)" : c.text}</p>
+                ) : (
+                  /* JA: kanji + furigana redup di atas, romaji di-balik icon toggle */
+                  <JaText text={c.text} reading={c.reading} className="text-2xl font-bold" />
+                )}
                 {!reverse ? (
                   <button
                     className="rounded-lg p-1.5 text-zinc-400 hover:bg-zinc-100 hover:text-teal-600 dark:hover:bg-zinc-800"
@@ -1004,15 +1048,11 @@ export default function ReviewPage() {
                   </button>
                 ) : null}
               </div>
-              {/* JA: kana redup di bawah kanji — bantu baca tanpa jadi jawaban utama */}
-              {!reverse && c.reading ? (
-                <p className="-mt-2 text-sm text-zinc-400 dark:text-zinc-500">{c.reading}</p>
-              ) : null}
 
               {reveal ? (
                 <div className="space-y-3 border-t border-zinc-100 pt-4 text-left dark:border-zinc-800">
                   <div>
-                    <p className="label">{reverse ? "Inggrisnya" : "Arti"}</p>
+                    <p className="label">{reverse ? (ja ? "Jepangnya" : "Inggrisnya") : "Arti"}</p>
                     <p className="text-lg font-medium text-teal-700 dark:text-teal-300">
                       {reverse ? c.text : c.meaningId}
                     </p>
@@ -1037,18 +1077,32 @@ export default function ReviewPage() {
                   {c.firstEn ? (
                     <div>
                       <p className="label">Contoh</p>
-                      <div className="flex items-start gap-2">
-                        <p className="flex-1 whitespace-pre-line text-sm font-medium">{c.firstEn}</p>
-                        <button
-                          className="shrink-0 rounded-lg p-1 text-zinc-400 hover:bg-zinc-100 hover:text-teal-600 dark:hover:bg-zinc-800"
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            speak(c.firstEn!);
-                          }}
-                        >
-                          <Volume2 className="h-4 w-4" />
-                        </button>
-                      </div>
+                      {(() => {
+                        const jpLine = hasJa(c.firstEn) ? (c.firstEn!.split("\n")[0] ?? c.firstEn!) : c.firstEn!;
+                        const romajiLine = hasJa(c.firstEn) && c.firstEn!.includes("\n")
+                          ? c.firstEn!.split("\n").slice(1).join(" ")
+                          : null;
+                        return (
+                          <div className="flex items-start gap-2">
+                            {hasJa(jpLine) ? (
+                              <div className="flex-1">
+                                <JaText text={jpLine} romaji={romajiLine} className="text-sm font-medium" />
+                              </div>
+                            ) : (
+                              <p className="flex-1 whitespace-pre-line text-sm font-medium">{c.firstEn}</p>
+                            )}
+                            <button
+                              className="shrink-0 rounded-lg p-1 text-zinc-400 hover:bg-zinc-100 hover:text-teal-600 dark:hover:bg-zinc-800"
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                speak(jpLine);
+                              }}
+                            >
+                              <Volume2 className="h-4 w-4" />
+                            </button>
+                          </div>
+                        );
+                      })()}
                       {c.firstId ? <p className="mt-0.5 text-xs text-zinc-500">{c.firstId}</p> : null}
                     </div>
                   ) : null}
@@ -1243,8 +1297,10 @@ export default function ReviewPage() {
 
   const pct = Math.round((set!.correct / Math.max(1, total)) * 100);
 
-  // Estimasi level CEFR dari akurasi tes periodik.
+  // Estimasi level dari akurasi tes periodik: CEFR (EN) / JLPT (JA).
   const cefrOf = (p: number) => (p >= 90 ? "C1" : p >= 80 ? "B2+" : p >= 70 ? "B2" : p >= 60 ? "B1+" : p >= 50 ? "B1" : p >= 35 ? "A2" : "A1");
+  const jlptOf = (p: number) => (p >= 90 ? "N2" : p >= 80 ? "N3" : p >= 70 ? "N3-" : p >= 60 ? "N4" : p >= 50 ? "N4-" : "N5");
+  const levelOf = ja ? jlptOf : cefrOf;
   const isToefl = set!.mode === "toefl";
   const isBulanan = set!.mode === "bulanan";
 
@@ -1265,10 +1321,10 @@ export default function ReviewPage() {
               Estimasi level
             </p>
             <p className="text-3xl font-extrabold text-indigo-700 dark:text-indigo-200">
-              {cefrOf(pct)}
+              {levelOf(pct)}
             </p>
             <p className="text-[11px] text-indigo-400 dark:text-indigo-300/70">
-              A1 pemula → C1 mahir · akurasi {pct}%
+              {ja ? "N5 pemula → N2 mahir" : "A1 pemula → C1 mahir"} · akurasi {pct}%
             </p>
           </div>
         ) : null}
@@ -1295,6 +1351,8 @@ export default function ReviewPage() {
   const isTypingUI = mode === "typing" || q.type === "typing";
   const isScrambleUI = mode === "scramble";
   const meta = TYPE_META[isScrambleUI ? "typing" : q.type];
+  const metaLabel =
+    ja && (isScrambleUI || q.type === "typing") ? "Ketik bahasa Jepangnya" : meta.label;
   const spokenEn = q.options[Number(q.answer)]; // teks EN untuk TTS (listen/audio)
   // JP: token per-kata dari segmentasi AI (partikel sendiri); EN: split spasi.
   const scrambleWords = q.tokens && q.tokens.length >= 2 ? q.tokens : (q.answer ?? "").split(/\s+/).filter(Boolean);
@@ -1368,16 +1426,18 @@ export default function ReviewPage() {
 
       <div className="card">
         <span className="badge inline-flex items-center gap-1 bg-zinc-100 text-zinc-500 dark:bg-zinc-800 dark:text-zinc-400">
-          <meta.icon className="h-3.5 w-3.5" /> {meta.label}
+          <meta.icon className="h-3.5 w-3.5" /> {metaLabel}
         </span>
 
         {isTypingUI ? (
           <>
             <p className="mt-3 text-center text-xl font-semibold">{q.prompt}</p>
-            <p className="mt-1 text-center text-[11px] text-zinc-400">Ketik bahasa Inggrisnya dari arti di atas</p>
+            <p className="mt-1 text-center text-[11px] text-zinc-400">
+              {ja ? "Ketik bahasa Jepangnya dari arti di atas" : "Ketik bahasa Inggrisnya dari arti di atas"}
+            </p>
             <input
               className="input-area mt-4 text-center text-lg"
-              placeholder="Ketik bahasa Inggrisnya…"
+              placeholder={ja ? "Ketik bahasa Jepangnya…" : "Ketik bahasa Inggrisnya…"}
               value={typed}
               autoFocus
               disabled={typedResult !== null}

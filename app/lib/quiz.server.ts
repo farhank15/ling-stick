@@ -2,7 +2,7 @@ import { and, desc, eq, sql } from "drizzle-orm";
 import { db } from "~/lib/db/client.server";
 import { cards, items, quizSets, quizAnswers, wordbank } from "~/lib/db/schema";
 import { env } from "~/lib/env.server";
-import { getTargetLang } from "~/lib/lang.server";
+import { getTargetLang, type TargetLang } from "~/lib/lang.server";
 
 /**
  * Latihan harian & multi-metode — BLUEPRINT §3 F3 (diupgrade):
@@ -302,33 +302,46 @@ async function buildQuestions(
   return questions;
 }
 
-function modeTitle(mode: QuizMode, day: string): string {
+function modeTitle(mode: QuizMode, day: string, lang: TargetLang = "en"): string {
   const d = new Date(day + "T00:00:00");
   const tgl = d.toLocaleDateString("id-ID", { day: "numeric", month: "short" });
-  const names: Record<QuizMode, string> = {
-    daily: "Latihan",
-    extra: "Latihan Tambahan",
-    typing: "Latihan Ketik",
-    intens: "Latihan Intens",
-    audio: "Latihan Dengar",
-    scramble: "Susun Kata",
-    toefl: "TOEFL Test",
-    bulanan: "Uji Bulanan",
-  };
-  if (mode === "toefl") return `TOEFL Test ${day}`;
+  // Mode JA: tes periodik berlabel JLPT (bukan TOEFL).
+  const names: Record<QuizMode, string> =
+    lang === "ja"
+      ? {
+          daily: "Latihan",
+          extra: "Latihan Tambahan",
+          typing: "Latihan Ketik",
+          intens: "Latihan Intens",
+          audio: "Latihan Dengar",
+          scramble: "Susun Kata",
+          toefl: "Tes JLPT",
+          bulanan: "JLPT Bulanan",
+        }
+      : {
+          daily: "Latihan",
+          extra: "Latihan Tambahan",
+          typing: "Latihan Ketik",
+          intens: "Latihan Intens",
+          audio: "Latihan Dengar",
+          scramble: "Susun Kata",
+          toefl: "TOEFL Test",
+          bulanan: "Uji Bulanan",
+        };
+  if (mode === "toefl") return `${names.toefl} ${day}`;
   if (mode === "bulanan") {
     const [y, m] = day.split("-").map(Number);
     const bulan = new Date(y, (m || 1) - 1, 1).toLocaleDateString("id-ID", {
       month: "long",
       year: "numeric",
     });
-    return `Uji Bulanan ${bulan}`;
+    return `${names.bulanan} ${bulan}`;
   }
   return `${names[mode]} ${tgl}`;
 }
 
-export function defaultTitle(day: string): string {
-  return modeTitle("daily", day);
+export function defaultTitle(day: string, lang: TargetLang = "en"): string {
+  return modeTitle("daily", day, lang);
 }
 
 /** Set bawaan harian (kuis rutin). */
@@ -355,7 +368,7 @@ export async function getSetForDay(mode: QuizMode, day: string, limit: number, o
       day,
       mode,
       lang,
-      title: modeTitle(mode, day),
+      title: modeTitle(mode, day, lang),
       questions: JSON.stringify(questions),
       order: JSON.stringify(questions.map((_, i) => i)),
       total: questions.length,
@@ -390,7 +403,7 @@ export async function createExtraSet(
   // generate kedua/ketiga gak 500. Urutan ronde tetap masuk riwayat.
   for (let attempt = 0; attempt < 10; attempt++) {
     const day = attempt === 0 ? today : `${today}#${attempt + 1}`;
-    const title = `${modeTitle(mode, today)} — ekstra${attempt > 0 ? ` ${attempt + 1}` : ""}`;
+    const title = `${modeTitle(mode, today, lang)} — ekstra${attempt > 0 ? ` ${attempt + 1}` : ""}`;
     try {
       const [created] = await db
         .insert(quizSets)
@@ -631,7 +644,7 @@ export async function getPeriodicSet(mode: "toefl" | "bulanan") {
         day: week,
         mode: "toefl",
         lang,
-        title: `TOEFL Test ${week}`,
+        title: modeTitle("toefl", week, lang),
         questions: JSON.stringify(questions),
         order: JSON.stringify(questions.map((_, i) => i)),
         total: questions.length,
@@ -672,7 +685,7 @@ export async function getPeriodicSet(mode: "toefl" | "bulanan") {
       day: month,
       mode: "bulanan",
       lang,
-      title: modeTitle("bulanan", month),
+      title: modeTitle("bulanan", month, lang),
       questions: JSON.stringify(questions),
       order: JSON.stringify(questions.map((_, i) => i)),
       total: questions.length,

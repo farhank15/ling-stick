@@ -6,6 +6,7 @@ export const exampleSchema = z.object({
   register: z.enum(["casual", "neutral", "formal"]),
   en: z.string().min(1),
   id: z.string().min(1),
+  romaji: z.string().catch("").optional(), // JA: romaji kalimat
 });
 
 export const senseSchema = z.object({
@@ -72,14 +73,33 @@ export type CheckSentenceOutput = z.infer<typeof checkSentenceOutputSchema>;
 
 export const bankWordSchema = z.object({
   text: z.string().min(1).max(60),
-  type: z.enum(["word", "phrasal_verb", "idiom", "collocation", "slang"]).catch("word"),
+  reading: z.string().catch("").optional(), // JA: kana
+  romaji: z.string().catch("").optional(), // JA: hepburn
+  type: z
+    .enum([
+      "word",
+      "phrasal_verb",
+      "idiom",
+      "collocation",
+      "slang",
+      "particle",
+      "expression",
+      "kana",
+    ])
+    .catch("word"),
   register: z
     .enum(["formal", "neutral", "informal", "slang"])
     .catch("neutral"),
   meaning_id: z.string().min(1),
   use_when_id: z.string().catch("").optional(),
   examples: z
-    .array(z.object({ en: z.string().min(1), id: z.string().min(1) }))
+    .array(
+      z.object({
+        en: z.string().min(1),
+        id: z.string().min(1),
+        romaji: z.string().catch("").optional(),
+      }),
+    )
     .max(4)
     .catch([]),
 });
@@ -117,6 +137,7 @@ export const chatOutputSchema = z.object({
     .array(
       z.object({
         text: z.string().min(1),
+        reading: z.string().catch("").optional(), // JA: kana
         meaning_id: z.string().min(1),
         examples: z
           .array(z.object({ en: z.string().min(1), id: z.string().min(1) }))
