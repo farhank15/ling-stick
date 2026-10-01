@@ -7,7 +7,20 @@ import {
   markKnown,
   startLearning,
   isCefr,
+  isLevel,
+  type Cefr,
 } from "~/lib/bank.server";
+import { getTargetLang } from "~/lib/lang.server";
+
+/**
+ * Level yang valid sesuai bahasa aktif: CEFR (EN) / JLPT (JA).
+ * Dulu pakai isCefr doang — "N5" gak dikenal → semua generate JA ke-catat "B1".
+ */
+async function parseLevel(raw: string | null | undefined): Promise<Cefr> {
+  const lang = await getTargetLang();
+  if (lang === "ja") return raw && /^N[1-5]$/.test(raw) ? (raw as Cefr) : "N4";
+  return isCefr(raw) ? raw : "B1";
+}
 
 /**
  * GET /api/bank              → semua entri + stat
@@ -46,7 +59,7 @@ export async function action({ request }: ActionFunctionArgs) {
   };
 
   if (body.action === "generate") {
-    const level = isCefr(body.level) ? body.level : "B1";
+    const level = await parseLevel(body.level);
     const count = Math.min(30, Math.max(5, Number(body.count) || 10));
     try {
       const res = await generateBankWords({ level, count, topic: body.topic });

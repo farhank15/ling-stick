@@ -7,7 +7,12 @@ import { normalizeText } from "~/lib/utils.shared";
 /** Bank Kata — BLUEPRINT §3 (katalog kosakata per level CEFR, koleksi selalu bertambah). */
 
 export const CEFR_LEVELS = ["A1", "A2", "B1", "B2", "C1", "C2"] as const;
-export type Cefr = (typeof CEFR_LEVELS)[number];
+export const JLPT_LEVELS = ["N5", "N4", "N3", "N2", "N1"] as const;
+/**
+ * Label level generik di kolom `cefr`: EN pakai CEFR, JA pakai JLPT.
+ * (Kolom dipakai generik biar gak perlu rebuild skema — lihat BLUEPRINT mode JA.)
+ */
+export type Cefr = (typeof CEFR_LEVELS)[number] | (typeof JLPT_LEVELS)[number];
 
 export type BankExample = { en: string; id: string };
 
@@ -50,8 +55,13 @@ function parseRow(r: typeof wordbank.$inferSelect): BankEntry {
   };
 }
 
-export function isCefr(v: string | null | undefined): v is Cefr {
+export function isCefr(v: string | null | undefined): v is (typeof CEFR_LEVELS)[number] {
   return !!v && (CEFR_LEVELS as readonly string[]).includes(v);
+}
+
+/** Level valid apa pun bahasanya: CEFR (EN) atau JLPT (JA). */
+export function isLevel(v: string | null | undefined): v is Cefr {
+  return isCefr(v) || (!!v && (JLPT_LEVELS as readonly string[]).includes(v));
 }
 
 /** List entri bank; filter level & status. Contoh di-prefetch 1 query (anti N+1). Semua ter-scope bahasa aktif.
@@ -59,8 +69,12 @@ export function isCefr(v: string | null | undefined): v is Cefr {
 export async function listBank(filter: { cefr?: string; status?: string } = {}) {
   const lang = await getTargetLang();
   const conds = [eq(wordbank.lang, lang)];
-  if (lang === "ja") conds.push(ne(wordbank.type, "kana"));
-  if (isCefr(filter.cefr)) conds.push(eq(wordbank.cefr, filter.cefr));
+  if (lang === "ja") {
+    // Aksara punya menu sendiri (Home → Aksara): entri kana (あ, カ, dsb.) gak tampil
+    // di Bank. Partikel tetap masuk — itu materi grammar, bukan aksara.
+    conds.push(ne(wordbank.type, "kana"));
+  }
+  if (isLevel(filter.cefr)) conds.push(eq(wordbank.cefr, filter.cefr));
   if (filter.status && ["new", "learning", "known"].includes(filter.status)) {
     conds.push(eq(wordbank.status, filter.status));
   }
@@ -200,7 +214,7 @@ export async function generateBankWords(opts: GenOptions): Promise<{ added: numb
   // Mode Jepang: generate kosakata JP per level JLPT. "text" = kata dalam kanji/kana,
   // wajib ada field "reading" (kana) + "romaji" biar bisa dipelajari orang dewasa.
   if (lang === "ja") {
-    const userJa = `Generate exactly ${opts.count} Japanese vocabulary items of JLPT level ${opts.level}.\n${topicLine}\n"text" MUST be the word written in kanji (and/or kana), plus "reading" in hiragana and "romaji".\nExplanations (meaning_id, use_when_id, id fields) in casual Indonesian. Examples: natural Japanese sentence + Indonesian translation.\nAvoid these words already in the bank:\n${await existingWordsForPrompt(opts.level, "ja")}\n\nJSON shape:\n{ "words": [{ "text": string, "reading": string, "romaji": string, "type": "word"|"particle"|"expression"|"kana", "register": "formal"|"neutral"|"informal", "meaning_id": string, "use_when_id": string, "examples": [{ "en": string (Japanese sentence), "id": string (Indonesian), "romaji": string }] }] }`;
+    const userJa = `Generate exactly ${opts.count} Japanese vocabulary items of JLPT level ${opts.level}.\n${topicLine}\n"text" MUST be the word written in kanji (and/or kana), plus "reading" in hiragana and "romaji".\nNEVER generate kana characters (single hiragana/katakana letters like あ or カ) — kana charts are taught elsewhere, not in this vocabulary bank. Only real words, particles, grammar points and expressions.\nExplanations (meaning_id, use_when_id, id fields) in casual Indonesian. Examples: natural Japanese sentence + Indonesian translation.\nAvoid these words already in the bank:\n${await existingWordsForPrompt(opts.level, "ja")}\n\nJSON shape:\n{ "words": [{ "text": string, "reading": string, "romaji": string, "type": "word"|"particle"|"expression", "register": "formal"|"neutral"|"informal", "meaning_id": string, "use_when_id": string, "examples": [{ "en": string (Japanese sentence), "id": string (Indonesian), "romaji": string }] }] }`;
     const { data } = await chatJson(BANK_SYSTEM, userJa, bankOutputSchema, "bank:ja:v1", userJa);
     return await insertGeneratedJa(opts.level, data.words, topic ? `bank:${topic}` : "bank");
   }

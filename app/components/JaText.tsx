@@ -92,6 +92,9 @@ type JaTextProps = {
   romajiClassName?: string;
   /** Romaji langsung kelihatan? Default hidden (belajar baca dulu). */
   defaultShowRomaji?: boolean;
+  /** Icon toggle romaji ditampilin? Matikan di baris list yang padat (mis. list Bank)
+   *  biar gak penuh icon — pasang versi ber-icon di area detail. Default true. */
+  romajiToggle?: boolean;
 };
 
 export function JaText({
@@ -101,6 +104,7 @@ export function JaText({
   className = "",
   romajiClassName = "text-xs font-normal text-zinc-400 dark:text-zinc-500",
   defaultShowRomaji = false,
+  romajiToggle = true,
 }: JaTextProps) {
   const [showRomaji, setShowRomaji] = useState(defaultShowRomaji);
   const { kana, romaji: romajiFromReading } = splitReading(reading);
@@ -127,11 +131,11 @@ export function JaText({
           </span>
         ))}
       </span>
-      {romaji ? (
+      {romaji && romajiToggle ? (
         <>
           <button
             type="button"
-            className={`ml-1 inline-flex shrink-0 rounded-md p-0.5 align-middle text-zinc-400 hover:bg-zinc-100 hover:text-teal-600 dark:hover:bg-zinc-800 dark:hover:text-teal-400 ${className.includes("text-2xl") || className.includes("text-3xl") ? "" : "opacity-70"}`}
+            className="ml-1 inline-flex shrink-0 rounded p-0.5 align-middle text-zinc-300 opacity-80 hover:bg-zinc-100 hover:text-teal-600 hover:opacity-100 dark:text-zinc-600 dark:hover:bg-zinc-800 dark:hover:text-teal-400"
             title={showRomaji ? "Sembunyikan romaji" : "Tampilkan romaji"}
             aria-label={showRomaji ? "Sembunyikan romaji" : "Tampilkan romaji"}
             onClick={(e) => {
@@ -139,7 +143,7 @@ export function JaText({
               setShowRomaji((v) => !v);
             }}
           >
-            <Type className="h-3.5 w-3.5" strokeWidth={1.75} />
+            <Type className="h-3 w-3" strokeWidth={2} />
           </button>
           {showRomaji ? <span className={`block ${romajiClassName}`}>{romaji}</span> : null}
         </>

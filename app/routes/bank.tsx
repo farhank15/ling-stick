@@ -10,12 +10,13 @@ import {
   Plus,
   Search,
   Sparkles,
+  Type,
   Volume2,
 } from "lucide-react";
 import { requireUser } from "~/lib/auth.server";
 import { getTargetLang } from "~/lib/lang.server";
 import { ttsLang } from "~/lib/utils.shared";
-import { JaText, hasJa } from "~/components/JaText";
+import { JaText, hasJa, splitReading } from "~/components/JaText";
 import { useToast } from "~/components/Toast";
 
 function speak(s: string, lang?: string) {
@@ -100,6 +101,7 @@ export default function BankPage() {
   const [level, setLevel] = useState<string>("all");
   const [query, setQuery] = useState("");
   const [expanded, setExpanded] = useState<number | null>(null);
+  const [showRomajiId, setShowRomajiId] = useState<number | null>(null); // toggle romaji di detail
   const [loading, setLoading] = useState(true);
   const [genOpen, setGenOpen] = useState(false);
   const [genLevel, setGenLevel] = useState<string>(lang === "ja" ? "N4" : "B1");
@@ -407,9 +409,10 @@ export default function BankPage() {
                       </span>
                       <span className="min-w-0 flex-1">
                         {hasJa(e.text) ? (
-                          /* JA: kanji + furigana redup di atas, romaji di-balik icon toggle */
+                          /* JA: kanji + furigana redup di atas. Tanpa icon toggle di sini
+                             — baris list harus bersih; romaji di-toggle di detail. */
                           <span className="block font-semibold">
-                            <JaText text={e.text} reading={e.reading} className="font-semibold" />
+                            <JaText text={e.text} reading={e.reading} romajiToggle={false} className="font-semibold" />
                           </span>
                         ) : (
                           <span className="block truncate font-semibold">{e.text}</span>
@@ -423,6 +426,32 @@ export default function BankPage() {
 
                     {isOpen ? (
                       <div className="space-y-3 border-t border-zinc-100 px-4 pb-4 pt-3 dark:border-zinc-800">
+                        {/* JA: cara baca + toggle romaji (icon T di sini, bukan di tiap baris list) */}
+                        {e.reading
+                          ? (() => {
+                              const { kana, romaji } = splitReading(e.reading);
+                              return (
+                                <div className="flex flex-wrap items-center gap-1.5 text-xs">
+                                  <span className="text-zinc-400 dark:text-zinc-500">{kana || e.reading}</span>
+                                  {romaji ? (
+                                    <>
+                                      <button
+                                        className="inline-flex items-center gap-0.5 rounded p-0.5 text-zinc-300 hover:bg-zinc-100 hover:text-teal-600 dark:text-zinc-600 dark:hover:bg-zinc-800 dark:hover:text-teal-400"
+                                        title={showRomajiId === e.id ? "Sembunyikan romaji" : "Tampilkan romaji"}
+                                        aria-label={showRomajiId === e.id ? "Sembunyikan romaji" : "Tampilkan romaji"}
+                                        onClick={() => setShowRomajiId(showRomajiId === e.id ? null : e.id)}
+                                      >
+                                        <Type className="h-3 w-3" strokeWidth={2} />
+                                      </button>
+                                      {showRomajiId === e.id ? (
+                                        <span className="text-zinc-400 dark:text-zinc-500">({romaji})</span>
+                                      ) : null}
+                                    </>
+                                  ) : null}
+                                </div>
+                              );
+                            })()
+                          : null}
                         <div className="flex flex-wrap items-center gap-1.5 text-[11px] text-zinc-500">
                           <span className="badge bg-zinc-100 dark:bg-zinc-800">{e.type}</span>
                           <span className="badge bg-zinc-100 dark:bg-zinc-800">{e.register}</span>

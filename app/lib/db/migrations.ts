@@ -281,14 +281,29 @@ async function seedWordbank(client: Client): Promise<void> {
       });
     }
   }
-  // Seed JP sekali (per bahasa).
-  const cntJa = await client.execute("SELECT COUNT(*) AS c FROM wordbank WHERE lang = 'ja'");
+  // Seed JP sekali (per bahasa). Rows seed LAMA (source='seed', sebelum format furigana
+  // + exclude kana) dibuang sekali di sini supaya ke-replace versi baru di bawah.
+  // Data generate/import milik user (source lain) gak disentuh.
+  await client.execute("DELETE FROM wordbank WHERE lang = 'ja' AND source = 'seed'");
+  // Hasil generate JA dari masa bug ikut dibuang: (a) meaningId format campur
+  // "kana (romaji) arti", (b) reading gak kesimpan (schema lama nolak) + level
+  // kepaksa B1 — keduanya gak layak tampil di format baru.
+  await client.execute(
+    "DELETE FROM wordbank WHERE lang = 'ja' AND source LIKE 'bank%' AND meaning_id LIKE '%(%'",
+  );
+  await client.execute(
+    "DELETE FROM wordbank WHERE lang = 'ja' AND source LIKE 'bank%' AND reading IS NULL AND cefr = 'B1'",
+  );
+  // Seed jalan kalau BELUM ADA row seed JA (row generate/import user gak nimblokir).
+  const cntJa = await client.execute(
+    "SELECT COUNT(*) AS c FROM wordbank WHERE lang = 'ja' AND source LIKE 'seed%'",
+  );
   if (Number(cntJa.rows[0]?.c ?? 0) === 0) {
     const now = Date.now();
     for (const w of SEED_BANK_JP) {
       await client.execute({
         sql: `INSERT INTO wordbank (text, text_norm, type, register, cefr, meaning_id, use_when_id, examples_json, status, source, created_at, lang, reading)
-              VALUES (?, ?, ?, ?, ?, ?, ?, ?, 'new', 'seed', ?, 'ja', ?)`,
+              VALUES (?, ?, ?, ?, ?, ?, ?, ?, 'new', 'seed-ja-v2', ?, 'ja', ?)`,
         args: [
           w.text,
           w.text.toLowerCase(),
