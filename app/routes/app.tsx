@@ -79,7 +79,8 @@ export default function AppLayout() {
 
   return (
     <div className="mx-auto flex min-h-dvh max-w-md flex-col">
-      <header className="sticky top-0 z-20 flex items-center justify-between bg-zinc-50/80 px-4 py-3 backdrop-blur-md dark:bg-zinc-950/80">
+      {/* z-40: header + dropdown notif harus di atas SEMUA sticky konten (toolbar library z-20, chips explore z-10, dst) */}
+      <header className="sticky top-0 z-40 flex items-center justify-between bg-zinc-50/80 px-4 py-3 backdrop-blur-md dark:bg-zinc-950/80">
         <Link to="/" className="flex items-center gap-2 font-bold tracking-tight">
           <img
             src="/lingstick.png"

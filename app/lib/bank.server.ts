@@ -1,8 +1,6 @@
 import { and, eq, inArray, sql } from "drizzle-orm";
 import { db } from "~/lib/db/client.server";
 import { cards, examples, items, wordbank } from "~/lib/db/schema";
-import { applyRating } from "~/lib/fsrs.server";
-import { env } from "~/lib/env.server";
 import { normalizeText } from "~/lib/utils.shared";
 
 /** Bank Kata — BLUEPRINT §3 (katalog kosakata per level CEFR, koleksi selalu bertambah). */
@@ -23,20 +21,9 @@ export type BankEntry = {
   examples: BankExample[];
   status: "new" | "learning" | "known";
   itemId: number | null;
-};
+};;
 
-const CEFR_LABEL: Record<Cefr, string> = {
-  A1: "Pemula",
-  A2: "Dasar",
-  B1: "Menengah",
-  B2: "Menengah atas",
-  C1: "Mahir",
-  C2: "Near-native",
-};
 
-export function cefrLabel(level: string): string {
-  return CEFR_LABEL[level as Cefr] ?? level;
-}
 
 function parseRow(r: typeof wordbank.$inferSelect): BankEntry {
   let examples: BankExample[] = [];
@@ -260,5 +247,4 @@ export async function syncBankFromItems() {
   }
 }
 
-export const DAILY_BANK_SIZE = () => env.DAILY_QUIZ_SIZE;
-export const rating = { applyRating };
+

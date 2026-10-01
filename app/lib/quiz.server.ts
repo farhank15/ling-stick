@@ -471,3 +471,30 @@ export async function getFlashQueue(limit = 30) {
     .limit(Math.max(0, limit - dueRows.length));
   return [...dueRows, ...newRows];
 }
+
+/** Ronde minigame Match: 5 ronde × 4 pasangan kata-arti dari kosakata yang dipelajari. */
+export type MatchPair = { itemId: number; word: string; meaning: string };
+
+export async function getMatchRounds(rounds = 5, perRound = 4): Promise<MatchPair[][]> {
+  const rows = (
+    await db
+      .select({ id: items.id, text: items.text, meaningId: items.meaningId })
+      .from(items)
+      .where(and(eq(items.status, "learning"), sql`${items.meaningId} IS NOT NULL`))
+      .limit(200)
+  ).map((r) => ({ itemId: r.id, word: r.text, meaning: r.meaningId! }));
+  if (rows.length < perRound) return [];
+
+  const shuffled = shuffle(rows);
+  const out: MatchPair[][] = [];
+  let cursor = 0;
+  for (let i = 0; i < rounds; i++) {
+    const round: MatchPair[] = [];
+    for (let j = 0; j < perRound; j++) {
+      if (cursor >= shuffled.length) cursor = 0;
+      round.push(shuffled[cursor++]);
+    }
+    out.push(round);
+  }
+  return out;
+}

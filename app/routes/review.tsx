@@ -12,6 +12,7 @@ import {
   Layers,
   PartyPopper,
   Plus,
+  Puzzle,
   RotateCcw,
   Repeat,
   Shuffle,
@@ -90,10 +91,12 @@ type FlashCard = {
   reps: number;
 };
 
+type MatchPair = { itemId: number; word: string; meaning: string };
+
 type Mode = "daily" | "typing" | "intens" | "audio" | "scramble";
 
 const MODES: {
-  id: Mode | "flash";
+  id: Mode | "flash" | "match";
   label: string;
   icon: typeof Repeat;
   desc: string;
@@ -105,6 +108,7 @@ const MODES: {
   { id: "audio", label: "Dengar", icon: Volume2, desc: "Dengarin cara bacanya, pilih arti yang tepat", action: "start" },
   { id: "scramble", label: "Susun Kata", icon: Shuffle, desc: "Susun kata jadi frasa Inggris yang benar", action: "start" },
   { id: "intens", label: "Intens Mingguan", icon: Zap, desc: "25 soal campuran buat mempertajam ingatan", action: "generate" },
+  { id: "match", label: "Match", icon: Puzzle, desc: "Minigame: pasangkan kata dengan artinya — per ronde", action: "start" },
 ];
 
 const TYPE_META: Record<QuestionType, { label: string; icon: typeof Ear }> = {
@@ -126,7 +130,7 @@ function ModePicker({
   genBusy,
   genMsg,
 }: {
-  onStart: (mode: Mode | "flash") => void;
+  onStart: (mode: Mode | "flash" | "match") => void;
   onGenerate: (mode: "typing" | "intens") => void;
   genBusy: string | null;
   genMsg: string | null;
@@ -224,7 +228,7 @@ function OptionList({
 export default function ReviewPage() {
   const { dailyTarget } = useLoaderData<typeof loader>();
   const toast = useToast();
-  const [screen, setScreen] = useState<"pick" | "quiz" | "flash">("pick");
+  const [screen, setScreen] = useState<"pick" | "quiz" | "flash" | "match">("pick");
   const [mode, setMode] = useState<Mode>("daily");
 
   const [data, setData] = useState<QuizResponse | null>(null);
@@ -254,9 +258,24 @@ export default function ReviewPage() {
   const [reveal, setReveal] = useState(false);
   const [drag, setDrag] = useState(0);
   const [flashDone, setFlashDone] = useState(0);
+  const [reverse, setReverse] = useState(false); // dua arah: ID → EN
   const dragStartX = useRef(0);
   const dragging = useRef(false);
   const moved = useRef(false);
+
+  // Match
+  const [matchRounds, setMatchRounds] = useState<MatchPair[][]>([]);
+  const [matchRound, setMatchRound] = useState(0);
+  const [enOrder, setEnOrder] = useState<number[]>([]);
+  const [idOrder, setIdOrder] = useState<number[]>([]);
+  const [selectedEn, setSelectedEn] = useState<number | null>(null);
+  const [matchedIds, setMatchedIds] = useState<Set<number>>(new Set());
+  const [wrongPair, setWrongPair] = useState<{ en: number | null; id: number | null }>({
+    en: null,
+    id: null,
+  });
+  const matchResults = useRef<{ itemId: number; correct: boolean }[]>([]);
+  const matchWrong = useRef<Record<number, number>>({});
 
   const load = useCallback((m: Mode) => {
     setLoading(true);
@@ -298,6 +317,24 @@ export default function ReviewPage() {
         setReveal(false);
         setDrag(0);
         setFlashDone(0);
+        setLoading(false);
+      })
+      .catch((e: Error) => {
+        toast(e.message);
+        setLoading(false);
+      });
+  };
+
+  const startMatch = () => {
+    setScreen("match");
+    setLoading(true);
+    matchResults.current = [];
+    matchWrong.current = {};
+    fetch("/api/match")
+      .then((r) => safeJson<{ rounds: MatchPair[][] }>(r))
+      .then((d) => {
+        setMatchRounds(d.rounds ?? []);
+        setMatchRound(0);
         setLoading(false);
       })
       .catch((e: Error) => {
@@ -479,10 +516,70 @@ export default function ReviewPage() {
     }
   };
 
+  /* ── Match actions ── */
+  const finishMatch = async (msg: string) => {
+    const results = [...matchResults.current];
+    backToPick(msg);
+    try {
+      await fetch("/api/match", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ results }),
+      });
+    } catch {
+      /* progres FSRS gak kritis */
+    }
+  };
+
+  const pickMeaning = (j: number) => {
+    const round = matchRounds[matchRound];
+    if (!round || selectedEn === null || matchedIds.has(round[j].itemId)) return;
+    const enPair = round[selectedEn];
+    const idPair = round[j];
+    if (enPair.itemId === idPair.itemId) {
+      const nextMatched = new Set(matchedIds).add(idPair.itemId);
+      setMatchedIds(nextMatched);
+      matchResults.current.push({
+        itemId: idPair.itemId,
+        correct: (matchWrong.current[idPair.itemId] ?? 0) === 0,
+      });
+      setSelectedEn(null);
+      navigator.vibrate?.(10);
+      if (nextMatched.size === round.length) {
+        if (matchRound + 1 >= matchRounds.length) {
+          void finishMatch(
+            `Match selesai — ${matchResults.current.length} pasang dimainkan`,
+          );
+        } else {
+          setTimeout(() => setMatchRound((r) => r + 1), 450);
+        }
+      }
+    } else {
+      matchWrong.current[idPair.itemId] = (matchWrong.current[idPair.itemId] ?? 0) + 1;
+      matchWrong.current[enPair.itemId] = (matchWrong.current[enPair.itemId] ?? 0) + 1;
+      setWrongPair({ en: selectedEn, id: j });
+      setTimeout(() => setWrongPair({ en: null, id: null }), 550);
+    }
+  };
+
+  // Acak ulang tile tiap ganti ronde
+  useEffect(() => {
+    if (screen !== "match") return;
+    const n = matchRounds[matchRound]?.length ?? 0;
+    setEnOrder([...Array(n).keys()].sort(() => Math.random() - 0.5));
+    setIdOrder([...Array(n).keys()].sort(() => Math.random() - 0.5));
+    setSelectedEn(null);
+    setMatchedIds(new Set());
+    setWrongPair({ en: null, id: null });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [screen, matchRound, matchRounds]);
+
   if (screen === "pick") {
     return (
       <ModePicker
-        onStart={(m) => (m === "flash" ? startFlash() : startQuiz(m))}
+        onStart={(m) =>
+          m === "flash" ? startFlash() : m === "match" ? startMatch() : startQuiz(m)
+        }
         onGenerate={generateSet}
         genBusy={genBusy}
         genMsg={genMsg}
@@ -525,9 +622,18 @@ export default function ReviewPage() {
           <span>
             Kartu {cardIdx + 1} / {cards.length}
           </span>
-          <button className="btn-ghost text-xs" onClick={() => backToPick()}>
-            Selesai
-          </button>
+          <span className="flex items-center gap-1">
+            <button
+              className="btn-ghost text-xs"
+              title="Balik arah kartu (EN→ID atau ID→EN)"
+              onClick={() => setReverse((v) => !v)}
+            >
+              {reverse ? "ID → EN" : "EN → ID"}
+            </button>
+            <button className="btn-ghost text-xs" onClick={() => backToPick()}>
+              Selesai
+            </button>
+          </span>
         </div>
         <div className="h-1.5 overflow-hidden rounded-full bg-zinc-200 dark:bg-zinc-800">
           <div
@@ -573,27 +679,42 @@ export default function ReviewPage() {
               }}
             >
               <p className="text-xs uppercase tracking-wide text-zinc-400">
-                {c.reps > 0 ? "Ulangi kartu ini" : "Kartu baru"}
+                {reverse ? "Apa bahasa Inggrisnya?" : c.reps > 0 ? "Ulangi kartu ini" : "Kartu baru"}
               </p>
               <div className="flex items-center justify-center gap-2">
-                <p className="text-2xl font-bold">{c.text}</p>
-                <button
-                  className="rounded-lg p-1.5 text-zinc-400 hover:bg-zinc-100 hover:text-teal-600 dark:hover:bg-zinc-800"
-                  title="Cara baca"
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    speak(c.text);
-                  }}
-                >
-                  <Volume2 className="h-5 w-5" />
-                </button>
+                <p className="text-2xl font-bold">{reverse ? c.meaningId ?? "(tanpa arti)" : c.text}</p>
+                {!reverse ? (
+                  <button
+                    className="rounded-lg p-1.5 text-zinc-400 hover:bg-zinc-100 hover:text-teal-600 dark:hover:bg-zinc-800"
+                    title="Cara baca"
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      speak(c.text);
+                    }}
+                  >
+                    <Volume2 className="h-5 w-5" />
+                  </button>
+                ) : null}
               </div>
 
               {reveal ? (
                 <div className="space-y-3 border-t border-zinc-100 pt-4 text-left dark:border-zinc-800">
                   <div>
-                    <p className="label">Arti</p>
-                    <p className="text-lg font-medium text-teal-700 dark:text-teal-300">{c.meaningId}</p>
+                    <p className="label">{reverse ? "Inggrisnya" : "Arti"}</p>
+                    <p className="text-lg font-medium text-teal-700 dark:text-teal-300">
+                      {reverse ? c.text : c.meaningId}
+                    </p>
+                    {reverse ? (
+                      <button
+                        className="mt-1 inline-flex items-center gap-1 text-xs text-zinc-400 hover:text-teal-600"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          speak(c.text);
+                        }}
+                      >
+                        <Volume2 className="h-3.5 w-3.5" /> Dengarkan
+                      </button>
+                    ) : null}
                   </div>
                   {c.notesId ? (
                     <div>
@@ -646,6 +767,110 @@ export default function ReviewPage() {
             <BadgeCheck className="h-4 w-4 text-emerald-600" /> Tahu
           </button>
         </div>
+      </div>
+    );
+  }
+
+  /* ── Match ── */
+  if (screen === "match") {
+    const round = matchRounds[matchRound];
+    if (!round) {
+      return (
+        <div className="py-16 text-center">
+          <Puzzle className="mx-auto h-10 w-10 text-teal-600 dark:text-teal-400" strokeWidth={1.5} />
+          <p className="mt-3 font-medium">Butuh minimal 4 kosakata yang dipelajari</p>
+          <p className="mt-1 text-sm text-zinc-500">Simpan kata dulu dari Tambah atau Bank Kata.</p>
+          <button className="btn-secondary mt-6" onClick={() => backToPick()}>
+            Kembali
+          </button>
+        </div>
+      );
+    }
+    const totalPairs = matchRounds.reduce((a, r) => a + r.length, 0);
+    const donePairs = matchResults.current.length;
+    const tileBase =
+      "flex min-h-11 cursor-pointer select-none items-center justify-between gap-1.5 rounded-xl border px-3 py-2 text-left transition-colors";
+    return (
+      <div className="space-y-4">
+        <div className="flex items-center justify-between text-xs text-zinc-500">
+          <span>
+            Ronde {matchRound + 1} / {matchRounds.length}
+          </span>
+          <button
+            className="btn-ghost text-xs"
+            onClick={() => backToPick(`Match berhenti — ${donePairs} pasang dimainkan`)}
+          >
+            Selesai
+          </button>
+        </div>
+        <div className="h-1.5 overflow-hidden rounded-full bg-zinc-200 dark:bg-zinc-800">
+          <div
+            className="h-full bg-teal-600 transition-all dark:bg-teal-500"
+            style={{ width: `${(donePairs / Math.max(1, totalPairs)) * 100}%` }}
+          />
+        </div>
+
+        <div className="grid grid-cols-2 gap-2">
+          <div className="space-y-2">
+            {enOrder.map((pi) => {
+              const pair = round[pi];
+              const isMatched = matchedIds.has(pair.itemId);
+              const isSel = selectedEn === pi;
+              const isWrong = wrongPair.en === pi;
+              const cls = isMatched
+                ? " border-teal-500 bg-teal-50 text-teal-800 dark:bg-teal-950 dark:text-teal-300"
+                : isWrong
+                  ? " border-red-400 bg-red-50 text-red-700 dark:bg-red-950 dark:text-red-300"
+                  : isSel
+                    ? " border-teal-500 bg-teal-50/60 dark:bg-teal-950/60"
+                    : " border-zinc-200 bg-white dark:border-zinc-800 dark:bg-zinc-900";
+              return (
+                <div
+                  key={pi}
+                  className={tileBase + cls}
+                  onClick={() => !isMatched && setSelectedEn(isSel ? null : pi)}
+                >
+                  <span className="truncate font-medium">{pair.word}</span>
+                  <button
+                    className="shrink-0 rounded-lg p-1 text-zinc-400 hover:text-teal-600 dark:hover:text-teal-300"
+                    title="Dengarkan"
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      speak(pair.word);
+                    }}
+                  >
+                    <Volume2 className="h-3.5 w-3.5" />
+                  </button>
+                </div>
+              );
+            })}
+          </div>
+          <div className="space-y-2">
+            {idOrder.map((pi) => {
+              const pair = round[pi];
+              const isMatched = matchedIds.has(pair.itemId);
+              const isWrong = wrongPair.id === pi;
+              const cls = isMatched
+                ? " border-teal-500 bg-teal-50 text-teal-800 dark:bg-teal-950 dark:text-teal-300"
+                : isWrong
+                  ? " border-red-400 bg-red-50 text-red-700 dark:bg-red-950 dark:text-red-300"
+                  : " border-zinc-200 bg-white dark:border-zinc-800 dark:bg-zinc-900";
+              return (
+                <div
+                  key={pi}
+                  className={tileBase + cls}
+                  onClick={() => pickMeaning(pi)}
+                >
+                  <span className="truncate text-sm">{pair.meaning}</span>
+                  {isMatched ? <CheckCircle2 className="h-4 w-4 shrink-0 text-teal-600" /> : null}
+                </div>
+              );
+            })}
+          </div>
+        </div>
+        <p className="text-center text-xs text-zinc-400">
+          Pilih kata, lalu tap artinya yang cocok — salah tidak menghukum, cuma dicatat
+        </p>
       </div>
     );
   }
