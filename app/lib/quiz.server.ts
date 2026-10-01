@@ -280,7 +280,7 @@ export async function getSetForDay(mode: QuizMode, day: string, limit: number, o
   return again ?? null;
 }
 
-/** Set tambahan dibuat manual (tombol "Generate") — selalu set baru, tidak pakai cache harian. */
+/** Set tambahan dibuat manual (tombol "Generate") — selalu set baru, boleh >1 per hari. */
 export async function createExtraSet(
   mode: Exclude<QuizMode, "daily">,
   limit: number,
@@ -288,22 +288,35 @@ export async function createExtraSet(
 ) {
   const questions = await buildQuestions(limit, { ...opts, forceType: forceTypeFor(mode) });
   if (questions.length === 0) return null;
-  const [created] = await db
-    .insert(quizSets)
-    .values({
-      day: localDayStr(),
-      mode,
-      title: `${modeTitle(mode, localDayStr())} — ekstra`,
-      questions: JSON.stringify(questions),
-      order: JSON.stringify(questions.map((_, i) => i)),
-      total: questions.length,
-      done: 0,
-      correct: 0,
-      completed: 0,
-      createdAt: Date.now(),
-    })
-    .returning();
-  return created ?? null;
+  const today = localDayStr();
+
+  // Slot (day, mode) unik di DB — kalau udah kepakai, pakai suffix #n biar
+  // generate kedua/ketiga gak 500. Urutan ronde tetap masuk riwayat.
+  for (let attempt = 0; attempt < 10; attempt++) {
+    const day = attempt === 0 ? today : `${today}#${attempt + 1}`;
+    const title = `${modeTitle(mode, today)} — ekstra${attempt > 0 ? ` ${attempt + 1}` : ""}`;
+    try {
+      const [created] = await db
+        .insert(quizSets)
+        .values({
+          day,
+          mode,
+          title,
+          questions: JSON.stringify(questions),
+          order: JSON.stringify(questions.map((_, i) => i)),
+          total: questions.length,
+          done: 0,
+          correct: 0,
+          completed: 0,
+          createdAt: Date.now(),
+        })
+        .returning();
+      return created ?? null;
+    } catch {
+      /* slot kepakai → coba suffix berikutnya */
+    }
+  }
+  return null;
 }
 
 /** Ambil set by id (mode tambahan bisa dibuat kapan pun). */

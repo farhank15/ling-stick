@@ -1,13 +1,21 @@
 import type { LoaderFunctionArgs, MetaFunction } from "react-router";
-import { Link, useLoaderData, useRevalidator, useSearchParams } from "react-router";
+import { Link, useLoaderData, useNavigation, useRevalidator, useSearchParams } from "react-router";
 import { useEffect, useMemo, useRef, useState } from "react";
-import { BadgeCheck, CheckCircle2, Circle, Search, Trash2 } from "lucide-react";
+import { BadgeCheck, CheckCircle2, Circle, Loader2, Search, Trash2, Volume2 } from "lucide-react";
 import { requireUser } from "~/lib/auth.server";
 import { getFacetCounts, listItems } from "~/lib/items.server";
 import { ConfirmModal } from "~/components/ConfirmModal";
 import { useToast } from "~/components/Toast";
 
 export const meta: MetaFunction = () => [{ title: "Library — LingStick" }];
+
+function speak(text: string, lang = "en-US") {
+  if (typeof window === "undefined" || !window.speechSynthesis) return;
+  const u = new SpeechSynthesisUtterance(text);
+  u.lang = lang;
+  window.speechSynthesis.cancel();
+  window.speechSynthesis.speak(u);
+}
 export const handle = { title: "Library" };
 
 export async function loader({ request }: LoaderFunctionArgs) {
@@ -65,6 +73,18 @@ export default function Library() {
   const type = params.get("type") ?? "";
   const register = params.get("register") ?? "";
   const status = params.get("status") ?? "";
+
+  // Search di-debounce 400ms — dulu tiap ketikan = 1 request server (berat).
+  const [qInput, setQInput] = useState(q);
+  useEffect(() => {
+    const t = setTimeout(() => {
+      if (qInput !== q) setParam("q", qInput);
+    }, 400);
+    return () => clearTimeout(t);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [qInput]);
+  const nav = useNavigation();
+  const searching = nav.state !== "idle";
 
   // Total dalam tab aktif (tanpa filter tipe/register) — buat chip "Semua".
   const totalInStatus = useMemo(
@@ -176,12 +196,15 @@ export default function Library() {
         <div className="relative">
           <Search className="pointer-events-none absolute top-1/2 left-3 h-4 w-4 -translate-y-1/2 text-zinc-400" />
           <input
-            className="input pl-9"
+            className="input pl-9 pr-9"
             type="search"
             placeholder="Cari kata / arti…"
-            value={q}
-            onChange={(e) => setParam("q", e.target.value)}
+            value={qInput}
+            onChange={(e) => setQInput(e.target.value)}
           />
+          {searching ? (
+            <Loader2 className="absolute top-1/2 right-3 h-4 w-4 -translate-y-1/2 animate-spin text-teal-600" />
+          ) : null}
         </div>
       </form>
 
@@ -331,6 +354,15 @@ export default function Library() {
                   HAFAL
                 </span>
               </div>
+              {/* Speaker kata — di luar Link biar gak nested interactive */}
+              <button
+                className="absolute top-1/2 right-2 -translate-y-1/2 rounded-lg p-1.5 text-zinc-300 hover:bg-zinc-100 hover:text-teal-600 dark:text-zinc-600 dark:hover:bg-zinc-800"
+                aria-label={`Dengarkan ${r.text}`}
+                title="Cara baca"
+                onClick={() => speak(r.text)}
+              >
+                <Volume2 className="h-4 w-4" />
+              </button>
               <Link
                 to={`/library/${r.id}`}
                 onClick={(e) => {
@@ -340,7 +372,7 @@ export default function Library() {
                   transform: swipeId === r.id ? `translateX(${swipeDx}px)` : undefined,
                   transition: swiping.current && swipeId === r.id ? "none" : "transform 160ms ease",
                 }}
-                className="card block py-3 pl-10 transition-colors hover:border-teal-500 dark:hover:border-teal-500"
+                className="card block py-3 pr-11 pl-10 transition-colors hover:border-teal-500 dark:hover:border-teal-500"
               >
                 <div className="flex items-center justify-between gap-2">
                   <span className="font-semibold">{r.text}</span>

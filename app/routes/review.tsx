@@ -305,6 +305,24 @@ export default function ReviewPage() {
     load(m);
   };
 
+  /** Muat set spesifik by id — dipakai setelah Generate biar yang dimainkan set barunya. */
+  const loadSetById = (id: number) => {
+    setLoading(true);
+    setLoadError(null);
+    fetch(`/api/quiz?setId=${id}`)
+      .then((r) => safeJson<QuizResponse>(r))
+      .then((d) => {
+        setData(d);
+        setSavedDone(d.set?.done ?? 0);
+        setPos(d.set?.done ?? 0);
+        setLoading(false);
+      })
+      .catch((e: Error) => {
+        setLoadError(e.message);
+        setLoading(false);
+      });
+  };
+
   const startFlash = () => {
     setMode("daily");
     setScreen("flash");
@@ -354,7 +372,9 @@ export default function ReviewPage() {
       });
       const d = await safeJson<{ ok?: boolean; setId?: number; error?: string }>(r);
       if (!r.ok || !d.ok) throw new Error(d.error || "Gagal generate");
-      startQuiz(m);
+      // Mainkan langsung set yang barusan dibuat (bukan set harian yang lama).
+      loadSetById(d.setId!);
+      setGenBusy(null);
     } catch (e) {
       setGenMsg(e instanceof Error ? e.message : "Gagal generate");
       setGenBusy(null);
@@ -789,7 +809,7 @@ export default function ReviewPage() {
     const totalPairs = matchRounds.reduce((a, r) => a + r.length, 0);
     const donePairs = matchResults.current.length;
     const tileBase =
-      "flex min-h-11 cursor-pointer select-none items-center justify-between gap-1.5 rounded-xl border px-3 py-2 text-left transition-colors";
+      "flex min-h-12 cursor-pointer select-none items-center justify-between gap-1.5 rounded-xl border px-3.5 py-2.5 text-left transition-colors";
     return (
       <div className="space-y-4">
         <div className="flex items-center justify-between text-xs text-zinc-500">
@@ -810,8 +830,10 @@ export default function ReviewPage() {
           />
         </div>
 
-        <div className="grid grid-cols-2 gap-2">
-          <div className="space-y-2">
+        {/* Layout atas-bawah: kata di atas, arti di bawah — tile lebih lapang daripada
+            2 kolom menyamping yang sempit (arti Indonesia sering kepotong). */}
+        <div className="space-y-2">
+          <div className="grid grid-cols-2 gap-2">
             {enOrder.map((pi) => {
               const pair = round[pi];
               const isMatched = matchedIds.has(pair.itemId);
@@ -845,7 +867,8 @@ export default function ReviewPage() {
               );
             })}
           </div>
-          <div className="space-y-2">
+          <div className="h-px bg-zinc-100 dark:bg-zinc-800/60" />
+          <div className="grid grid-cols-2 gap-2">
             {idOrder.map((pi) => {
               const pair = round[pi];
               const isMatched = matchedIds.has(pair.itemId);
@@ -861,7 +884,7 @@ export default function ReviewPage() {
                   className={tileBase + cls}
                   onClick={() => pickMeaning(pi)}
                 >
-                  <span className="truncate text-sm">{pair.meaning}</span>
+                  <span className="min-w-0 flex-1 truncate text-sm">{pair.meaning}</span>
                   {isMatched ? <CheckCircle2 className="h-4 w-4 shrink-0 text-teal-600" /> : null}
                 </div>
               );
@@ -869,7 +892,7 @@ export default function ReviewPage() {
           </div>
         </div>
         <p className="text-center text-xs text-zinc-400">
-          Pilih kata, lalu tap artinya yang cocok — salah tidak menghukum, cuma dicatat
+          Tap kata di atas, lalu tap artinya di bawah — salah tidak menghukum, cuma dicatat
         </p>
       </div>
     );

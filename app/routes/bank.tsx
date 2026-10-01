@@ -81,7 +81,6 @@ export default function BankPage() {
   const [query, setQuery] = useState("");
   const [expanded, setExpanded] = useState<number | null>(null);
   const [loading, setLoading] = useState(true);
-  const [busyId, setBusyId] = useState<number | null>(null);
   const [genOpen, setGenOpen] = useState(false);
   const [genLevel, setGenLevel] = useState("B1");
   const [genCount, setGenCount] = useState(10);
@@ -95,6 +94,8 @@ export default function BankPage() {
   const dragStartX = useRef(0);
   const dragging = useRef(false);
   const moved = useRef(false);
+  /** Kartu yang sedang/udah diproses — guard spam-swipe & dobel-tap. */
+  const processedIds = useRef<Set<number>>(new Set());
 
   const refresh = useCallback(async (nextLevel: string) => {
     setLoading(true);
@@ -116,9 +117,25 @@ export default function BankPage() {
     refresh("all");
   }, [refresh]);
 
-  /** Aksi sukses → entri langsung hilang dari bank (udah pindah ke Library / ditandai tahu). */
+  /** Aksi sukses → entri langsung hilang dari bank (udah pindah ke Library / ditandai tahu).
+   * Optimistic: UI update instan, request jalan di belakang — spam-swipe aman. */
   const setStatus = async (id: number, action: "learn" | "know") => {
-    setBusyId(id);
+    if (processedIds.current.has(id)) return;
+    processedIds.current.add(id);
+    const done = entries.find((e) => e.id === id);
+    setEntries((list) => list.filter((e) => e.id !== id));
+    setStats((s) =>
+      s
+        ? {
+            total: Math.max(0, s.total - 1),
+            byLevel: done
+              ? { ...s.byLevel, [done.cefr]: Math.max(0, (s.byLevel[done.cefr] ?? 1) - 1) }
+              : s.byLevel,
+          }
+        : s,
+    );
+    navigator.vibrate?.(15);
+    toast(ACTION_LABEL[action]);
     try {
       const r = await fetch("/api/bank", {
         method: "POST",
@@ -127,24 +144,10 @@ export default function BankPage() {
       });
       const d = await r.json();
       if (!r.ok || !d.ok) throw new Error(d.error || "Gagal menyimpan");
-      const done = entries.find((e) => e.id === id);
-      setEntries((list) => list.filter((e) => e.id !== id));
-      setStats((s) =>
-        s
-          ? {
-              total: Math.max(0, s.total - 1),
-              byLevel: done
-                ? { ...s.byLevel, [done.cefr]: Math.max(0, (s.byLevel[done.cefr] ?? 1) - 1) }
-                : s.byLevel,
-            }
-          : s,
-      );
-      navigator.vibrate?.(15);
-      toast(ACTION_LABEL[action]);
     } catch (e) {
-      toast(e instanceof Error ? e.message : "Gagal menyimpan");
-    } finally {
-      setBusyId(null);
+      toast(e instanceof Error ? e.message : "Gagal menyimpan — status dipulihkan");
+      processedIds.current.delete(id);
+      refresh(level); // pulihkan sesuai state server
     }
   };
 
@@ -188,6 +191,7 @@ export default function BankPage() {
     const dx = drag;
     setDrag(0);
     setDragId(null);
+    if (processedIds.current.has(id)) return; // udah diproses — abaikan spam
     if (dx < -90) {
       void setStatus(id, "learn");
     } else if (dx > 90) {
@@ -414,19 +418,13 @@ export default function BankPage() {
                         <div className="flex gap-2 pt-1">
                           <button
                             className="btn-primary flex-1 gap-1.5 text-sm"
-                            disabled={busyId === e.id}
                             onClick={() => setStatus(e.id, "learn")}
                           >
-                            {busyId === e.id ? (
-                              <Loader2 className="h-4 w-4 animate-spin" />
-                            ) : (
-                              <Layers className="h-4 w-4" />
-                            )}
+                            <Layers className="h-4 w-4" />
                             Mau dipelajari
                           </button>
                           <button
                             className="btn-secondary flex-1 gap-1.5 text-sm"
-                            disabled={busyId === e.id}
                             onClick={() => setStatus(e.id, "know")}
                           >
                             <CheckCircle2 className="h-4 w-4" /> Sudah tahu

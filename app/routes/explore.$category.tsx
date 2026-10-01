@@ -1,7 +1,7 @@
 import type { ActionFunctionArgs, LoaderFunctionArgs, MetaFunction } from "react-router";
 import { Link, useFetcher, useLoaderData, useRevalidator } from "react-router";
 import { useEffect, useRef, useState } from "react";
-import { ArrowLeft, CheckCircle2, Loader2, Sparkles } from "lucide-react";
+import { ArrowLeft, CheckCircle2, Loader2, Sparkles, Volume2 } from "lucide-react";
 import { requireUser } from "~/lib/auth.server";
 import { db } from "~/lib/db/client.server";
 import { exploreItems, items, settings } from "~/lib/db/schema";
@@ -15,6 +15,14 @@ export const meta: MetaFunction = () => [{ title: "Explore — LingStick" }];
 
 /** Lock anti dobel-generate per kategori (StrictMode / multi-tab). */
 const genLocks = new Map<string, number>();
+
+function speak(text: string, lang = "en-US") {
+  if (typeof window === "undefined" || !window.speechSynthesis) return;
+  const u = new SpeechSynthesisUtterance(text);
+  u.lang = lang;
+  window.speechSynthesis.cancel();
+  window.speechSynthesis.speak(u);
+}
 
 function autoGenKey(category: string) {
   return `explore_autogen:${category}`;
@@ -302,7 +310,17 @@ export default function ExploreCategory() {
         {visible.map((r) => (
           <div key={r.id} className="card">
             <div className="flex items-start justify-between gap-2">
-              <p className="font-semibold">{r.text}</p>
+              <div className="flex min-w-0 items-center gap-1.5">
+                <p className="truncate font-semibold">{r.text}</p>
+                <button
+                  className="shrink-0 rounded-lg p-1 text-zinc-400 hover:bg-zinc-100 hover:text-teal-600 dark:hover:bg-zinc-800"
+                  title="Cara baca"
+                  aria-label={`Dengarkan ${r.text}`}
+                  onClick={() => speak(r.text)}
+                >
+                  <Volume2 className="h-4 w-4" />
+                </button>
+              </div>
               {isSaved(r) ? (
                 <span className="badge inline-flex shrink-0 items-center gap-1 bg-teal-50 text-teal-700 dark:bg-teal-950 dark:text-teal-400">
                   <CheckCircle2 className="h-3.5 w-3.5" /> Tersimpan
@@ -320,7 +338,17 @@ export default function ExploreCategory() {
                 <p className="label">Contoh</p>
                 {examplesOf(r).map((ex, i) => (
                   <div key={i}>
-                    <p className="text-sm">{ex.en}</p>
+                    <div className="flex items-start gap-1.5">
+                      <p className="flex-1 text-sm">{ex.en}</p>
+                      <button
+                        className="shrink-0 rounded-lg p-0.5 text-zinc-400 hover:text-teal-600 dark:hover:text-teal-300"
+                        title="Dengarkan contoh"
+                        aria-label="Dengarkan contoh"
+                        onClick={() => speak(ex.en)}
+                      >
+                        <Volume2 className="h-3.5 w-3.5" />
+                      </button>
+                    </div>
                     <p className="text-xs text-zinc-500 dark:text-zinc-400">{ex.id}</p>
                   </div>
                 ))}

@@ -132,7 +132,11 @@ export default function Settings() {
 
       <section className="card space-y-1.5">
         <h2 className="label">Review</h2>
-        <Row k="Kartu baru / hari" v={String(data.newCardsPerDay)} />
+        <Row k="Kartu baru / hari" v={`${data.newCardsPerDay} kata`} />
+        <p className="text-[11px] text-zinc-400">
+          Jumlah kata baru yang masuk antrian flashcard &amp; kuis tiap hari. Naikin kalau mau
+          nambah kosakata lebih cepat, turunin kalau mulai kewalahan.
+        </p>
       </section>
 
       <section className="card space-y-2">

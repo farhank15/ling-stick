@@ -1,6 +1,6 @@
 import type { ActionFunctionArgs, LoaderFunctionArgs, MetaFunction } from "react-router";
 import { Form, Link, useFetcher, useLoaderData, useNavigation } from "react-router";
-import { ArrowLeft, CheckCircle2, Lightbulb, TriangleAlert } from "lucide-react";
+import { ArrowLeft, CheckCircle2, Lightbulb, TriangleAlert, Volume2 } from "lucide-react";
 import { useState } from "react";
 import { ConfirmModal } from "~/components/ConfirmModal";
 import { requireUser } from "~/lib/auth.server";
@@ -8,6 +8,14 @@ import { deleteItem, getItemDetail, markLearning, updateItem } from "~/lib/items
 import { redirect } from "react-router";
 
 export const meta: MetaFunction = () => [{ title: "Detail Item — LingStick" }];
+
+function speak(text: string, lang = "en-US") {
+  if (typeof window === "undefined" || !window.speechSynthesis) return;
+  const u = new SpeechSynthesisUtterance(text);
+  u.lang = lang;
+  window.speechSynthesis.cancel();
+  window.speechSynthesis.speak(u);
+}
 
 export async function loader({ request, params }: LoaderFunctionArgs) {
   await requireUser(request);
@@ -134,6 +142,15 @@ export default function ItemDetail() {
                     dari sumber
                   </span>
                 ) : null}
+                <span className="flex-1" />
+                <button
+                  className="shrink-0 rounded-lg p-1 text-zinc-400 hover:bg-zinc-100 hover:text-teal-600 dark:hover:bg-zinc-800"
+                  title="Dengarkan contoh"
+                  aria-label="Dengarkan contoh"
+                  onClick={() => speak(ex.en)}
+                >
+                  <Volume2 className="h-4 w-4" />
+                </button>
               </div>
               <p className="mt-1.5 text-sm">
                 <Highlighted text={ex.en} highlight={item.text} />
