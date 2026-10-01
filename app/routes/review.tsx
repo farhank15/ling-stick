@@ -10,6 +10,7 @@ import {
   History,
   Keyboard,
   Layers,
+  Lightbulb,
   PartyPopper,
   Plus,
   Puzzle,
@@ -274,6 +275,9 @@ export default function ReviewPage() {
     en: null,
     id: null,
   });
+  // Hint: 1x per ronde — sorot satu pasangan yang benar.
+  const [hintPair, setHintPair] = useState<number | null>(null);
+  const [hintUsed, setHintUsed] = useState(false);
   const matchResults = useRef<{ itemId: number; correct: boolean }[]>([]);
   const matchWrong = useRef<Record<number, number>>({});
 
@@ -372,9 +376,11 @@ export default function ReviewPage() {
       });
       const d = await safeJson<{ ok?: boolean; setId?: number; error?: string }>(r);
       if (!r.ok || !d.ok) throw new Error(d.error || "Gagal generate");
-      // Mainkan langsung set yang barusan dibuat (bukan set harian yang lama).
-      loadSetById(d.setId!);
+      // Mainkan langsung set yang barusan dibuat — WAJIB pindah layar, bukan cuma load.
       setGenBusy(null);
+      setMode(m);
+      setScreen("quiz");
+      loadSetById(d.setId!);
     } catch (e) {
       setGenMsg(e instanceof Error ? e.message : "Gagal generate");
       setGenBusy(null);
@@ -537,6 +543,17 @@ export default function ReviewPage() {
   };
 
   /* ── Match actions ── */
+  const useHint = () => {
+    const round = matchRounds[matchRound];
+    if (!round || hintUsed) return;
+    const remaining = round.filter((p) => !matchedIds.has(p.itemId));
+    if (remaining.length <= 1) return; // 1 pasangan tersisa = sudah jelas
+    const pick = remaining[Math.floor(Math.random() * remaining.length)];
+    setHintPair(pick.itemId);
+    setHintUsed(true);
+    navigator.vibrate?.(10);
+  };
+
   const finishMatch = async (msg: string) => {
     const results = [...matchResults.current];
     backToPick(msg);
@@ -559,6 +576,7 @@ export default function ReviewPage() {
     if (enPair.itemId === idPair.itemId) {
       const nextMatched = new Set(matchedIds).add(idPair.itemId);
       setMatchedIds(nextMatched);
+      if (hintPair === idPair.itemId) setHintPair(null); // pasangan hint cocok
       matchResults.current.push({
         itemId: idPair.itemId,
         correct: (matchWrong.current[idPair.itemId] ?? 0) === 0,
@@ -591,6 +609,8 @@ export default function ReviewPage() {
     setSelectedEn(null);
     setMatchedIds(new Set());
     setWrongPair({ en: null, id: null });
+    setHintPair(null);
+    setHintUsed(false);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [screen, matchRound, matchRounds]);
 
@@ -816,12 +836,23 @@ export default function ReviewPage() {
           <span>
             Ronde {matchRound + 1} / {matchRounds.length}
           </span>
-          <button
-            className="btn-ghost text-xs"
-            onClick={() => backToPick(`Match berhenti — ${donePairs} pasang dimainkan`)}
-          >
-            Selesai
-          </button>
+          <span className="flex items-center gap-1">
+            <button
+              className="btn-ghost inline-flex items-center gap-1 text-xs disabled:opacity-40"
+              disabled={hintUsed || donePairs >= totalPairs}
+              title="Sorot satu pasangan yang benar (1x per ronde)"
+              onClick={useHint}
+            >
+              <Lightbulb className={`h-3.5 w-3.5 ${hintPair !== null ? "text-amber-500" : ""}`} />
+              {hintUsed ? "Hint terpakai" : "Hint"}
+            </button>
+            <button
+              className="btn-ghost text-xs"
+              onClick={() => backToPick(`Match berhenti — ${donePairs} pasang dimainkan`)}
+            >
+              Selesai
+            </button>
+          </span>
         </div>
         <div className="h-1.5 overflow-hidden rounded-full bg-zinc-200 dark:bg-zinc-800">
           <div
@@ -839,13 +870,16 @@ export default function ReviewPage() {
               const isMatched = matchedIds.has(pair.itemId);
               const isSel = selectedEn === pi;
               const isWrong = wrongPair.en === pi;
+              const isHint = pair.itemId === hintPair;
               const cls = isMatched
                 ? " border-teal-500 bg-teal-50 text-teal-800 dark:bg-teal-950 dark:text-teal-300"
                 : isWrong
                   ? " border-red-400 bg-red-50 text-red-700 dark:bg-red-950 dark:text-red-300"
-                  : isSel
-                    ? " border-teal-500 bg-teal-50/60 dark:bg-teal-950/60"
-                    : " border-zinc-200 bg-white dark:border-zinc-800 dark:bg-zinc-900";
+                  : isHint
+                    ? " border-amber-400 bg-amber-50 dark:bg-amber-950/50"
+                    : isSel
+                      ? " border-teal-500 bg-teal-50/60 dark:bg-teal-950/60"
+                      : " border-zinc-200 bg-white dark:border-zinc-800 dark:bg-zinc-900";
               return (
                 <div
                   key={pi}
@@ -873,11 +907,14 @@ export default function ReviewPage() {
               const pair = round[pi];
               const isMatched = matchedIds.has(pair.itemId);
               const isWrong = wrongPair.id === pi;
+              const isHint = pair.itemId === hintPair;
               const cls = isMatched
                 ? " border-teal-500 bg-teal-50 text-teal-800 dark:bg-teal-950 dark:text-teal-300"
                 : isWrong
                   ? " border-red-400 bg-red-50 text-red-700 dark:bg-red-950 dark:text-red-300"
-                  : " border-zinc-200 bg-white dark:border-zinc-800 dark:bg-zinc-900";
+                  : isHint
+                    ? " border-amber-400 bg-amber-50 dark:bg-amber-950/50"
+                    : " border-zinc-200 bg-white dark:border-zinc-800 dark:bg-zinc-900";
               return (
                 <div
                   key={pi}
@@ -1031,7 +1068,8 @@ export default function ReviewPage() {
 
         {isTypingUI ? (
           <>
-            <p className="mt-3 text-center text-xl font-semibold">“{q.prompt}”</p>
+            <p className="mt-3 text-center text-xl font-semibold">{q.prompt}</p>
+            <p className="mt-1 text-center text-[11px] text-zinc-400">Ketik bahasa Inggrisnya dari arti di atas</p>
             <input
               className="input-area mt-4 text-center text-lg"
               placeholder="Ketik bahasa Inggrisnya…"
@@ -1064,7 +1102,7 @@ export default function ReviewPage() {
           </>
         ) : isScrambleUI ? (
           <>
-            <p className="mt-3 text-center text-xl font-semibold">“{q.prompt}”</p>
+            <p className="mt-3 text-center text-xl font-semibold">{q.prompt}</p>
             {/* Baris susunan */}
             <div className="mt-4 flex min-h-14 flex-wrap items-center justify-center gap-1.5 rounded-xl border border-dashed border-zinc-300 p-2 dark:border-zinc-700">
               {pickedWords.length === 0 ? (
@@ -1141,7 +1179,7 @@ export default function ReviewPage() {
         ) : q.type === "mcq_en_id" ? (
           <p className="mt-3 text-center text-2xl font-bold">{q.prompt}</p>
         ) : q.type === "mcq_id_en" ? (
-          <p className="mt-3 text-center text-xl font-semibold">“{q.prompt}”</p>
+          <p className="mt-3 text-center text-xl font-semibold">{q.prompt}</p>
         ) : q.type === "cloze" ? (
           <p className="mt-3 text-center text-lg leading-relaxed">{q.prompt}</p>
         ) : null}

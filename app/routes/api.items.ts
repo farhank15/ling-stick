@@ -44,12 +44,6 @@ export async function action({ request }: ActionFunctionArgs) {
     return redirect(to, 303);
   }
 
-  const text = (body.text ?? "").trim();
-  if (!text || text.length > 200) {
-    if (body._redirect) return redirect("/?error=teks-kosong", 303);
-    return Response.json({ error: "Teks wajib 1–200 karakter" }, { status: 400 });
-  }
-
   // Fallback manual: arti diketik sendiri kalau LLM gagal (BLUEPRINT §10).
   const examples = (body.examples ?? [])
     .filter((e) => (e.en ?? "").trim() && (e.idText ?? "").trim())
@@ -61,10 +55,20 @@ export async function action({ request }: ActionFunctionArgs) {
       isContext: e.isContext,
     }));
 
+  // Tambah contoh ke item yang sudah ada — TIDAK butuh teks baru (validasi teks dilewati).
   if (body.addExamplesTo) {
+    if (examples.length === 0) {
+      return Response.json({ error: "Contoh kalimat wajib diisi" }, { status: 400 });
+    }
     const addTo = Number(body.addExamplesTo);
     if (Number.isInteger(addTo)) await addExamplesToItem(addTo, examples);
     return Response.json({ ok: true, id: body.addExamplesTo, addedToExisting: true });
+  }
+
+  const text = (body.text ?? "").trim();
+  if (!text || text.length > 200) {
+    if (body._redirect) return redirect("/?error=teks-kosong", 303);
+    return Response.json({ error: "Teks wajib 1–200 karakter" }, { status: 400 });
   }
 
   const type: ItemType = body.type ?? "word";

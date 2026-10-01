@@ -36,6 +36,7 @@ export default function Translate() {
   const [usageBusy, setUsageBusy] = useState(false);
   const [busy, setBusy] = useState(false);
   const [saved, setSaved] = useState(false);
+  const [saving, setSaving] = useState(false);
   const seq = useRef(0);
 
   const active = STYLE_PRESETS.find((p) => p.key === preset)!;
@@ -142,26 +143,53 @@ export default function Translate() {
   };
 
   const saveAsItem = async () => {
-    if (!result || saved) return;
-    const res = await fetch("/api/items", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        text: text.trim().slice(0, 120),
+    if (!result || saved || saving) return;
+    setSaving(true);
+    try {
+      const src = text.trim();
+      // Contoh selalu disimpan dengan arah yang benar:
+      // en = sisi bahasa Inggris, idText = sisi Indonesia (dulu en selalu teks input,
+      // jadi kalau translate ID→EN kolomnya kebalik).
+      const en = from === "en" ? src : (result.translation ?? "").trim();
+      const idText = from === "en" ? (result.translation ?? "").trim() : src;
+      const payload = {
+        text: src.slice(0, 120),
         type: "sentence",
         register: "neutral",
-        meaningId: result.translation.slice(0, 300),
+        meaningId: (result.translation ?? "").slice(0, 300),
         source: "Terjemah",
         confidence: "medium",
-        examples: [{ register: "neutral", en: text.trim(), idText: result.translation }],
-      }),
-    });
-    const data = await res.json();
-    if (data.ok || data.existed) {
-      setSaved(true);
-      toast(data.existed ? "Sudah ada di Library" : "Tersimpan ke Library");
-    } else {
-      toast(data.error ?? "Gagal menyimpan");
+        examples: en ? [{ register: "neutral", en: en.slice(0, 300), idText: idText.slice(0, 300) }] : [],
+      };
+      let res = await fetch("/api/items", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(payload),
+      });
+      let data = await res.json();
+      // Teks pernah disimpan? Jangan buang contohnya — tambahkan ke item lama.
+      if (res.status === 409 && data.duplicateOf) {
+        res = await fetch("/api/items", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ ...payload, addExamplesTo: String(data.duplicateOf) }),
+        });
+        data = await res.json();
+      }
+      if (data.ok) {
+        setSaved(true);
+        toast(
+          data.addedToExisting
+            ? "Teks udah ada di Library — contoh ditambahkan"
+            : "Tersimpan ke Library",
+        );
+      } else {
+        toast(data.error ?? "Gagal menyimpan");
+      }
+    } catch {
+      toast("Gagal menyimpan");
+    } finally {
+      setSaving(false);
     }
   };
 
@@ -234,11 +262,22 @@ export default function Translate() {
       </div>
 
       {/* Hasil */}
+      {/* Status loading yang jelas: skeleton kartu + tahapan (bukan layar kosong) */}
+      {!result && busy ? (
+        <div className="card space-y-3">
+          <p className="inline-flex items-center gap-1.5 text-xs text-zinc-400">
+            <Loader2 className="h-3.5 w-3.5 animate-spin" /> Menerjemahkan… (AI, bisa 2–5 detik)
+          </p>
+          <div className="h-6 w-3/4 animate-pulse rounded bg-zinc-100 dark:bg-zinc-800/60" />
+          <div className="h-4 w-1/2 animate-pulse rounded bg-zinc-100 dark:bg-zinc-800/60" />
+        </div>
+      ) : null}
+
       {result ? (
         <div className="card">
           {busy ? (
             <p className="inline-flex items-center gap-1.5 text-xs text-zinc-400">
-              <Loader2 className="h-3.5 w-3.5 animate-spin" /> Menerjemahkan…
+              <Loader2 className="h-3.5 w-3.5 animate-spin" /> Menerjemahkan ulang…
             </p>
           ) : (
             <>
@@ -303,12 +342,16 @@ export default function Translate() {
                 <button
                   className="btn-secondary min-h-9 gap-1.5 px-3 text-xs"
                   onClick={() => void saveAsItem()}
-                  disabled={saved}
+                  disabled={saved || saving}
                   title="Simpan ke Library"
                 >
                   {saved ? (
                     <>
                       <BookmarkCheck className="h-4 w-4 text-teal-600 dark:text-teal-400" /> Tersimpan
+                    </>
+                  ) : saving ? (
+                    <>
+                      <Loader2 className="h-4 w-4 animate-spin" /> Menyimpan…
                     </>
                   ) : (
                     <>

@@ -1,6 +1,6 @@
 import type { ActionFunctionArgs, LoaderFunctionArgs, MetaFunction } from "react-router";
 import { Form, Link, useFetcher, useLoaderData, useNavigation } from "react-router";
-import { ArrowLeft, CheckCircle2, Lightbulb, TriangleAlert, Volume2 } from "lucide-react";
+import { ArrowLeft, CheckCircle2, Lightbulb, Loader2, Sparkles, TriangleAlert, Volume2 } from "lucide-react";
 import { useState } from "react";
 import { ConfirmModal } from "~/components/ConfirmModal";
 import { requireUser } from "~/lib/auth.server";
@@ -52,6 +52,48 @@ export default function ItemDetail() {
   const nav = useNavigation();
   const fetcher = useFetcher();
   const [confirming, setConfirming] = useState(false);
+  // Generate contoh kalimat via AI — hasil disimpan permanen ke item.
+  const [genEx, setGenEx] = useState<{ busy: boolean; error: string | null }>({ busy: false, error: null });
+  const [exampleCount, setExampleCount] = useState(examples.length);
+
+  const generateExamples = async () => {
+    if (genEx.busy) return;
+    setGenEx({ busy: true, error: null });
+    try {
+      const isEn = /^[\x00-\x7F\s'’-]+$/.test(item.text);
+      const res = await fetch("/api/usage-examples", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          text: item.text.slice(0, 300),
+          direction: isEn ? "en2id" : "id2en",
+        }),
+      });
+      const data = await res.json();
+      if (!res.ok || !data.result) throw new Error(data.error || "Gagal generate");
+      const save = await fetch("/api/items", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          addExamplesTo: String(item.id),
+          examples: (data.result.examples as { en: string; id: string }[])
+            .slice(0, 5)
+            .map((e) => ({
+              register: "neutral",
+              en: e.en,
+              idText: e.id,
+            })),
+        }),
+      });
+      const saved = await save.json();
+      if (!save.ok) throw new Error(saved.error || "Gagal menyimpan contoh");
+      setExampleCount((n) => n + data.result.examples.length);
+    } catch (e) {
+      setGenEx({ busy: false, error: e instanceof Error ? e.message : "Gagal generate" });
+      return;
+    }
+    setGenEx({ busy: false, error: null });
+  };
 
   const busy = nav.state !== "idle" || fetcher.state !== "idle";
   const checkResult = (fetcher.data as { result?: CheckResult } | undefined)?.result;
@@ -124,9 +166,28 @@ export default function ItemDetail() {
 
       {/* Contoh */}
       <section className="space-y-2">
-        <h2 className="label">Contoh kalimat</h2>
-        {examples.length === 0 ? (
-          <p className="text-sm text-zinc-500">Belum ada contoh.</p>
+        <div className="flex items-center justify-between">
+          <h2 className="label">Contoh kalimat</h2>
+          <button
+            className="btn-ghost inline-flex items-center gap-1 text-xs disabled:opacity-50"
+            disabled={genEx.busy}
+            onClick={() => void generateExamples()}
+          >
+            {genEx.busy ? (
+              <Loader2 className="h-3.5 w-3.5 animate-spin" />
+            ) : (
+              <Sparkles className="h-3.5 w-3.5 text-teal-600 dark:text-teal-400" />
+            )}
+            {genEx.busy ? "Lagi generate…" : "Generate contoh (AI)"}
+          </button>
+        </div>
+        {genEx.error ? (
+          <p className="rounded-lg bg-red-50 px-3 py-2 text-xs text-red-700 dark:bg-red-950 dark:text-red-300">
+            {genEx.error}
+          </p>
+        ) : null}
+        {examples.length === 0 && exampleCount === 0 ? (
+          <p className="text-sm text-zinc-500">Belum ada contoh — tap “Generate contoh (AI)” di atas.</p>
         ) : (
           examples.map((ex) => (
             <div key={ex.id} className="card">
