@@ -11,8 +11,15 @@ import { env } from "~/lib/env.server";
  * - Sumber soal: item Library sendiri + kata dari Bank Kata (CEFR level bisa dipilih)
  */
 
-export type QuizMode = "daily" | "extra" | "typing" | "intens";
-export const QUIZ_MODES: QuizMode[] = ["daily", "extra", "typing", "intens"];
+export type QuizMode = "daily" | "extra" | "typing" | "intens" | "audio" | "scramble";
+export const QUIZ_MODES: QuizMode[] = ["daily", "extra", "typing", "intens", "audio", "scramble"];
+
+/** Mode khusus memaksa tipe soal tertentu biar isinya beda dari kuis harian. */
+function forceTypeFor(mode: QuizMode): QuizQuestion["type"] | undefined {
+  if (mode === "typing" || mode === "scramble") return "typing";
+  if (mode === "audio") return "listen";
+  return undefined;
+}
 
 export type QuizQuestion = {
   itemId: number;
@@ -221,6 +228,8 @@ function modeTitle(mode: QuizMode, day: string): string {
     extra: "Latihan Tambahan",
     typing: "Latihan Ketik",
     intens: "Latihan Intens",
+    audio: "Latihan Dengar",
+    scramble: "Susun Kata",
   };
   return `${names[mode]} ${tgl}`;
 }
@@ -243,7 +252,7 @@ export async function getSetForDay(mode: QuizMode, day: string, limit: number, o
     .limit(1);
   if (existing) return existing;
 
-  const questions = await buildQuestions(limit, opts);
+  const questions = await buildQuestions(limit, { ...opts, forceType: forceTypeFor(mode) });
   if (questions.length === 0) return null;
 
   const [created] = await db
@@ -277,7 +286,7 @@ export async function createExtraSet(
   limit: number,
   opts: BuildOpts = {},
 ) {
-  const questions = await buildQuestions(limit, opts);
+  const questions = await buildQuestions(limit, { ...opts, forceType: forceTypeFor(mode) });
   if (questions.length === 0) return null;
   const [created] = await db
     .insert(quizSets)
@@ -422,18 +431,21 @@ export async function pendingToday(): Promise<{ total: number; done: number; com
   return { total: order.length, done: set.done, completed: Boolean(set.completed) };
 }
 
-/** Antrian flashcard: kartu due + kartu baru hari ini. */
+/** Antrian flashcard: kartu due + kartu baru hari ini (dengan contoh & catatan). */
 export async function getFlashQueue(limit = 30) {
   const today = localDayStr();
   const dayStart = new Date(today + "T00:00:00+07:00").getTime();
   const dayEnd = dayStart + 86_400_000;
   const firstEn = sql<string | null>`(SELECT en FROM examples WHERE item_id = ${items.id} ORDER BY id LIMIT 1)`;
+  const firstId = sql<string | null>`(SELECT id_text FROM examples WHERE item_id = ${items.id} ORDER BY id LIMIT 1)`;
   const dueRows = await db
     .select({
       itemId: items.id,
       text: items.text,
       meaningId: items.meaningId,
+      notesId: items.notesId,
       firstEn,
+      firstId,
       due: cards.due,
       reps: cards.reps,
     })
@@ -447,7 +459,9 @@ export async function getFlashQueue(limit = 30) {
       itemId: items.id,
       text: items.text,
       meaningId: items.meaningId,
+      notesId: items.notesId,
       firstEn,
+      firstId,
       due: cards.due,
       reps: cards.reps,
     })

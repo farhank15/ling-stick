@@ -1,14 +1,12 @@
 import type { MetaFunction } from "react-router";
 import { Link, useLoaderData } from "react-router";
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import {
   ArrowRight,
   BadgeCheck,
   BookOpenCheck,
   CheckCircle2,
   Ear,
-  Eye,
-  EyeOff,
   History,
   Keyboard,
   Layers,
@@ -16,12 +14,15 @@ import {
   Plus,
   RotateCcw,
   Repeat,
+  Shuffle,
   Sparkles,
+  Volume2,
   XCircle,
   Zap,
 } from "lucide-react";
 import { requireUser } from "~/lib/auth.server";
 import { env } from "~/lib/env.server";
+import { useToast } from "~/components/Toast";
 
 export const meta: MetaFunction = () => [{ title: "Review — LingStick" }];
 export const handle = { title: "Review" };
@@ -29,6 +30,24 @@ export const handle = { title: "Review" };
 export async function loader({ request }: { request: Request }) {
   await requireUser(request);
   return { dailyTarget: env.DAILY_QUIZ_SIZE };
+}
+
+function speak(text: string, lang = "en-US") {
+  if (typeof window === "undefined" || !window.speechSynthesis) return;
+  const u = new SpeechSynthesisUtterance(text);
+  u.lang = lang;
+  window.speechSynthesis.cancel();
+  window.speechSynthesis.speak(u);
+}
+
+/** r.json() yang aman — kalau body bukan JSON (mis. halaman error), jadi pesan jelas. */
+async function safeJson<T = unknown>(r: Response): Promise<T> {
+  const text = await r.text();
+  try {
+    return JSON.parse(text) as T;
+  } catch {
+    throw new Error(r.ok ? "Respons server nggak valid" : `Server error ${r.status}`);
+  }
 }
 
 type QuestionType = "mcq_en_id" | "mcq_id_en" | "cloze" | "listen" | "typing";
@@ -65,22 +84,27 @@ type FlashCard = {
   itemId: number;
   text: string;
   meaningId: string | null;
+  notesId: string | null;
   firstEn: string | null;
+  firstId: string | null;
   reps: number;
 };
 
-type Mode = "daily" | "flash" | "typing" | "intens";
+type Mode = "daily" | "typing" | "intens" | "audio" | "scramble";
 
 const MODES: {
-  id: Mode;
+  id: Mode | "flash";
   label: string;
   icon: typeof Repeat;
   desc: string;
+  action: "start" | "generate";
 }[] = [
-  { id: "daily", label: "Kuis Harian", icon: Repeat, desc: "Rutinitas 20 soal per hari — pilihan ganda, cloze, dengar" },
-  { id: "flash", label: "Flashcard", icon: Layers, desc: "Kartu ingatan: lihat arti, nilai diri sendiri" },
-  { id: "typing", label: "Latihan Ketik", icon: Keyboard, desc: "Ketik bahasa Inggrisnya dari arti Indonesia" },
-  { id: "intens", label: "Intens Mingguan", icon: Zap, desc: "25 soal campuran buat mempertajam ingatan" },
+  { id: "daily", label: "Kuis Harian", icon: Repeat, desc: "Rutinitas 20 soal per hari — campuran pilihan ganda, cloze, dengar", action: "start" },
+  { id: "flash", label: "Flashcard", icon: Layers, desc: "Kartu ingatan yang jatuh tempo — tap flip, swipe nilai", action: "start" },
+  { id: "typing", label: "Latihan Ketik", icon: Keyboard, desc: "Ketik bahasa Inggrisnya dari arti Indonesia", action: "generate" },
+  { id: "audio", label: "Dengar", icon: Volume2, desc: "Dengarin cara bacanya, pilih arti yang tepat", action: "start" },
+  { id: "scramble", label: "Susun Kata", icon: Shuffle, desc: "Susun kata jadi frasa Inggris yang benar", action: "start" },
+  { id: "intens", label: "Intens Mingguan", icon: Zap, desc: "25 soal campuran buat mempertajam ingatan", action: "generate" },
 ];
 
 const TYPE_META: Record<QuestionType, { label: string; icon: typeof Ear }> = {
@@ -91,6 +115,10 @@ const TYPE_META: Record<QuestionType, { label: string; icon: typeof Ear }> = {
   typing: { label: "Ketik dalam Inggris", icon: Keyboard },
 };
 
+function normalizeAnswer(s: string): string {
+  return s.toLowerCase().replace(/[^a-z0-9' ]/g, "").replace(/\s+/g, " ").trim();
+}
+
 /** Pemilih metode (halaman depan Review). */
 function ModePicker({
   onStart,
@@ -98,7 +126,7 @@ function ModePicker({
   genBusy,
   genMsg,
 }: {
-  onStart: (mode: Mode) => void;
+  onStart: (mode: Mode | "flash") => void;
   onGenerate: (mode: "typing" | "intens") => void;
   genBusy: string | null;
   genMsg: string | null;
@@ -120,11 +148,11 @@ function ModePicker({
               <p className="font-semibold">{m.label}</p>
               <p className="truncate text-xs text-zinc-500">{m.desc}</p>
             </div>
-            {m.id === "daily" || m.id === "flash" ? (
+            {m.action === "start" ? (
               <button className="btn-primary shrink-0 text-sm" onClick={() => onStart(m.id)}>
                 Mulai
               </button>
-              ) : (
+            ) : (
               <button
                 className="btn-secondary shrink-0 gap-1 text-sm"
                 disabled={genBusy === m.id}
@@ -142,7 +170,7 @@ function ModePicker({
         ))}
       </div>
       <p className="px-1 text-center text-xs text-zinc-400">
-        Generate = bikin soal tambahan baru di luar jadwal harian.
+        Generate = bikin set soal tambahan baru di luar jadwal harian.
       </p>
     </div>
   );
@@ -195,15 +223,19 @@ function OptionList({
 
 export default function ReviewPage() {
   const { dailyTarget } = useLoaderData<typeof loader>();
+  const toast = useToast();
   const [screen, setScreen] = useState<"pick" | "quiz" | "flash">("pick");
   const [mode, setMode] = useState<Mode>("daily");
 
   const [data, setData] = useState<QuizResponse | null>(null);
+  const [loadError, setLoadError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
   const [pos, setPos] = useState(0);
   const [picked, setPicked] = useState<number | null>(null);
   const [typed, setTyped] = useState("");
   const [typedResult, setTypedResult] = useState<null | { ok: boolean }>(null);
+  const [answered, setAnswered] = useState(0);
+  const [correctHere, setCorrectHere] = useState(0);
   const [savedDone, setSavedDone] = useState(0);
   const [showHistory, setShowHistory] = useState(false);
   const [history, setHistory] = useState<
@@ -212,26 +244,38 @@ export default function ReviewPage() {
   const [genBusy, setGenBusy] = useState<string | null>(null);
   const [genMsg, setGenMsg] = useState<string | null>(null);
 
-  // Flashcard state
+  // Susun Kata
+  const [scrambleOrder, setScrambleOrder] = useState<number[]>([]);
+  const [pickedWords, setPickedWords] = useState<number[]>([]);
+
+  // Flashcard
   const [cards, setCards] = useState<FlashCard[]>([]);
   const [cardIdx, setCardIdx] = useState(0);
   const [reveal, setReveal] = useState(false);
+  const [drag, setDrag] = useState(0);
   const [flashDone, setFlashDone] = useState(0);
+  const dragStartX = useRef(0);
+  const dragging = useRef(false);
+  const moved = useRef(false);
 
   const load = useCallback((m: Mode) => {
     setLoading(true);
+    setLoadError(null);
     const url = m === "daily" ? "/api/quiz" : `/api/quiz?mode=${m}`;
     fetch(url)
-      .then((r) => r.json())
-      .then((d: QuizResponse) => {
+      .then((r) => safeJson<QuizResponse>(r))
+      .then((d) => {
         setData(d);
         setSavedDone(d.set?.done ?? 0);
         setPos(d.set?.done ?? 0);
         setLoading(false);
       })
-      .catch(() => setLoading(false));
+      .catch((e: Error) => {
+        setLoadError(e.message);
+        setLoading(false);
+      });
     fetch("/api/quiz?history=1")
-      .then((r) => r.json())
+      .then((r) => safeJson<{ history: typeof history }>(r))
       .then((d) => setHistory(d.history ?? []))
       .catch(() => {});
   }, []);
@@ -243,19 +287,23 @@ export default function ReviewPage() {
   };
 
   const startFlash = () => {
-    setMode("flash");
+    setMode("daily");
     setScreen("flash");
     setLoading(true);
     fetch("/api/flash")
-      .then((r) => r.json())
+      .then((r) => safeJson<{ cards: FlashCard[] }>(r))
       .then((d) => {
         setCards(d.cards ?? []);
         setCardIdx(0);
         setReveal(false);
+        setDrag(0);
         setFlashDone(0);
         setLoading(false);
       })
-      .catch(() => setLoading(false));
+      .catch((e: Error) => {
+        toast(e.message);
+        setLoading(false);
+      });
   };
 
   const generateSet = async (m: "typing" | "intens") => {
@@ -267,9 +315,8 @@ export default function ReviewPage() {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ action: "create", mode: m, count: m === "intens" ? 25 : 15 }),
       });
-      const d = await r.json();
+      const d = await safeJson<{ ok?: boolean; setId?: number; error?: string }>(r);
       if (!r.ok || !d.ok) throw new Error(d.error || "Gagal generate");
-      setGenMsg(`Set ${m === "intens" ? "intens" : "ketik"} baru siap — ${d.setId}`);
       startQuiz(m);
     } catch (e) {
       setGenMsg(e instanceof Error ? e.message : "Gagal generate");
@@ -286,11 +333,7 @@ export default function ReviewPage() {
   const finished = Boolean(set?.completed) || (total > 0 && pos >= total);
 
   /** Terapkan progres terbaru dari respons server ke state UI. */
-  const applyProgress = (res: {
-    done?: number;
-    correct?: number;
-    order?: number[];
-  }) => {
+  const applyProgress = (res: { done?: number; correct?: number; order?: number[] }) => {
     if (typeof res?.done !== "number" && !Array.isArray(res?.order)) return;
     setData((d) =>
       d?.set
@@ -311,18 +354,16 @@ export default function ReviewPage() {
     setAnswered((n) => n + 1);
     if (correct) setCorrectHere((n) => n + 1);
     if (!q || !set) return;
+    const typedText = mode === "typing" || mode === "scramble" ? typed : undefined;
     void fetch("/api/quiz", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ setId: set.id, index: currentIndex, correct, typed: mode === "typing" ? typed : undefined }),
+      body: JSON.stringify({ setId: set.id, index: currentIndex, correct, typed: typedText }),
     })
-      .then((r) => r.json())
+      .then((r) => safeJson<{ done?: number; correct?: number; order?: number[] }>(r))
       .then(applyProgress)
       .catch(() => {});
   };
-
-  const [answered, setAnswered] = useState(0);
-  const [correctHere, setCorrectHere] = useState(0);
 
   const pick = (i: number) => {
     if (picked !== null || !q) return;
@@ -330,10 +371,28 @@ export default function ReviewPage() {
     answer(String(i) === q.answer);
   };
 
-  const submitTyped = () => {
+  // Susun Kata: susun ulang chip tiap ganti soal.
+  useEffect(() => {
+    if (screen !== "quiz" || mode !== "scramble" || !q) return;
+    setPickedWords([]);
+    const words = (q.answer ?? "").split(/\s+/).filter(Boolean);
+    setScrambleOrder(words.map((_, i) => i).sort(() => Math.random() - 0.5));
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [screen, mode, currentIndex]);
+
+  // Dengar: otomatis bunyikan kata saat soal muncul.
+  useEffect(() => {
+    if (screen !== "quiz" || mode !== "audio" || !q || picked !== null) return;
+    const t = setTimeout(() => speak(q.options[Number(q.answer)]), 350);
+    return () => clearTimeout(t);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [screen, mode, currentIndex]);
+
+  const submitAnswerText = (text: string) => {
     if (typedResult !== null || !q) return;
-    const ok = typed.trim().toLowerCase().replace(/[^a-z0-9' ]/g, "") === q.answer.replace(/[^a-z0-9' ]/g, "");
+    const ok = normalizeAnswer(text) === normalizeAnswer(q.answer);
     setTypedResult({ ok });
+    setTyped(text);
     answer(ok);
   };
 
@@ -344,30 +403,91 @@ export default function ReviewPage() {
     setPos((p) => p + 1);
   };
 
-  const rateCard = async (rating: 1 | 2 | 3 | 4) => {
+  const backToPick = (msg?: string) => {
+    setScreen("pick");
+    if (msg) setGenMsg(msg);
+  };
+
+  /* ── Flashcard actions ── */
+  const advanceCard = () => {
+    setFlashDone((n) => n + 1);
+    if (cardIdx + 1 >= cards.length) {
+      backToPick(`Flashcard selesai — ${flashDone + 1} kartu direview`);
+    } else {
+      setCardIdx((i) => i + 1);
+      setReveal(false);
+      setDrag(0);
+    }
+  };
+
+  const rateCard = async (rating: 1 | 2 | 3 | 4, msg?: string) => {
     const c = cards[cardIdx];
     if (!c) return;
-    setFlashDone((n) => n + 1);
+    advanceCard();
     try {
       await fetch("/api/flash", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ itemId: c.itemId, rating }),
       });
+      if (msg) toast(msg);
     } catch {
       /* tetap lanjut */
     }
-    if (cardIdx + 1 >= cards.length) {
-      setScreen("pick");
-      setGenMsg(`Flashcard selesai — ${flashDone + 1} kartu diulang FSRS`);
+  };
+
+  const knowCard = async () => {
+    const c = cards[cardIdx];
+    if (!c) return;
+    advanceCard();
+    try {
+      await fetch("/api/review", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ itemId: c.itemId, action: "known" }),
+      });
+      toast("Ditandai udah tahu — cek di Library");
+    } catch {
+      toast("Gagal menandai — coba lagi nanti");
+    }
+  };
+
+  /* ── Swipe handlers (flashcard) ── */
+  const onSwipeStart = (clientX: number) => {
+    dragStartX.current = clientX;
+    dragging.current = true;
+    moved.current = false;
+  };
+  const onSwipeMove = (clientX: number) => {
+    if (!dragging.current) return;
+    const dx = clientX - dragStartX.current;
+    if (Math.abs(dx) > 6) moved.current = true;
+    setDrag(dx);
+  };
+  const onSwipeEnd = () => {
+    if (!dragging.current) return;
+    dragging.current = false;
+    const dx = drag;
+    if (dx > 90) {
+      navigator.vibrate?.(20);
+      void knowCard();
+    } else if (dx < -90) {
+      navigator.vibrate?.(20);
+      void rateCard(1, "Masih dipelajari — bakal muncul lagi");
     } else {
-      setCardIdx((i) => i + 1);
-      setReveal(false);
+      setDrag(0);
     }
   };
 
   if (screen === "pick") {
-    return <ModePicker onStart={startQuiz} onGenerate={generateSet} genBusy={genBusy} genMsg={genMsg} />;
+    return (
+      <ModePicker
+        onStart={(m) => (m === "flash" ? startFlash() : startQuiz(m))}
+        onGenerate={generateSet}
+        genBusy={genBusy}
+        genMsg={genMsg}
+      />
+    );
   }
 
   if (loading) {
@@ -392,19 +512,20 @@ export default function ReviewPage() {
           <Layers className="mx-auto h-10 w-10 text-teal-600 dark:text-teal-400" strokeWidth={1.5} />
           <p className="mt-3 font-medium">Tidak ada kartu yang jatuh tempo</p>
           <p className="mt-1 text-sm text-zinc-500">Balik lagi nanti, atau kerjakan kuis harian dulu.</p>
-          <button className="btn-secondary mt-6" onClick={() => setScreen("pick")}>
+          <button className="btn-secondary mt-6" onClick={() => backToPick()}>
             Kembali
           </button>
         </div>
       );
     }
+    const revealPct = Math.min(1, Math.max(0, drag / 90));
     return (
       <div className="space-y-4">
         <div className="flex items-center justify-between text-xs text-zinc-500">
           <span>
             Kartu {cardIdx + 1} / {cards.length}
           </span>
-          <button className="btn-ghost text-xs" onClick={() => setScreen("pick")}>
+          <button className="btn-ghost text-xs" onClick={() => backToPick()}>
             Selesai
           </button>
         </div>
@@ -415,61 +536,147 @@ export default function ReviewPage() {
           />
         </div>
 
-        <div className="card min-h-56 space-y-4 p-6 text-center">
-          <p className="text-xs uppercase tracking-wide text-zinc-400">
-            {c.reps > 0 ? "Ulangi kartu ini" : "Kartu baru"}
-          </p>
-          <p className="text-2xl font-bold">{c.text}</p>
-          {reveal ? (
-            <div className="space-y-2 border-t border-zinc-100 pt-4 dark:border-zinc-800">
-              <p className="text-lg text-teal-700 dark:text-teal-300">{c.meaningId}</p>
-              {c.firstEn ? <p className="text-sm italic text-zinc-500">“{c.firstEn}”</p> : null}
+        {/* Kartu interaktif di tengah */}
+        <div className="flex justify-center">
+          <div className="relative w-full max-w-sm">
+            {/* Overlay swipe */}
+            <div
+              className="pointer-events-none absolute inset-0 z-10 flex items-start justify-start rounded-2xl border-2 border-red-400 bg-red-50/90 p-4 transition-opacity dark:bg-red-950/80"
+              style={{ opacity: drag < -10 ? revealPct : 0 }}
+            >
+              <span className="rounded-lg bg-red-500 px-2 py-1 text-xs font-bold text-white">
+                MASIH DIPELAJARI
+              </span>
             </div>
-          ) : (
-            <button className="btn-secondary mx-auto gap-1.5" onClick={() => setReveal(true)}>
-              <Eye className="h-4 w-4" /> Lihat arti
-            </button>
-          )}
-        </div>
+            <div
+              className="pointer-events-none absolute inset-0 z-10 flex items-start justify-end rounded-2xl border-2 border-teal-400 bg-teal-50/90 p-4 transition-opacity dark:bg-teal-950/80"
+              style={{ opacity: drag > 10 ? revealPct : 0 }}
+            >
+              <span className="rounded-lg bg-teal-600 px-2 py-1 text-xs font-bold text-white">
+                UDAH TAHU
+              </span>
+            </div>
 
-        {reveal ? (
-          <div className="space-y-2">
-            <p className="text-center text-xs text-zinc-400">Seberapa pas kamu ingat?</p>
-            <div className="grid grid-cols-4 gap-2">
-              <button className="btn-secondary flex-col gap-1 py-3 text-xs" onClick={() => rateCard(1)}>
-                <XCircle className="h-4 w-4 text-red-500" /> Lupa
-              </button>
-              <button className="btn-secondary flex-col gap-1 py-3 text-xs" onClick={() => rateCard(2)}>
-                <RotateCcw className="h-4 w-4 text-amber-500" /> Susah
-              </button>
-              <button className="btn-secondary flex-col gap-1 py-3 text-xs" onClick={() => rateCard(3)}>
-                <CheckCircle2 className="h-4 w-4 text-teal-600" /> Pas
-              </button>
-              <button className="btn-secondary flex-col gap-1 py-3 text-xs" onClick={() => rateCard(4)}>
-                <Sparkles className="h-4 w-4 text-emerald-600" /> Gampang
-              </button>
+            <div
+              className="card min-h-64 cursor-pointer select-none space-y-4 p-6 text-center transition-transform"
+              style={{
+                transform: `translateX(${drag}px) rotate(${drag / 24}deg)`,
+                transition: dragging.current ? "none" : "transform 180ms ease",
+              }}
+              onTouchStart={(e) => onSwipeStart(e.touches[0].clientX)}
+              onTouchMove={(e) => onSwipeMove(e.touches[0].clientX)}
+              onTouchEnd={() => onSwipeEnd()}
+              onClick={() => {
+                if (moved.current) return;
+                setReveal((v) => !v);
+                navigator.vibrate?.(10);
+              }}
+            >
+              <p className="text-xs uppercase tracking-wide text-zinc-400">
+                {c.reps > 0 ? "Ulangi kartu ini" : "Kartu baru"}
+              </p>
+              <div className="flex items-center justify-center gap-2">
+                <p className="text-2xl font-bold">{c.text}</p>
+                <button
+                  className="rounded-lg p-1.5 text-zinc-400 hover:bg-zinc-100 hover:text-teal-600 dark:hover:bg-zinc-800"
+                  title="Cara baca"
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    speak(c.text);
+                  }}
+                >
+                  <Volume2 className="h-5 w-5" />
+                </button>
+              </div>
+
+              {reveal ? (
+                <div className="space-y-3 border-t border-zinc-100 pt-4 text-left dark:border-zinc-800">
+                  <div>
+                    <p className="label">Arti</p>
+                    <p className="text-lg font-medium text-teal-700 dark:text-teal-300">{c.meaningId}</p>
+                  </div>
+                  {c.notesId ? (
+                    <div>
+                      <p className="label">Penjelasan</p>
+                      <p className="text-sm text-zinc-600 dark:text-zinc-300">{c.notesId}</p>
+                    </div>
+                  ) : null}
+                  {c.firstEn ? (
+                    <div>
+                      <p className="label">Contoh</p>
+                      <div className="flex items-start gap-2">
+                        <p className="flex-1 text-sm font-medium">{c.firstEn}</p>
+                        <button
+                          className="shrink-0 rounded-lg p-1 text-zinc-400 hover:bg-zinc-100 hover:text-teal-600 dark:hover:bg-zinc-800"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            speak(c.firstEn!);
+                          }}
+                        >
+                          <Volume2 className="h-4 w-4" />
+                        </button>
+                      </div>
+                      {c.firstId ? <p className="mt-0.5 text-xs text-zinc-500">{c.firstId}</p> : null}
+                    </div>
+                  ) : null}
+                </div>
+              ) : (
+                <p className="text-xs text-zinc-400">Tap kartu buat lihat arti & contoh</p>
+              )}
             </div>
           </div>
-        ) : null}
+        </div>
+
+        <p className="text-center text-xs text-zinc-400">
+          Swipe kiri = masih dipelajari · Swipe kanan = udah tahu
+        </p>
+
+        {/* Fallback tombol */}
+        <div className="grid grid-cols-4 gap-2">
+          <button className="btn-secondary flex-col gap-1 py-2.5 text-xs" onClick={() => void rateCard(1, "Masih dipelajari — bakal muncul lagi")}>
+            <XCircle className="h-4 w-4 text-red-500" /> Lupa
+          </button>
+          <button className="btn-secondary flex-col gap-1 py-2.5 text-xs" onClick={() => void rateCard(2)}>
+            <RotateCcw className="h-4 w-4 text-amber-500" /> Susah
+          </button>
+          <button className="btn-secondary flex-col gap-1 py-2.5 text-xs" onClick={() => void rateCard(3)}>
+            <CheckCircle2 className="h-4 w-4 text-teal-600" /> Pas
+          </button>
+          <button className="btn-secondary flex-col gap-1 py-2.5 text-xs" onClick={() => void knowCard()}>
+            <BadgeCheck className="h-4 w-4 text-emerald-600" /> Tahu
+          </button>
+        </div>
       </div>
     );
   }
 
   /* ── Kuis ── */
+  if (loadError) {
+    return (
+      <div className="py-16 text-center">
+        <XCircle className="mx-auto h-10 w-10 text-red-500" strokeWidth={1.5} />
+        <p className="mt-3 font-medium">Gagal memuat soal</p>
+        <p className="mt-1 text-sm text-zinc-500">{loadError}</p>
+        <button className="btn-secondary mt-6" onClick={() => load(mode)}>
+          Coba lagi
+        </button>
+      </div>
+    );
+  }
+
   if (questions.length === 0) {
     return (
       <div className="py-16 text-center">
         <PartyPopper className="mx-auto h-10 w-10 text-teal-600 dark:text-teal-400" strokeWidth={1.5} />
         <p className="mt-3 font-medium">Belum ada soal latihan</p>
         <p className="mt-1 text-sm text-zinc-500">
-          Simpan kosakata dulu (Tambah / Bank Kata) — nanti otomatis dibuatkan set latihan
-          (maks {dailyTarget} soal).
+          Simpan kosakata dulu (Tambah / Bank Kata) — nanti otomatis dibuatkan set latihan.
         </p>
         <div className="mt-6 flex justify-center gap-2">
           <Link to="/bank" className="btn-primary">
             Buka Bank Kata
           </Link>
-          <button className="btn-secondary" onClick={() => setScreen("pick")}>
+          <button className="btn-secondary" onClick={() => backToPick()}>
             Kembali
           </button>
         </div>
@@ -495,7 +702,7 @@ export default function ReviewPage() {
           Soal yang salah tadi udah dicatat FSRS — bakal muncul lagi di latihan berikutnya.
         </p>
         <div className="mt-6 flex justify-center gap-2">
-          <button className="btn-primary" onClick={() => setScreen("pick")}>
+          <button className="btn-primary" onClick={() => backToPick()}>
             Metode lain
           </button>
           <Link to="/library" className="btn-secondary">
@@ -507,7 +714,11 @@ export default function ReviewPage() {
   }
 
   if (!q || !set) return null;
-  const meta = TYPE_META[q.type];
+
+  const isTypingUI = mode === "typing" || q.type === "typing";
+  const isScrambleUI = mode === "scramble";
+  const meta = TYPE_META[isScrambleUI ? "typing" : q.type];
+  const spokenEn = q.options[Number(q.answer)]; // teks EN untuk TTS (listen/audio)
 
   return (
     <div className="space-y-4">
@@ -570,7 +781,7 @@ export default function ReviewPage() {
           <meta.icon className="h-3.5 w-3.5" /> {meta.label}
         </span>
 
-        {q.type === "typing" ? (
+        {isTypingUI ? (
           <>
             <p className="mt-3 text-center text-xl font-semibold">“{q.prompt}”</p>
             <input
@@ -581,7 +792,7 @@ export default function ReviewPage() {
               disabled={typedResult !== null}
               onChange={(e) => setTyped(e.target.value)}
               onKeyDown={(e) => {
-                if (e.key === "Enter") submitTyped();
+                if (e.key === "Enter") submitAnswerText(typed);
               }}
             />
             {typedResult ? (
@@ -590,16 +801,94 @@ export default function ReviewPage() {
                   typedResult.ok ? "text-teal-700 dark:text-teal-300" : "text-amber-700 dark:text-amber-300"
                 }`}
               >
-                {typedResult.ok
-                  ? "Tepat!"
-                  : `Jawaban: ${q.answer}`}
+                {typedResult.ok ? "Tepat!" : `Jawaban: ${q.answer}`}
               </p>
             ) : null}
             {typedResult ? null : (
-              <button className="btn-primary mt-3 w-full" onClick={submitTyped} disabled={!typed.trim()}>
+              <button
+                className="btn-primary mt-3 w-full"
+                onClick={() => submitAnswerText(typed)}
+                disabled={!typed.trim()}
+              >
                 Periksa
               </button>
             )}
+          </>
+        ) : isScrambleUI ? (
+          <>
+            <p className="mt-3 text-center text-xl font-semibold">“{q.prompt}”</p>
+            {/* Baris susunan */}
+            <div className="mt-4 flex min-h-14 flex-wrap items-center justify-center gap-1.5 rounded-xl border border-dashed border-zinc-300 p-2 dark:border-zinc-700">
+              {pickedWords.length === 0 ? (
+                <span className="text-xs text-zinc-400">Tap kata di bawah buat menyusun</span>
+              ) : (
+                pickedWords.map((wi, pos2) => (
+                  <button
+                    key={`${wi}-${pos2}`}
+                    className="rounded-lg bg-teal-100 px-2.5 py-1.5 text-sm font-semibold text-teal-800 dark:bg-teal-950 dark:text-teal-200"
+                    disabled={typedResult !== null}
+                    onClick={() =>
+                      setPickedWords((w) => w.filter((_, p) => p !== pos2))
+                    }
+                  >
+                    {q.answer.split(/\s+/)[wi]}
+                  </button>
+                ))
+              )}
+            </div>
+            {/* Pool kata acak */}
+            <div className="mt-3 flex flex-wrap items-center justify-center gap-1.5">
+              {scrambleOrder.map((wi) =>
+                pickedWords.includes(wi) ? null : (
+                  <button
+                    key={wi}
+                    className="btn-secondary px-3 py-1.5 text-sm"
+                    disabled={typedResult !== null}
+                    onClick={() => setPickedWords((w) => [...w, wi])}
+                  >
+                    {q.answer.split(/\s+/)[wi]}
+                  </button>
+                ),
+              )}
+            </div>
+            {typedResult ? (
+              <p
+                className={`mt-3 text-center text-sm font-medium ${
+                  typedResult.ok ? "text-teal-700 dark:text-teal-300" : "text-amber-700 dark:text-amber-300"
+                }`}
+              >
+                {typedResult.ok ? "Tepat!" : `Jawaban: ${q.answer}`}
+              </p>
+            ) : (
+              <button
+                className="btn-primary mt-3 w-full"
+                disabled={pickedWords.length === 0}
+                onClick={() =>
+                  submitAnswerText(pickedWords.map((wi) => q.answer.split(/\s+/)[wi]).join(" "))
+                }
+              >
+                Periksa
+              </button>
+            )}
+          </>
+        ) : q.type === "listen" ? (
+          <>
+            <div className="mt-4 flex flex-col items-center gap-2">
+              <button
+                className="flex h-16 w-16 items-center justify-center rounded-full bg-teal-600 text-white shadow-lg shadow-teal-600/30 active:scale-95"
+                title="Dengarkan lagi"
+                onClick={() => speak(spokenEn)}
+              >
+                <Volume2 className="h-7 w-7" />
+              </button>
+              <button
+                className="text-xs text-zinc-400 underline-offset-2 hover:underline"
+                onClick={() => speak(spokenEn)}
+              >
+                Dengarkan lagi
+              </button>
+            </div>
+            <p className="mt-2 text-center text-xs text-zinc-400">pilih frasa EN yang cocok</p>
           </>
         ) : q.type === "mcq_en_id" ? (
           <p className="mt-3 text-center text-2xl font-bold">{q.prompt}</p>
@@ -607,19 +896,14 @@ export default function ReviewPage() {
           <p className="mt-3 text-center text-xl font-semibold">“{q.prompt}”</p>
         ) : q.type === "cloze" ? (
           <p className="mt-3 text-center text-lg leading-relaxed">{q.prompt}</p>
-        ) : (
-          <>
-            <p className="mt-3 text-center text-lg font-semibold tracking-wide">{q.prompt}</p>
-            <p className="mt-1 text-center text-xs text-zinc-400">frasa EN yang cocok?</p>
-          </>
-        )}
+        ) : null}
       </div>
 
-      {q.type === "typing" ? null : (
+      {!isTypingUI && !isScrambleUI ? (
         <OptionList options={q.options} answer={q.answer} picked={picked} onPick={pick} />
-      )}
+      ) : null}
 
-      {picked !== null && q.type !== "typing" ? (
+      {picked !== null && !isTypingUI && !isScrambleUI ? (
         <div className="space-y-3">
           <div
             className={`rounded-xl px-4 py-3 text-sm ${
@@ -644,7 +928,7 @@ export default function ReviewPage() {
         </div>
       ) : null}
 
-      {q.type === "typing" && typedResult ? (
+      {(isTypingUI || isScrambleUI) && typedResult ? (
         <div className="space-y-3">
           <div
             className={`rounded-xl px-4 py-3 text-sm ${
@@ -669,7 +953,7 @@ export default function ReviewPage() {
         </div>
       ) : null}
 
-      {q.type !== "typing" ? (
+      {!isTypingUI && !isScrambleUI ? (
         <button
           className="btn-ghost mx-auto flex w-full text-xs"
           onClick={() => {
@@ -683,4 +967,3 @@ export default function ReviewPage() {
     </div>
   );
 }
-

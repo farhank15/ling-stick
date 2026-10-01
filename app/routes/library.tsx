@@ -1,7 +1,7 @@
 import type { LoaderFunctionArgs, MetaFunction } from "react-router";
 import { Link, useLoaderData, useSearchParams } from "react-router";
 import { useEffect, useMemo, useState } from "react";
-import { BadgeCheck, CheckSquare, Search, Square, Trash2 } from "lucide-react";
+import { BadgeCheck, CheckCircle2, Circle, Search, Trash2 } from "lucide-react";
 import { requireUser } from "~/lib/auth.server";
 import { getFacetCounts, listItems } from "~/lib/items.server";
 import { ConfirmModal } from "~/components/ConfirmModal";
@@ -123,7 +123,7 @@ export default function Library() {
   return (
     <div className="space-y-3">
       {/* Toolbar sticky: search + tab + chip filter — nggak ikut ke-scroll */}
-      <div className="sticky top-[52px] z-10 -mx-4 space-y-2 bg-zinc-50/95 px-4 pb-2 pt-1 backdrop-blur dark:bg-zinc-950/95">
+      <div className="sticky top-[52px] z-20 -mx-4 space-y-2 bg-zinc-50 px-4 pb-2 pt-1 dark:bg-zinc-950">
       {/* Search */}
       <form role="search" onSubmit={(e) => e.preventDefault()}>
         <div className="relative">
@@ -249,15 +249,17 @@ export default function Library() {
         <ul className="space-y-2">
           {rows.map((r) => (
             <li key={r.id} className="relative">
+              {/* Checkbox lingkaran — TANPA z-index, biar gak nembus di atas toolbar
+                  sticky saat scroll (posisi absolute sudah di atas konten kartu). */}
               <button
-                className="absolute top-4 left-3 z-10 text-zinc-400 hover:text-teal-600"
+                className="absolute top-4 left-3 text-zinc-300 hover:text-teal-600 dark:text-zinc-600"
                 onClick={() => toggle(r.id)}
                 aria-label="Pilih item"
               >
                 {selected.has(r.id) ? (
-                  <CheckSquare className="h-5 w-5 text-teal-600 dark:text-teal-400" />
+                  <CheckCircle2 className="h-5 w-5 text-teal-600 dark:text-teal-400" />
                 ) : (
-                  <Square className="h-5 w-5" />
+                  <Circle className="h-5 w-5" />
                 )}
               </button>
               <Link

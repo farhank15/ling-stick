@@ -1,5 +1,5 @@
 import type { MetaFunction } from "react-router";
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import {
   BookMarked,
   CheckCircle2,
@@ -24,7 +24,8 @@ function speak(s: string, lang = "en-US") {
 }
 
 export const meta: MetaFunction = () => [{ title: "Bank Kata — LingStick" }];
-export const handle = { title: "Bank Kata" };
+// ownHeader: halaman punya header sendiri (judul + stat) — jangan dirender dobel oleh layout.
+export const handle = { title: "Bank Kata", ownHeader: true };
 
 type BankExample = { en: string; id: string };
 type Entry = {
@@ -67,6 +68,13 @@ const LEVEL_ACTIVE: Record<string, string> = {
   C2: "border-rose-500 bg-rose-50 dark:bg-rose-950/60",
 };
 
+const STATUS_OPTIONS = [
+  { v: "all", label: "Semua status" },
+  { v: "new", label: "Baru" },
+  { v: "learning", label: "Dipelajari" },
+  { v: "known", label: "Sudah tahu" },
+] as const;
+
 const STATUS_BADGE: Record<Entry["status"], { label: string; cls: string } | null> = {
   learning: {
     label: "Dipelajari",
@@ -104,7 +112,23 @@ export default function BankPage() {
   const [genCount, setGenCount] = useState(10);
   const [genTopic, setGenTopic] = useState("");
   const [genBusy, setGenBusy] = useState(false);
+  const [statusOpen, setStatusOpen] = useState(false);
+  const statusRef = useRef<HTMLDivElement | null>(null);
   const toast = useToast();
+
+  // Tutup popover filter kalau tap di luar.
+  useEffect(() => {
+    if (!statusOpen) return;
+    const onDown = (e: MouseEvent | TouchEvent) => {
+      if (statusRef.current && !statusRef.current.contains(e.target as Node)) setStatusOpen(false);
+    };
+    document.addEventListener("mousedown", onDown);
+    document.addEventListener("touchstart", onDown);
+    return () => {
+      document.removeEventListener("mousedown", onDown);
+      document.removeEventListener("touchstart", onDown);
+    };
+  }, [statusOpen]);
 
   const refresh = useCallback(async (nextLevel: string, nextStatus: string) => {
     setLoading(true);
@@ -311,19 +335,44 @@ export default function BankPage() {
             onChange={(e) => setQuery(e.target.value)}
           />
         </div>
-        <select
-          className="input-area w-32 text-xs"
-          value={statusFilter}
-          onChange={(e) => {
-            setStatusFilter(e.target.value);
-            refresh(level, e.target.value);
-          }}
-        >
-          <option value="all">Semua status</option>
-          <option value="new">Baru</option>
-          <option value="learning">Dipelajari</option>
-          <option value="known">Sudah tahu</option>
-        </select>
+        <div className="relative" ref={statusRef}>
+          <button
+            className="input-area flex w-36 items-center justify-between gap-1.5 text-xs"
+            onClick={() => setStatusOpen((o) => !o)}
+            aria-haspopup="listbox"
+            aria-expanded={statusOpen}
+          >
+            <span className="truncate">
+              {STATUS_OPTIONS.find((o) => o.v === statusFilter)?.label ?? "Semua status"}
+            </span>
+            <ChevronDown className={`h-3.5 w-3.5 shrink-0 text-zinc-400 transition-transform ${statusOpen ? "rotate-180" : ""}`} />
+          </button>
+          {statusOpen ? (
+            <div
+              className="absolute right-0 z-30 mt-1 w-44 overflow-hidden rounded-xl border border-zinc-200 bg-white shadow-xl dark:border-zinc-800 dark:bg-zinc-900"
+              role="listbox"
+            >
+              {STATUS_OPTIONS.map((o) => (
+                <button
+                  key={o.v}
+                  role="option"
+                  aria-selected={statusFilter === o.v}
+                  className={`flex w-full items-center justify-between px-3 py-2.5 text-left text-sm hover:bg-zinc-50 dark:hover:bg-zinc-800 ${
+                    statusFilter === o.v ? "font-semibold text-teal-700 dark:text-teal-300" : ""
+                  }`}
+                  onClick={() => {
+                    setStatusFilter(o.v);
+                    setStatusOpen(false);
+                    refresh(level, o.v);
+                  }}
+                >
+                  {o.label}
+                  {statusFilter === o.v ? <CheckCircle2 className="h-4 w-4" /> : null}
+                </button>
+              ))}
+            </div>
+          ) : null}
+        </div>
       </div>
 
       {loading ? (
