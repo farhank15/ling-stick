@@ -11,8 +11,45 @@ import { env } from "~/lib/env.server";
  * - Sumber soal: item Library sendiri + kata dari Bank Kata (CEFR level bisa dipilih)
  */
 
-export type QuizMode = "daily" | "extra" | "typing" | "intens" | "audio" | "scramble";
-export const QUIZ_MODES: QuizMode[] = ["daily", "extra", "typing", "intens", "audio", "scramble"];
+export type QuizMode =
+  | "daily"
+  | "extra"
+  | "typing"
+  | "intens"
+  | "audio"
+  | "scramble"
+  | "toefl"
+  | "bulanan";
+export const QUIZ_MODES: QuizMode[] = [
+  "daily",
+  "extra",
+  "typing",
+  "intens",
+  "audio",
+  "scramble",
+  "toefl",
+  "bulanan",
+];
+
+/** Minggu ISO: 2025-W41 — kunci satu TOEFL Test per minggu. */
+export function isoWeekKey(d = new Date()): string {
+  const date = new Date(Date.UTC(d.getFullYear(), d.getMonth(), d.getDate()));
+  const dayNum = date.getUTCDay() || 7;
+  date.setUTCDate(date.getUTCDate() + 4 - dayNum);
+  const yearStart = new Date(Date.UTC(date.getUTCFullYear(), 0, 1));
+  const week = Math.ceil(((date.getTime() - yearStart.getTime()) / 86_400_000 + 1) / 7);
+  return `${date.getUTCFullYear()}-W${String(week).padStart(2, "0")}`;
+}
+
+/** Kunci bulan: 2025-10 — kunci satu Uji Bulanan per bulan. */
+export function monthKey(d = new Date()): string {
+  return localDayStr().slice(0, 7);
+}
+
+/** Tanggal berapa di bulan ini (Jakarta). */
+export function dayOfMonth(): number {
+  return Number(localDayStr().slice(8, 10));
+}
 
 /** Mode khusus memaksa tipe soal tertentu biar isinya beda dari kuis harian. */
 function forceTypeFor(mode: QuizMode): QuizQuestion["type"] | undefined {
@@ -108,7 +145,7 @@ async function collectRows(opts: BuildOpts) {
  */
 async function buildQuestions(
   limit: number,
-  opts: BuildOpts & { forceType?: QuizQuestion["type"] } = {},
+  opts: BuildOpts & { forceType?: QuizQuestion["type"]; typeMix?: QuizQuestion["type"][] } = {},
 ): Promise<QuizQuestion[]> {
   const allRows = await collectRows(opts);
   if (allRows.length === 0) return [];
@@ -134,7 +171,7 @@ async function buildQuestions(
 
   const types: QuizQuestion["type"][] = opts.forceType
     ? [opts.forceType]
-    : ["mcq_en_id", "mcq_id_en", "cloze", "listen"];
+    : opts.typeMix ?? ["mcq_en_id", "mcq_id_en", "cloze", "listen"];
   const questions: QuizQuestion[] = [];
 
   for (let i = 0; questions.length < limit; i++) {
@@ -230,7 +267,18 @@ function modeTitle(mode: QuizMode, day: string): string {
     intens: "Latihan Intens",
     audio: "Latihan Dengar",
     scramble: "Susun Kata",
+    toefl: "TOEFL Test",
+    bulanan: "Uji Bulanan",
   };
+  if (mode === "toefl") return `TOEFL Test ${day}`;
+  if (mode === "bulanan") {
+    const [y, m] = day.split("-").map(Number);
+    const bulan = new Date(y, (m || 1) - 1, 1).toLocaleDateString("id-ID", {
+      month: "long",
+      year: "numeric",
+    });
+    return `Uji Bulanan ${bulan}`;
+  }
   return `${names[mode]} ${tgl}`;
 }
 
@@ -483,6 +531,128 @@ export async function getFlashQueue(limit = 30) {
     .where(and(eq(items.status, "learning"), sql`${cards.due} >= ${dayStart}`, sql`${cards.due} < ${dayEnd}`, eq(cards.reps, 0)))
     .limit(Math.max(0, limit - dueRows.length));
   return [...dueRows, ...newRows];
+}
+
+/**
+ * Set periodik (TOEFL mingguan / Uji Bulanan) — SATU per periode, hari = kunci periode.
+ * toefl: 40 soal 3 section (Structure 15 → Vocabulary 15 → Listening 10), timer di client.
+ * bulanan: 50 soal campuran + typing, tersedia mulai tgl 25.
+ */
+export async function getPeriodicSet(mode: "toefl" | "bulanan") {
+  if (mode === "toefl") {
+    const week = isoWeekKey();
+    const [existing] = await db
+      .select()
+      .from(quizSets)
+      .where(and(eq(quizSets.mode, "toefl"), eq(quizSets.day, week)))
+      .limit(1);
+    if (existing) return existing;
+
+    // Section 1: Structure (cloze) → Section 2: Vocabulary (mcq) → Section 3: Listening.
+    const structure = await buildQuestions(15, { forceType: "cloze" });
+    const vocab = await buildQuestions(15, {
+      forceType: "mcq_en_id",
+      typeMix: ["mcq_en_id", "mcq_id_en"],
+    });
+    const listening = await buildQuestions(10, { forceType: "listen" });
+    const questions = [...structure, ...vocab, ...listening];
+    if (questions.length < 10) return null; // kosakata belum cukup buat tes
+
+    const [created] = await db
+      .insert(quizSets)
+      .values({
+        day: week,
+        mode: "toefl",
+        title: `TOEFL Test ${week}`,
+        questions: JSON.stringify(questions),
+        order: JSON.stringify(questions.map((_, i) => i)),
+        total: questions.length,
+        done: 0,
+        correct: 0,
+        completed: 0,
+        createdAt: Date.now(),
+      })
+      .onConflictDoNothing()
+      .returning();
+    if (created) return created;
+    const [again] = await db
+      .select()
+      .from(quizSets)
+      .where(and(eq(quizSets.mode, "toefl"), eq(quizSets.day, week)))
+      .limit(1);
+    return again ?? null;
+  }
+
+  // Bulanan — hanya dibuat setelah tgl 25 (muncul + notif di bel).
+  const month = monthKey();
+  if (dayOfMonth() < 25) return null;
+  const [existing] = await db
+    .select()
+    .from(quizSets)
+    .where(and(eq(quizSets.mode, "bulanan"), eq(quizSets.day, month)))
+    .limit(1);
+  if (existing) return existing;
+
+  const mix = await buildQuestions(40, {});
+  const typing = await buildQuestions(10, { forceType: "typing" });
+  const questions = [...mix, ...typing];
+ if (questions.length < 10) return null;
+
+  const [created] = await db
+    .insert(quizSets)
+    .values({
+      day: month,
+      mode: "bulanan",
+      title: modeTitle("bulanan", month),
+      questions: JSON.stringify(questions),
+      order: JSON.stringify(questions.map((_, i) => i)),
+      total: questions.length,
+      done: 0,
+      correct: 0,
+      completed: 0,
+      createdAt: Date.now(),
+    })
+    .onConflictDoNothing()
+    .returning();
+  if (created) return created;
+  const [again] = await db
+    .select()
+    .from(quizSets)
+    .where(and(eq(quizSets.mode, "bulanan"), eq(quizSets.day, month)))
+    .limit(1);
+  return again ?? null;
+}
+
+/** Badge periodik untuk bel notifikasi: tes minggu/bulan ini sudah selesai? */
+export async function periodicStatus() {
+  const [toefl] = await db
+    .select({ id: quizSets.id, done: quizSets.done, completed: quizSets.completed })
+    .from(quizSets)
+    .where(and(eq(quizSets.mode, "toefl"), eq(quizSets.day, isoWeekKey())))
+    .limit(1);
+  const available = dayOfMonth() >= 25;
+  const [bulanan] = await db
+    .select({ id: quizSets.id, done: quizSets.done, completed: quizSets.completed })
+    .from(quizSets)
+    .where(and(eq(quizSets.mode, "bulanan"), eq(quizSets.day, monthKey())))
+    .limit(1);
+  return {
+    toefl: {
+      week: isoWeekKey(),
+      exists: Boolean(toefl),
+      setId: toefl?.id ?? null,
+      done: toefl?.done ?? 0,
+      completed: Boolean(toefl?.completed),
+    },
+    bulanan: {
+      month: monthKey(),
+      available,
+      exists: Boolean(bulanan),
+      setId: bulanan?.id ?? null,
+      done: bulanan?.done ?? 0,
+      completed: Boolean(bulanan?.completed),
+    },
+  };
 }
 
 /** Ronde minigame Match: 5 ronde × 4 pasangan kata-arti dari kosakata yang dipelajari. */

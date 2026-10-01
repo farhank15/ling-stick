@@ -10,6 +10,8 @@ import {
   localDayStr,
   createExtraSet,
   answerQuestionById,
+  getPeriodicSet,
+  periodicStatus,
   type QuizMode,
   type QuizQuestion,
 } from "~/lib/quiz.server";
@@ -30,7 +32,8 @@ export async function loader({ request }: LoaderFunctionArgs) {
 
   if (url.searchParams.get("status")) {
     const p = await pendingToday();
-    return Response.json({ pending: p });
+    const periodic = await periodicStatus();
+    return Response.json({ pending: p, periodic });
   }
 
   if (url.searchParams.get("history")) {
@@ -38,7 +41,20 @@ export async function loader({ request }: LoaderFunctionArgs) {
     return Response.json({ history });
   }
 
+  // Status tes periodik (TOEFL mingguan & Uji Bulanan) — buat badge di Review & bel.
+  if (url.searchParams.get("periodic")) {
+    return Response.json(await periodicStatus());
+  }
+
   const modeParam = url.searchParams.get("mode");
+
+  // TOEFL mingguan / Uji Bulanan — dibuat otomatis sekali per periode.
+  if (modeParam === "toefl" || modeParam === "bulanan") {
+    const set = await getPeriodicSet(modeParam);
+    if (!set) return Response.json({ questions: [], set: null });
+    return setResponse(set);
+  }
+
   const level = url.searchParams.get("level") ?? undefined;
   const mode: QuizMode = ["daily", "extra", "typing", "intens", "audio", "scramble"].includes(modeParam ?? "")
     ? (modeParam as QuizMode)

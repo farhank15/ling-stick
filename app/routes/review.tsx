@@ -1,5 +1,5 @@
 import type { MetaFunction } from "react-router";
-import { Link, useLoaderData } from "react-router";
+import { Link, useLoaderData, useSearchParams } from "react-router";
 import { useCallback, useEffect, useRef, useState } from "react";
 import {
   ArrowRight,
@@ -94,6 +94,11 @@ type FlashCard = {
 
 type MatchPair = { itemId: number; word: string; meaning: string };
 
+type Periodic = {
+  toefl: { week: string; exists: boolean; setId: number | null; done: number; completed: boolean };
+  bulanan: { month: string; available: boolean; exists: boolean; setId: number | null; done: number; completed: boolean };
+};
+
 type Mode = "daily" | "typing" | "intens" | "audio" | "scramble";
 
 const MODES: {
@@ -124,14 +129,63 @@ function normalizeAnswer(s: string): string {
   return s.toLowerCase().replace(/[^a-z0-9' ]/g, "").replace(/\s+/g, " ").trim();
 }
 
+/** Kartu tes periodik — TOEFL mingguan & Uji Bulanan. Border/badge warna sendiri. */
+function PeriodicCard({
+  kind,
+  title,
+  desc,
+  badge,
+  badgeCls,
+  borderCls,
+  status,
+  onStart,
+}: {
+  kind: "toefl" | "bulanan";
+  title: string;
+  desc: string;
+  badge: string;
+  badgeCls: string;
+  borderCls: string;
+  status: { exists: boolean; setId: number | null; done: number; completed: boolean };
+  onStart: (kind: "toefl" | "bulanan") => void;
+}) {
+  return (
+    <div className={`card overflow-hidden border-2 ${borderCls} p-4`}>
+      <div className="flex items-center gap-2">
+        <span className={`rounded-full px-2 py-0.5 text-[10px] font-bold uppercase tracking-wide ${badgeCls}`}>
+          {badge}
+        </span>
+        <p className="font-semibold">{title}</p>
+      </div>
+      <p className="mt-1 text-xs text-zinc-500">{desc}</p>
+      <div className="mt-3 flex items-center justify-between">
+        <span className="text-xs text-zinc-500">
+          {status.completed
+            ? "Selesai minggu/bulan ini — mantap"
+            : status.exists
+              ? `Sudah dimulai — ${status.done} soal terjawab, lanjutkan`
+              : kind === "toefl"
+                ? "Belum dikerjakan minggu ini"
+                : "Menunggu dibuka"}
+        </span>
+        <button className="btn-primary shrink-0 text-sm" onClick={() => onStart(kind)}>
+          {status.exists ? "Lanjutkan" : "Mulai"}
+        </button>
+      </div>
+    </div>
+  );
+}
+
 /** Pemilih metode (halaman depan Review). */
 function ModePicker({
+  periodic,
   onStart,
   onGenerate,
   genBusy,
   genMsg,
 }: {
-  onStart: (mode: Mode | "flash" | "match") => void;
+  periodic: Periodic | null;
+  onStart: (mode: Mode | "flash" | "match" | "toefl" | "bulanan") => void;
   onGenerate: (mode: "typing" | "intens") => void;
   genBusy: string | null;
   genMsg: string | null;
@@ -143,6 +197,49 @@ function ModePicker({
           {genMsg}
         </div>
       ) : null}
+
+      {/* Tes periodik — TOEFL mingguan & Uji Bulanan */}
+      {periodic ? (
+        <div className="space-y-2">
+          <p className="label px-1">Tes periodik</p>
+          <PeriodicCard
+            kind="toefl"
+            title="TOEFL Test Mingguan"
+            badge="Mingguan"
+            badgeCls="bg-indigo-100 text-indigo-700 dark:bg-indigo-950 dark:text-indigo-300"
+            borderCls="border-indigo-300/70 dark:border-indigo-800"
+            desc="40 soal · 3 section gaya TOEFL (Structure → Vocabulary → Listening) · timer 25 menit · skor + estimasi level"
+            status={periodic.toefl}
+            onStart={onStart}
+          />
+          {periodic.bulanan.available ? (
+            <PeriodicCard
+              kind="bulanan"
+              title="Uji Bulanan"
+              badge="Bulanan"
+              badgeCls="bg-amber-100 text-amber-800 dark:bg-amber-950 dark:text-amber-300"
+              borderCls="border-amber-300/70 dark:border-amber-800"
+              desc="50 soal campuran + menulis · ditambah tiap akhir bulan · ngukur progres total"
+              status={periodic.bulanan}
+              onStart={onStart}
+            />
+          ) : (
+            <div className="card p-4 opacity-70">
+              <div className="flex items-center gap-2">
+                <span className="rounded-full bg-zinc-100 px-2 py-0.5 text-[10px] font-bold uppercase tracking-wide text-zinc-500 dark:bg-zinc-800 dark:text-zinc-400">
+                  Bulanan
+                </span>
+                <p className="font-semibold">Uji Bulanan</p>
+              </div>
+              <p className="mt-1 text-xs text-zinc-500">
+                Terbuka mulai tanggal 25 — akhir bulan, buat ngukur capaian sebulan penuh.
+              </p>
+            </div>
+          )}
+        </div>
+      ) : null}
+
+      <p className="label px-1">Latihan harian</p>
       <div className="space-y-2">
         {MODES.map((m) => (
           <div key={m.id} className="card flex items-center gap-3 p-4">
@@ -229,8 +326,18 @@ function OptionList({
 export default function ReviewPage() {
   const { dailyTarget } = useLoaderData<typeof loader>();
   const toast = useToast();
-  const [screen, setScreen] = useState<"pick" | "quiz" | "flash" | "match">("pick");
-  const [mode, setMode] = useState<Mode>("daily");
+  const [params, setParams] = useSearchParams();
+  // Mode kesimpen di URL (?mode=toefl) — refresh gak balikin ke picker.
+  const urlMode = params.get("mode");
+  const [screen, setScreen] = useState<"pick" | "quiz" | "flash" | "match">(
+    urlMode && urlMode !== "flash" ? "quiz" : "pick",
+  );
+  const [mode, setMode] = useState<Mode>(
+    urlMode && ["daily", "typing", "intens", "audio", "scramble"].includes(urlMode)
+      ? (urlMode as Mode)
+      : "daily",
+  );
+  const [periodic, setPeriodic] = useState<Periodic | null>(null);
 
   const [data, setData] = useState<QuizResponse | null>(null);
   const [loadError, setLoadError] = useState<string | null>(null);
@@ -248,6 +355,9 @@ export default function ReviewPage() {
   >([]);
   const [genBusy, setGenBusy] = useState<string | null>(null);
   const [genMsg, setGenMsg] = useState<string | null>(null);
+  // Timer TOEFL: 25 menit — habis = tes otomatis berakhir (jawaban terkini dihitung).
+  const [timeLeft, setTimeLeft] = useState<number | null>(null);
+  const [timeUp, setTimeUp] = useState(false);
 
   // Susun Kata
   const [scrambleOrder, setScrambleOrder] = useState<number[]>([]);
@@ -303,9 +413,69 @@ export default function ReviewPage() {
       .catch(() => {});
   }, []);
 
+  // Muat status tes periodik untuk picker.
+  useEffect(() => {
+    if (screen !== "pick") return;
+    fetch("/api/quiz?periodic=1")
+      .then((r) => safeJson<Periodic>(r))
+      .then(setPeriodic)
+      .catch(() => {});
+  }, [screen]);
+
+  // Restore tes periodik dari URL (?mode=toefl) — refresh gak balikin ke picker.
+  useEffect(() => {
+    if ((urlMode !== "toefl" && urlMode !== "bulanan") || screen !== "quiz" || data) return;
+    setLoading(true);
+    fetch(`/api/quiz?mode=${urlMode}`)
+      .then((r) => safeJson<QuizResponse>(r))
+      .then((d) => {
+        if (!d.set) {
+          setScreen("pick");
+          setLoading(false);
+          return;
+        }
+        setData(d);
+        setSavedDone(d.set.done);
+        setPos(d.set.done);
+        setLoading(false);
+      })
+      .catch(() => {
+        setScreen("pick");
+        setLoading(false);
+      });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  const startPeriodic = (kind: "toefl" | "bulanan") => {
+    setMode("daily");
+    setScreen("quiz");
+    setLoading(true);
+    setLoadError(null);
+    setParams({ mode: kind }, { preventScrollReset: true });
+    fetch(`/api/quiz?mode=${kind}`)
+      .then((r) => safeJson<QuizResponse>(r))
+      .then((d) => {
+        if (!d.set) {
+          toast("Kosakata belum cukup buat tes — simpan lebih banyak kata dulu");
+          setScreen("pick");
+          setLoading(false);
+          return;
+        }
+        setData(d);
+        setSavedDone(d.set.done);
+        setPos(d.set.done);
+        setLoading(false);
+      })
+      .catch((e: Error) => {
+        setLoadError(e.message);
+        setLoading(false);
+      });
+  };
+
   const startQuiz = (m: Mode) => {
     setMode(m);
     setScreen("quiz");
+    setParams(m === "daily" ? {} : { mode: m }, { preventScrollReset: true });
     load(m);
   };
 
@@ -330,6 +500,7 @@ export default function ReviewPage() {
   const startFlash = () => {
     setMode("daily");
     setScreen("flash");
+    setParams({}, { preventScrollReset: true });
     setLoading(true);
     fetch("/api/flash")
       .then((r) => safeJson<{ cards: FlashCard[] }>(r))
@@ -393,7 +564,8 @@ export default function ReviewPage() {
   const total = order.length;
   const currentIndex = order[pos] ?? -1;
   const q = currentIndex >= 0 ? questions[currentIndex] : undefined;
-  const finished = Boolean(set?.completed) || (total > 0 && pos >= total);
+  const finished =
+    timeUp || Boolean(set?.completed) || (total > 0 && pos >= total);
 
   /** Terapkan progres terbaru dari respons server ke state UI. */
   const applyProgress = (res: { done?: number; correct?: number; order?: number[] }) => {
@@ -412,6 +584,21 @@ export default function ReviewPage() {
         : d,
     );
   };
+
+  // Timer jalan khusus TOEFL.
+  useEffect(() => {
+    if (mode !== "daily" || set?.mode !== "toefl" || screen !== "quiz") return;
+    setTimeLeft((t) => (t === null ? 25 * 60 : t));
+  }, [mode, set?.mode, screen]);
+  useEffect(() => {
+    if (timeLeft === null || timeUp || finished) return;
+    if (timeLeft <= 0) {
+      setTimeUp(true);
+      return;
+    }
+    const t = setTimeout(() => setTimeLeft((s) => (s ?? 1) - 1), 1000);
+    return () => clearTimeout(t);
+  }, [timeLeft, timeUp, finished]);
 
   const answer = (correct: boolean) => {
     setAnswered((n) => n + 1);
@@ -468,6 +655,7 @@ export default function ReviewPage() {
 
   const backToPick = (msg?: string) => {
     setScreen("pick");
+    setParams({}, { preventScrollReset: true });
     if (msg) setGenMsg(msg);
   };
 
@@ -617,8 +805,15 @@ export default function ReviewPage() {
   if (screen === "pick") {
     return (
       <ModePicker
+        periodic={periodic}
         onStart={(m) =>
-          m === "flash" ? startFlash() : m === "match" ? startMatch() : startQuiz(m)
+          m === "flash"
+            ? startFlash()
+            : m === "match"
+              ? startMatch()
+              : m === "toefl" || m === "bulanan"
+                ? startPeriodic(m)
+                : startQuiz(m)
         }
         onGenerate={generateSet}
         genBusy={genBusy}
@@ -971,15 +1166,35 @@ export default function ReviewPage() {
 
   const pct = Math.round((set!.correct / Math.max(1, total)) * 100);
 
+  // Estimasi level CEFR dari akurasi tes periodik.
+  const cefrOf = (p: number) => (p >= 90 ? "C1" : p >= 80 ? "B2+" : p >= 70 ? "B2" : p >= 60 ? "B1+" : p >= 50 ? "B1" : p >= 35 ? "A2" : "A1");
+  const isToefl = set!.mode === "toefl";
+  const isBulanan = set!.mode === "bulanan";
+
   if (finished) {
     return (
       <div className="py-10 text-center">
         <PartyPopper className="mx-auto h-12 w-12 text-teal-600 dark:text-teal-400" strokeWidth={1.5} />
-        <p className="mt-3 text-lg font-bold">{set!.title} selesai!</p>
+        <p className="mt-3 text-lg font-bold">
+          {set!.title} selesai!{timeUp ? " (waktu habis)" : ""}
+        </p>
         <p className="mt-1 text-sm text-zinc-500">
           Benar {set!.correct} dari {total} soal ({pct}%)
           {answered > 0 && answered < set!.done ? ` · kamu mengerjakan ${answered} soal di sesi ini` : ""}
         </p>
+        {isToefl || isBulanan ? (
+          <div className="mx-auto mt-4 w-fit rounded-2xl border-2 border-indigo-300 bg-indigo-50 px-6 py-4 dark:border-indigo-800 dark:bg-indigo-950/60">
+            <p className="text-xs uppercase tracking-wide text-indigo-500 dark:text-indigo-300">
+              Estimasi level
+            </p>
+            <p className="text-3xl font-extrabold text-indigo-700 dark:text-indigo-200">
+              {cefrOf(pct)}
+            </p>
+            <p className="text-[11px] text-indigo-400 dark:text-indigo-300/70">
+              A1 pemula → C1 mahir · akurasi {pct}%
+            </p>
+          </div>
+        ) : null}
         <div className="mx-auto mt-4 h-2 w-48 overflow-hidden rounded-full bg-zinc-200 dark:bg-zinc-800">
           <div className="h-full bg-teal-600 dark:bg-teal-500" style={{ width: `${pct}%` }} />
         </div>
@@ -1011,6 +1226,17 @@ export default function ReviewPage() {
         <div className="mb-1 flex items-center justify-between text-xs text-zinc-500">
           <span className="font-medium text-zinc-700 dark:text-zinc-300">{set.title}</span>
           <span className="flex items-center gap-2">
+            {timeLeft !== null && !finished ? (
+              <span
+                className={`rounded-lg px-2 py-0.5 font-bold tabular-nums ${
+                  timeLeft < 120
+                    ? "bg-red-100 text-red-700 dark:bg-red-950 dark:text-red-300"
+                    : "bg-indigo-100 text-indigo-700 dark:bg-indigo-950 dark:text-indigo-300"
+                }`}
+              >
+                {String(Math.floor(timeLeft / 60)).padStart(2, "0")}:{String(timeLeft % 60).padStart(2, "0")}
+              </span>
+            ) : null}
             <span>
               benar {set.correct} · sisa {Math.max(0, total - set.done)}
             </span>

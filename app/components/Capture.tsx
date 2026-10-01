@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { Link } from "react-router";
-import { CheckCircle2, ClipboardPaste, Lightbulb } from "lucide-react";
+import { Bookmark, CheckCircle2, ClipboardPaste, Lightbulb, Loader2 } from "lucide-react";
 import { useToast } from "~/components/Toast";
 
 type GenExample = { register: string; en: string; id: string };
@@ -330,6 +330,13 @@ export function Capture() {
             <option value="casual">Register: santai</option>
             <option value="formal">Register: formal</option>
           </select>
+          <button
+            className="btn-primary"
+            disabled={saving || !manual.meaning.trim()}
+            onClick={() => void save()}
+          >
+            {saving ? "Menyimpan…" : "Simpan ke Library"}
+          </button>
         </div>
       ) : null}
 
@@ -361,6 +368,23 @@ export function Capture() {
                 <Lightbulb className="mr-1 inline h-3.5 w-3.5" /> {result.notes_id}
               </p>
             ) : null}
+            {/* Simpan: icon di kartu hasil (bukan bar fixed di bawah yang nimpa navbar) */}
+            <div className="mt-3 flex items-center justify-between border-t border-zinc-100 pt-2.5 dark:border-zinc-800">
+              <span className="text-xs text-zinc-500">{selected.size} kalimat dipilih</span>
+              <button
+                className="btn-ghost min-h-9 min-w-9 px-2"
+                disabled={saving || selected.size === 0}
+                onClick={() => void save()}
+                title="Simpan ke Library"
+                aria-label="Simpan ke Library"
+              >
+                {saving ? (
+                  <Loader2 className="h-4 w-4 animate-spin" />
+                ) : (
+                  <Bookmark className="h-4 w-4 text-teal-600 dark:text-teal-400" strokeWidth={1.75} />
+                )}
+              </button>
+            </div>
           </div>
 
           {result.senses.map((sense, si) => {
@@ -460,23 +484,6 @@ export function Capture() {
         </div>
       ) : null}
 
-      {/* Simpan sticky */}
-      {(result || degraded) && !saved ? (
-        <div className="fixed inset-x-0 bottom-14 z-10 mx-auto max-w-md border-t border-zinc-200 bg-white/95 px-4 py-3 backdrop-blur dark:border-zinc-800 dark:bg-zinc-950/95">
-          <div className="flex items-center gap-2">
-            <span className="text-xs text-zinc-500">
-              {result ? `${selected.size} kalimat dipilih` : "mode manual"}
-            </span>
-            <button
-              className="btn-primary flex-1"
-              disabled={saving || (result ? selected.size === 0 : !manual.meaning.trim())}
-              onClick={() => void save()}
-            >
-              {saving ? "Menyimpan…" : "Simpan"}
-            </button>
-          </div>
-        </div>
-      ) : null}
     </section>
   );
 }

@@ -44,6 +44,10 @@ export default function AppLayout() {
 
   // Notifikasi beneran: dropdown list (latihan hari ini + riwayat), dot kalau belum selesai.
   const [quizPending, setQuizPending] = useState<{ total: number; done: number; completed: boolean } | null>(null);
+  const [periodic, setPeriodic] = useState<{
+    toefl: { exists: boolean; completed: boolean };
+    bulanan: { available: boolean; exists: boolean; completed: boolean };
+  } | null>(null);
   const [notifOpen, setNotifOpen] = useState(false);
   const [history, setHistory] = useState<{ day: string; title: string; total: number; done: number; correct: number; completed: number }[]>([]);
   const notifRef = useRef<HTMLDivElement | null>(null);
@@ -53,6 +57,7 @@ export default function AppLayout() {
       .then((r) => r.json())
       .then((d) => {
         if (d.pending) setQuizPending(d.pending);
+        if (d.periodic) setPeriodic(d.periodic);
       })
       .catch(() => {});
     fetch("/api/quiz?history=1")
@@ -98,8 +103,15 @@ export default function AppLayout() {
               onClick={() => setNotifOpen((o) => !o)}
             >
               <Bell className="h-5 w-5" strokeWidth={1.75} />
+              {/* Dot notif: latihan harian (teal), TOEFL mingguan (indigo), Uji Bulanan (amber) */}
               {quizPending && !quizPending.completed ? (
                 <span className="absolute top-1.5 right-1.5 h-2 w-2 rounded-full bg-teal-500" />
+              ) : null}
+              {periodic?.toefl && !periodic.toefl.completed ? (
+                <span className="absolute top-1.5 right-4 h-2 w-2 rounded-full bg-indigo-500" />
+              ) : null}
+              {periodic?.bulanan?.available && !periodic.bulanan.completed ? (
+                <span className="absolute top-1.5 right-7 h-2 w-2 rounded-full bg-amber-500" />
               ) : null}
             </button>
             {notifOpen ? (
@@ -139,6 +151,50 @@ export default function AppLayout() {
                 ) : (
                   <p className="px-4 py-3 text-sm text-zinc-500">Belum ada latihan. Simpan kosakata dulu.</p>
                 )}
+                {/* Tes periodik di dropdown notif */}
+                {periodic ? (
+                  <Link
+                    to="/review"
+                    className="flex items-start gap-2.5 border-t border-zinc-100 px-4 py-3 hover:bg-zinc-50 dark:border-zinc-800 dark:hover:bg-zinc-800"
+                    onClick={() => setNotifOpen(false)}
+                  >
+                    <span className="mt-0.5 flex h-4 w-4 shrink-0 items-center justify-center">
+                      <span
+                        className={`h-2.5 w-2.5 rounded-full ${
+                          periodic.bulanan.available && !periodic.bulanan.completed
+                            ? "bg-amber-500"
+                            : !periodic.toefl.completed
+                              ? "bg-indigo-500"
+                              : "bg-teal-500"
+                        }`}
+                      />
+                    </span>
+                    <span className="text-sm">
+                      {periodic.bulanan.available && !periodic.bulanan.completed ? (
+                        <>
+                          <span className="block font-medium">Uji Bulanan siap</span>
+                          <span className="block text-xs text-zinc-500">
+                            50 soal campuran — ngukur progres sebulan ini
+                          </span>
+                        </>
+                      ) : !periodic.toefl.completed ? (
+                        <>
+                          <span className="block font-medium">TOEFL Test minggu ini nunggu</span>
+                          <span className="block text-xs text-zinc-500">
+                            40 soal · 3 section · timer 25 menit
+                          </span>
+                        </>
+                      ) : (
+                        <>
+                          <span className="block font-medium">Tes periodik aman</span>
+                          <span className="block text-xs text-zinc-500">
+                            TOEFL minggu ini & Uji Bulanan sudah selesai
+                          </span>
+                        </>
+                      )}
+                    </span>
+                  </Link>
+                ) : null}
                 {history.length > 0 ? (
                   <div className="border-t border-zinc-100 dark:border-zinc-800">
                     <p className="label px-4 pt-2.5">Riwayat</p>
