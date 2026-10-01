@@ -12,6 +12,7 @@ import {
   tags,
 } from "./db/schema";
 import { env } from "./env.server";
+import { getTargetLang, detectLang } from "./lang.server";
 import { newCardRow } from "./fsrs.server";
 import { startOfDay, addDays } from "./utils.shared";
 
@@ -37,6 +38,7 @@ export type SaveItemInput = {
   source?: string;
   confidence?: string;
   status?: "learning" | "known" | "archived";
+  reading?: string; // JA: kana (+ romaji) — tampil redup di kartu
   examples: {
     senseLabel?: string;
     register: string; // casual | neutral | formal
@@ -66,10 +68,11 @@ export function normalizeText(s: string): string {
 }
 
 export async function findItemIdByText(text: string): Promise<number | null> {
+  const lang = await getTargetLang();
   const [row] = await db
     .select({ id: items.id })
     .from(items)
-    .where(eq(items.textNorm, normalizeText(text)))
+    .where(and(eq(items.textNorm, normalizeText(text)), eq(items.lang, lang)))
     .limit(1);
   return row?.id ?? null;
 }
@@ -88,7 +91,9 @@ export async function saveItem(input: SaveItemInput): Promise<number> {
         text: input.text.trim(),
         textNorm,
         type: input.type,
+        lang: detectLang(input.text, await getTargetLang()),
         register: input.register ?? "neutral",
+        reading: input.reading?.trim() || null,
         meaningId: input.meaningId || null,
         notesId: input.notesId || null,
         source: input.source || null,
@@ -207,6 +212,7 @@ export type LibraryRow = {
 export async function listItems(filters: LibraryFilters): Promise<LibraryRow[]> {
   const limit = Math.min(filters.limit ?? 100, 500);
   const offset = filters.offset ?? 0;
+  const lang = await getTargetLang(); // scope: library per bahasa target
 
   // Full-text search via FTS5 (BLUEPRINT §5).
   if (filters.q && filters.q.trim()) {
@@ -235,6 +241,7 @@ export async function listItems(filters: LibraryFilters): Promise<LibraryRow[]> 
         FROM items i
         JOIN items_fts f ON i.id = f.rowid
         WHERE items_fts MATCH ${ftsQuery}
+          AND i.lang = ${lang}
           AND i.status = ${filters.status === "all" ? sql`i.status` : (filters.status || "learning")}
           ${filters.type ? sql`AND i.type = ${filters.type}` : sql``}
           ${filters.register ? sql`AND i.register = ${filters.register}` : sql``}
@@ -273,6 +280,7 @@ export async function listItems(filters: LibraryFilters): Promise<LibraryRow[]> 
            (SELECT register FROM examples WHERE item_id = i.id ORDER BY id LIMIT 1) AS first_reg
     FROM items i
     WHERE ${statusCond}
+      AND i.lang = ${lang}
       ${filters.type ? sql`AND i.type = ${filters.type}` : sql``}
       ${filters.register ? sql`AND i.register = ${filters.register}` : sql``}
       ${filters.dateFrom ? sql`AND i.created_at >= ${filters.dateFrom}` : sql``}
@@ -298,7 +306,7 @@ export async function getFacetCounts(status?: string): Promise<{
   byType: Record<string, number>;
   byRegister: Record<string, number>;
 }> {
-  const conds: SQLWrapper[] = [];
+  const conds: SQLWrapper[] = [eq(items.lang, await getTargetLang())];
   if (status === "all") conds.push(sql`${items.status} IN ('learning', 'known')`);
   else if (status) conds.push(eq(items.status, status));
   else conds.push(eq(items.status, "learning"));
@@ -385,6 +393,7 @@ export async function updateItem(
     source: string;
     status: string;
     hideMeaning: number;
+    reading: string | null;
   }>,
 ) {
   const values: Record<string, unknown> = {};
@@ -394,6 +403,7 @@ export async function updateItem(
   }
   if (patch.type !== undefined) values.type = patch.type;
   if (patch.register !== undefined) values.register = patch.register;
+  if (patch.reading !== undefined) values.reading = patch.reading;
   if (patch.meaningId !== undefined) values.meaningId = patch.meaningId;
   if (patch.notesId !== undefined) values.notesId = patch.notesId;
   if (patch.source !== undefined) values.source = patch.source;
@@ -431,6 +441,7 @@ export async function getReviewQueue(): Promise<{
 }> {
   const today = startOfDay().getTime();
   const tomorrow = addDays(startOfDay(), 1).getTime();
+  const lang = await getTargetLang();
 
   const dueRows = await db
     .select({
@@ -444,7 +455,7 @@ export async function getReviewQueue(): Promise<{
     })
     .from(cards)
     .innerJoin(items, eq(items.id, cards.itemId))
-    .where(and(lte(cards.due, tomorrow - 1), eq(items.status, "learning"), sql`${cards.reps} > 0`))
+    .where(and(lte(cards.due, tomorrow - 1), eq(items.status, "learning"), eq(items.lang, lang), sql`${cards.reps} > 0`))
     .orderBy(cards.due)
     .limit(200);
 
@@ -460,7 +471,7 @@ export async function getReviewQueue(): Promise<{
     })
     .from(cards)
     .innerJoin(items, eq(items.id, cards.itemId))
-    .where(and(gte(cards.due, today), lte(cards.due, tomorrow - 1), sql`${cards.reps} = 0`, eq(items.status, "learning")))
+    .where(and(gte(cards.due, today), lte(cards.due, tomorrow - 1), sql`${cards.reps} = 0`, eq(items.status, "learning"), eq(items.lang, lang)))
     .orderBy(items.createdAt)
     .limit(env.NEW_CARDS_PER_DAY);
 
@@ -548,7 +559,13 @@ export async function getExploreCategory(category: string) {
   const rows = await db
     .select()
     .from(exploreItems)
-    .where(and(eq(exploreItems.category, category), eq(exploreItems.hidden, 0)));
+    .where(
+      and(
+        eq(exploreItems.category, category),
+        eq(exploreItems.hidden, 0),
+        eq(exploreItems.lang, await getTargetLang()),
+      ),
+    );
   return rows;
 }
 
@@ -571,6 +588,7 @@ export async function saveExploreRow(row: {
       meaningId: row.meaningId,
       useWhenId: row.useWhenId,
       examplesJson: row.examplesJson,
+      lang: detectLang(row.text, await getTargetLang()),
       hidden: 0,
       createdAt: Date.now(),
     })

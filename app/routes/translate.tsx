@@ -11,6 +11,7 @@ import {
   X,
 } from "lucide-react";
 import { useToast } from "~/components/Toast";
+import { ttsLang } from "~/lib/utils.shared";
 
 export const meta: MetaFunction = () => [{ title: "Terjemah — LingStick" }];
 export const handle = { title: "Terjemah" };
@@ -134,10 +135,10 @@ export default function Translate() {
     };
   }, [result, from, text]);
 
-  const speak = (s: string, lang: string) => {
+  const speak = (s: string, lang?: string) => {
     if (typeof window === "undefined" || !window.speechSynthesis) return;
     const u = new SpeechSynthesisUtterance(s);
-    u.lang = lang;
+    u.lang = lang ?? ttsLang(s);
     window.speechSynthesis.cancel();
     window.speechSynthesis.speak(u);
   };
@@ -311,7 +312,7 @@ export default function Translate() {
                       </span>
                       <button
                         className="rounded-full p-0.5"
-                        onClick={() => speak(englishSide, "en-US")}
+                        onClick={() => speak(englishSide)}
                         title="Dengarkan"
                         aria-label="Dengarkan"
                       >

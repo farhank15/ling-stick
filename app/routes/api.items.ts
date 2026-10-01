@@ -24,6 +24,7 @@ export async function action({ request }: ActionFunctionArgs) {
     notesId?: string;
     source?: string;
     confidence?: string;
+    reading?: string;
     examples?: {
       senseLabel?: string;
       register?: string;
@@ -77,6 +78,7 @@ export async function action({ request }: ActionFunctionArgs) {
       text,
       type,
       register: body.register,
+      reading: body.reading,
       meaningId: body.meaningId,
       notesId: body.notesId,
       source: body.source,

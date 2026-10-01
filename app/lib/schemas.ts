@@ -22,6 +22,8 @@ export const alternativeSchema = z.object({
 
 export const generateOutputSchema = z.object({
   headword: z.string().min(1),
+  reading: z.string().optional().nullable().default(""), // JA: kana
+  romaji: z.string().optional().nullable().default(""), // JA: hepburn
   type: z.enum([
     "word",
     "phrasal_verb",
@@ -30,6 +32,7 @@ export const generateOutputSchema = z.object({
     "slang",
     "reaction",
     "sentence",
+    "particle",
   ]),
   register: z.enum(["formal", "neutral", "informal", "slang"]),
   meaning_id: z.string().min(1),

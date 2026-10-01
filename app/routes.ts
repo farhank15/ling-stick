@@ -14,6 +14,7 @@ export default [
     route("explore/:category", "routes/explore.$category.tsx"),
     route("extract", "routes/extract.tsx"),
     route("translate", "routes/translate.tsx"),
+    route("write", "routes/write.tsx"),
     route("chat", "routes/chat.tsx"),
     route("settings", "routes/settings.tsx"),
   ]),

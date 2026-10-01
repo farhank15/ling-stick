@@ -1,5 +1,6 @@
 import type { MetaFunction } from "react-router";
 import { useCallback, useEffect, useRef, useState } from "react";
+import { useLoaderData } from "react-router";
 import {
   BookMarked,
   CheckCircle2,
@@ -12,12 +13,14 @@ import {
   Volume2,
 } from "lucide-react";
 import { requireUser } from "~/lib/auth.server";
+import { getTargetLang } from "~/lib/lang.server";
+import { ttsLang } from "~/lib/utils.shared";
 import { useToast } from "~/components/Toast";
 
-function speak(s: string, lang = "en-US") {
+function speak(s: string, lang?: string) {
   if (typeof window === "undefined" || !window.speechSynthesis) return;
   const u = new SpeechSynthesisUtterance(s);
-  u.lang = lang;
+  u.lang = lang ?? ttsLang(s);
   window.speechSynthesis.cancel();
   window.speechSynthesis.speak(u);
 }
@@ -38,6 +41,7 @@ type Entry = {
   examples: BankExample[];
   status: "new" | "learning" | "known";
   itemId: number | null;
+  reading?: string | null; // JA: kana (+ romaji)
 };
 type Stats = {
   byLevel: Record<string, number>;
@@ -45,6 +49,7 @@ type Stats = {
 };
 
 const LEVELS = ["A1", "A2", "B1", "B2", "C1", "C2"] as const;
+const LEVELS_JA = ["N5", "N4", "N3", "N2", "N1"] as const;
 
 const LEVEL_STYLE: Record<string, string> = {
   A1: "bg-emerald-100 text-emerald-700 dark:bg-emerald-950 dark:text-emerald-300",
@@ -53,6 +58,11 @@ const LEVEL_STYLE: Record<string, string> = {
   B2: "bg-indigo-100 text-indigo-700 dark:bg-indigo-950 dark:text-indigo-300",
   C1: "bg-violet-100 text-violet-700 dark:bg-violet-950 dark:text-violet-300",
   C2: "bg-rose-100 text-rose-700 dark:bg-rose-950 dark:text-rose-300",
+  N5: "bg-emerald-100 text-emerald-700 dark:bg-emerald-950 dark:text-emerald-300",
+  N4: "bg-teal-100 text-teal-700 dark:bg-teal-950 dark:text-teal-300",
+  N3: "bg-sky-100 text-sky-700 dark:bg-sky-950 dark:text-sky-300",
+  N2: "bg-indigo-100 text-indigo-700 dark:bg-indigo-950 dark:text-indigo-300",
+  N1: "bg-rose-100 text-rose-700 dark:bg-rose-950 dark:text-rose-300",
 };
 
 const LEVEL_ACTIVE: Record<string, string> = {
@@ -62,6 +72,11 @@ const LEVEL_ACTIVE: Record<string, string> = {
   B2: "border-indigo-500 bg-indigo-50 dark:bg-indigo-950/60",
   C1: "border-violet-500 bg-violet-50 dark:bg-violet-950/60",
   C2: "border-rose-500 bg-rose-50 dark:bg-rose-950/60",
+  N5: "border-emerald-500 bg-emerald-50 dark:bg-emerald-950/60",
+  N4: "border-teal-500 bg-teal-50 dark:bg-teal-950/60",
+  N3: "border-sky-500 bg-sky-50 dark:bg-sky-950/60",
+  N2: "border-indigo-500 bg-indigo-50 dark:bg-indigo-950/60",
+  N1: "border-rose-500 bg-rose-50 dark:bg-rose-950/60",
 };
 
 const ACTION_LABEL: Record<string, string> = {
@@ -71,10 +86,14 @@ const ACTION_LABEL: Record<string, string> = {
 
 export async function loader({ request }: { request: Request }) {
   await requireUser(request);
-  return null;
+  // Level label ikut bahasa target: CEFR (EN) atau JLPT (JA).
+  return { lang: await getTargetLang() };
 }
 
 export default function BankPage() {
+  const { lang } = useLoaderData<typeof loader>();
+  // Level ikut bahasa target: CEFR (EN) / JLPT (JA). Default gen: tengah level list.
+  const LEVEL_TABS = lang === "ja" ? LEVELS_JA : LEVELS;
   const [entries, setEntries] = useState<Entry[]>([]);
   const [stats, setStats] = useState<Stats | null>(null);
   const [level, setLevel] = useState<string>("all");
@@ -82,7 +101,7 @@ export default function BankPage() {
   const [expanded, setExpanded] = useState<number | null>(null);
   const [loading, setLoading] = useState(true);
   const [genOpen, setGenOpen] = useState(false);
-  const [genLevel, setGenLevel] = useState("B1");
+  const [genLevel, setGenLevel] = useState<string>(lang === "ja" ? "N4" : "B1");
   const [genCount, setGenCount] = useState(10);
   const [genTopic, setGenTopic] = useState("");
   const [genBusy, setGenBusy] = useState(false);
@@ -224,7 +243,7 @@ export default function BankPage() {
             <p className="text-sm font-semibold">Generate kata baru (AI)</p>
           </div>
           <div className="flex flex-wrap gap-1.5">
-            {LEVELS.map((l) => (
+            {LEVEL_TABS.map((l) => (
               <button
                 key={l}
                 onClick={() => setGenLevel(l)}
@@ -283,7 +302,7 @@ export default function BankPage() {
             {stats?.total ?? "…"}
           </span>
         </button>
-        {LEVELS.map((l) => (
+        {LEVEL_TABS.map((l) => (
           <button
             key={l}
             onClick={() => {
@@ -382,6 +401,9 @@ export default function BankPage() {
                       </span>
                       <span className="min-w-0 flex-1">
                         <span className="block truncate font-semibold">{e.text}</span>
+                        {e.reading ? (
+                          <span className="block truncate text-xs text-zinc-400 dark:text-zinc-500">{e.reading}</span>
+                        ) : null}
                         <span className="block truncate text-xs text-zinc-500">{e.meaningId}</span>
                       </span>
                       <ChevronDown
@@ -401,7 +423,7 @@ export default function BankPage() {
                             {e.examples.map((ex, i) => (
                               <li key={i} className="rounded-xl bg-zinc-50 p-3 dark:bg-zinc-800/60">
                                 <div className="flex items-start gap-2">
-                                  <p className="flex-1 text-sm font-medium">{ex.en}</p>
+                                  <p className="flex-1 whitespace-pre-line text-sm font-medium">{ex.en}</p>
                                   <button
                                     className="shrink-0 rounded-lg p-1 text-zinc-400 hover:bg-zinc-200 hover:text-zinc-600 dark:hover:bg-zinc-700"
                                     title="Dengarkan"

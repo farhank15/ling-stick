@@ -1,6 +1,7 @@
 import { and, eq, inArray, sql } from "drizzle-orm";
 import { db } from "~/lib/db/client.server";
 import { cards, examples, items, wordbank } from "~/lib/db/schema";
+import { getTargetLang, detectLang } from "~/lib/lang.server";
 import { normalizeText } from "~/lib/utils.shared";
 
 /** Bank Kata — BLUEPRINT §3 (katalog kosakata per level CEFR, koleksi selalu bertambah). */
@@ -21,6 +22,7 @@ export type BankEntry = {
   examples: BankExample[];
   status: "new" | "learning" | "known";
   itemId: number | null;
+  reading: string | null; // JA: kana (+ romaji)
 };;
 
 
@@ -44,6 +46,7 @@ function parseRow(r: typeof wordbank.$inferSelect): BankEntry {
     examples,
     status: r.status as BankEntry["status"],
     itemId: r.itemId,
+    reading: r.reading ?? null,
   };
 }
 
@@ -51,9 +54,9 @@ export function isCefr(v: string | null | undefined): v is Cefr {
   return !!v && (CEFR_LEVELS as readonly string[]).includes(v);
 }
 
-/** List entri bank; filter level & status. Contoh di-prefetch 1 query (anti N+1). */
+/** List entri bank; filter level & status. Contoh di-prefetch 1 query (anti N+1). Semua ter-scope bahasa aktif. */
 export async function listBank(filter: { cefr?: string; status?: string } = {}) {
-  const conds = [];
+  const conds = [eq(wordbank.lang, await getTargetLang())];
   if (isCefr(filter.cefr)) conds.push(eq(wordbank.cefr, filter.cefr));
   if (filter.status && ["new", "learning", "known"].includes(filter.status)) {
     conds.push(eq(wordbank.status, filter.status));
@@ -67,11 +70,12 @@ export async function listBank(filter: { cefr?: string; status?: string } = {}) 
   return rows.map(parseRow);
 }
 
-/** Badge count per level CEFR + per status — 1 query GROUP BY. */
+/** Badge count per level CEFR/JLPT + per status — 1 query GROUP BY. Ter-scope bahasa aktif. */
 export async function getBankStats() {
   const perLevel = await db
     .select({ cefr: wordbank.cefr, total: sql<number>`count(*)` })
     .from(wordbank)
+    .where(eq(wordbank.lang, await getTargetLang()))
     .groupBy(wordbank.cefr);
   const perStatus = await db
     .select({ status: wordbank.status, total: sql<number>`count(*)` })
@@ -101,19 +105,24 @@ export async function startLearning(bankId: number) {
   }
 
   const norm = normalizeText(entry.text);
-  const [existing] = await db.select().from(items).where(eq(items.textNorm, norm)).limit(1);
+  const [existing] = await db
+    .select()
+    .from(items)
+    .where(and(eq(items.textNorm, norm), eq(items.lang, entry.lang)))
+    .limit(1);
   let itemId: number;
   if (existing) {
     itemId = existing.id;
     await db.update(items).set({ status: "learning" }).where(eq(items.id, itemId));
   } else {
-    const exs = (JSON.parse(entry.examplesJson || "[]") as BankExample[]).slice(0, 3);
-    const [created] = await db
+    const exs = (JSON.parse(entry.examplesJson || "[]") as BankExample[]).slice(0, 3);      const [created] = await db
       .insert(items)
       .values({
         text: entry.text,
         textNorm: norm,
         type: entry.type,
+        lang: entry.lang,
+        reading: entry.reading ?? null,
         register: entry.register,
         meaningId: entry.meaningId,
         notesId: entry.useWhenId ? `Dipakai saat: ${entry.useWhenId}` : null,
@@ -174,22 +183,32 @@ export async function generateBankWords(opts: GenOptions): Promise<{ added: numb
   const { chatJson } = await import("~/lib/llm.server");
   const { bankOutputSchema } = await import("~/lib/schemas");
   const { BANK_SYSTEM } = await import("~/lib/prompts");
+  const lang = await getTargetLang();
 
   const topic = opts.topic?.trim();
   const topicLine = topic
     ? `Theme: "${topic}" — all words must clearly relate to this theme.`
     : "No theme: pick words an Indonesian adult learner at this level should know next.";
-  const user = `Generate exactly ${opts.count} English words or phrases of CEFR level ${opts.level}.\n${topicLine}\nAvoid these words that are already in the bank:\n${await existingWordsForPrompt(opts.level)}\n\nJSON shape:\n{ "words": [{ "text": string, "type": "word"|"phrasal_verb"|"idiom"|"collocation"|"slang", "register": "formal"|"neutral"|"informal"|"slang", "meaning_id": string, "use_when_id": string, "examples": [{ "en": string, "id": string }] }] }`;
+
+  // Mode Jepang: generate kosakata JP per level JLPT. "text" = kata dalam kanji/kana,
+  // wajib ada field "reading" (kana) + "romaji" biar bisa dipelajari orang dewasa.
+  if (lang === "ja") {
+    const userJa = `Generate exactly ${opts.count} Japanese vocabulary items of JLPT level ${opts.level}.\n${topicLine}\n"text" MUST be the word written in kanji (and/or kana), plus "reading" in hiragana and "romaji".\nExplanations (meaning_id, use_when_id, id fields) in casual Indonesian. Examples: natural Japanese sentence + Indonesian translation.\nAvoid these words already in the bank:\n${await existingWordsForPrompt(opts.level, "ja")}\n\nJSON shape:\n{ "words": [{ "text": string, "reading": string, "romaji": string, "type": "word"|"particle"|"expression"|"kana", "register": "formal"|"neutral"|"informal", "meaning_id": string, "use_when_id": string, "examples": [{ "en": string (Japanese sentence), "id": string (Indonesian), "romaji": string }] }] }`;
+    const { data } = await chatJson(BANK_SYSTEM, userJa, bankOutputSchema, "bank:ja:v1", userJa);
+    return await insertGeneratedJa(opts.level, data.words, topic ? `bank:${topic}` : "bank");
+  }
+
+  const user = `Generate exactly ${opts.count} English words or phrases of CEFR level ${opts.level}.\n${topicLine}\nAvoid these words that are already in the bank:\n${await existingWordsForPrompt(opts.level, "en")}\n\nJSON shape:\n{ "words": [{ "text": string, "type": "word"|"phrasal_verb"|"idiom"|"collocation"|"slang", "register": "formal"|"neutral"|"informal"|"slang", "meaning_id": string, "use_when_id": string, "examples": [{ "en": string, "id": string }] }] }`;
 
   const { data } = await chatJson(BANK_SYSTEM, user, bankOutputSchema, "bank:v1", user);
   return await insertGenerated(opts.level, data.words, topic ? `bank:${topic}` : "bank");
 }
 
-async function existingWordsForPrompt(level: Cefr): Promise<string> {
+async function existingWordsForPrompt(level: Cefr, lang: "en" | "ja"): Promise<string> {
   const rows = await db
     .select({ text: wordbank.text })
     .from(wordbank)
-    .where(eq(wordbank.cefr, level))
+    .where(and(eq(wordbank.cefr, level), eq(wordbank.lang, lang)))
     .limit(300);
   return rows.length ? rows.map((r) => r.text.toLowerCase()).join(", ") : "(none)";
 }
@@ -206,7 +225,12 @@ async function insertGenerated(
     const text = w.text.trim();
     if (!text || !w.meaning_id) continue;
     const norm = normalizeText(text);
-    const [dup] = await db.select({ id: wordbank.id }).from(wordbank).where(eq(wordbank.textNorm, norm)).limit(1);
+    const lang = await getTargetLang();
+    const [dup] = await db
+      .select({ id: wordbank.id })
+      .from(wordbank)
+      .where(and(eq(wordbank.textNorm, norm), eq(wordbank.lang, lang)))
+      .limit(1);
     if (dup) {
       skipped++;
       continue;
@@ -222,6 +246,59 @@ async function insertGenerated(
       examplesJson: JSON.stringify((w.examples ?? []).slice(0, 4)),
       status: "new",
       source,
+      lang,
+      createdAt: Date.now(),
+    });
+    added++;
+  }
+  return { added, skipped };
+}
+
+/** Simpan hasil generate JA: reading/romaji dilipat ke meaning & examples. Skip duplikat per lang. */
+async function insertGeneratedJa(
+  level: Cefr,
+  words: { text: string; reading?: string; romaji?: string; type?: string; register?: string; meaning_id: string; use_when_id?: string; examples?: { en: string; id: string; romaji?: string }[] }[],
+  source: string,
+): Promise<{ added: number; skipped: number }> {
+  let added = 0;
+  let skipped = 0;
+  for (const w of words) {
+    const text = w.text.trim();
+    if (!text || !w.meaning_id) continue;
+    const norm = normalizeText(text);
+    const [dup] = await db
+      .select({ id: wordbank.id })
+      .from(wordbank)
+      .where(and(eq(wordbank.textNorm, norm), eq(wordbank.lang, "ja")))
+      .limit(1);
+    if (dup) {
+      skipped++;
+      continue;
+    }
+    const meaningJa = [
+      w.reading ? w.reading : null,
+      w.romaji ? `(${w.romaji})` : null,
+      w.meaning_id,
+    ]
+      .filter(Boolean)
+      .join(" ");
+    const examplesJa = (w.examples ?? []).slice(0, 4).map((e) => ({
+      en: e.romaji ? `${e.en}\n${e.romaji}` : e.en,
+      id: e.id,
+    }));
+    await db.insert(wordbank).values({
+      text,
+      textNorm: norm,
+      type: w.type || "word",
+      register: w.register || "neutral",
+      cefr: level,
+      meaningId: meaningJa,
+      useWhenId: w.use_when_id || null,
+      examplesJson: JSON.stringify(examplesJa),
+      status: "new",
+      source,
+      lang: "ja",
+      reading: [w.reading, w.romaji ? `(${w.romaji})` : null].filter(Boolean).join(" ") || null,
       createdAt: Date.now(),
     });
     added++;

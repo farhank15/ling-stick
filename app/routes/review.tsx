@@ -12,6 +12,7 @@ import {
   Layers,
   Lightbulb,
   PartyPopper,
+  PencilLine,
   Plus,
   Puzzle,
   RotateCcw,
@@ -34,10 +35,12 @@ export async function loader({ request }: { request: Request }) {
   return { dailyTarget: env.DAILY_QUIZ_SIZE };
 }
 
-function speak(text: string, lang = "en-US") {
+import { ttsLang } from "~/lib/utils.shared";
+
+function speak(text: string, lang?: string) {
   if (typeof window === "undefined" || !window.speechSynthesis) return;
   const u = new SpeechSynthesisUtterance(text);
-  u.lang = lang;
+  u.lang = lang ?? ttsLang(text); // kana/kanji → ja-JP otomatis
   window.speechSynthesis.cancel();
   window.speechSynthesis.speak(u);
 }
@@ -63,6 +66,7 @@ type QuizQuestion = {
   answer: string;
   meaningId: string | null;
   exampleEn: string | null;
+  tokens?: string[]; // JA Susun Kata: token per-kata dari segmentasi AI
 };
 
 type SetInfo = {
@@ -85,6 +89,7 @@ type QuizResponse = {
 type FlashCard = {
   itemId: number;
   text: string;
+  reading?: string | null; // JA: kana di bawah kanji
   meaningId: string | null;
   notesId: string | null;
   firstEn: string | null;
@@ -274,6 +279,23 @@ function ModePicker({
       <p className="px-1 text-center text-xs text-zinc-400">
         Generate = bikin set soal tambahan baru di luar jadwal harian.
       </p>
+
+      {/* Latihan nulis kanji/kana — khusus mode Jepang */}
+      <Link
+        to="/write"
+        className="card flex items-center gap-3 p-4 transition-colors hover:border-teal-300 dark:hover:border-teal-800"
+      >
+        <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-teal-50 text-teal-700 dark:bg-teal-950 dark:text-teal-300">
+          <PencilLine className="h-5 w-5" strokeWidth={1.75} />
+        </span>
+        <div className="min-w-0 flex-1">
+          <p className="font-semibold">Latihan Nulis</p>
+          <p className="truncate text-xs text-zinc-500">
+            Coret kanji &amp; kana di canvas — panduan samar bisa dimatikan
+          </p>
+        </div>
+        <ArrowRight className="h-4 w-4 shrink-0 text-zinc-400" />
+      </Link>
     </div>
   );
 }
@@ -330,7 +352,7 @@ export default function ReviewPage() {
   // Mode kesimpen di URL (?mode=toefl) — refresh gak balikin ke picker.
   const urlMode = params.get("mode");
   const [screen, setScreen] = useState<"pick" | "quiz" | "flash" | "match">(
-    urlMode && urlMode !== "flash" ? "quiz" : "pick",
+    urlMode === "flash" ? "flash" : urlMode === "match" ? "match" : urlMode ? "quiz" : "pick",
   );
   const [mode, setMode] = useState<Mode>(
     urlMode && ["daily", "typing", "intens", "audio", "scramble"].includes(urlMode)
@@ -422,6 +444,55 @@ export default function ReviewPage() {
       .catch(() => {});
   }, [screen]);
 
+  // Restore mode quiz biasa dari URL (?mode=typing dst) — refresh gak balikin ke picker.
+  useEffect(() => {
+    if (screen !== "quiz" || data || !urlMode) return;
+    if (["daily", "typing", "intens", "audio", "scramble"].includes(urlMode)) {
+      load(urlMode as Mode);
+      return;
+    }
+    if (urlMode === "toefl" || urlMode === "bulanan") return; // ditangani efek periodik
+    // Param asing — bersihkan & balik picker.
+    setParams({}, { preventScrollReset: true });
+    setScreen("pick");
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  // Restore flashcard dari URL (?mode=flash) — antrean FSRS dimuat ulang.
+  useEffect(() => {
+    if (screen !== "flash" || urlMode !== "flash") return;
+    setLoading(true);
+    fetch("/api/flash")
+      .then((r) => safeJson<{ cards: FlashCard[] }>(r))
+      .then((d) => {
+        setCards(d.cards ?? []);
+        setCardIdx(0);
+        setReveal(false);
+        setDrag(0);
+        setFlashDone(0);
+        setLoading(false);
+      })
+      .catch(() => setLoading(false));
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  // Restore match dari URL (?mode=match) — ronde diacak ulang, jawaban belum terkirim gak tersimpan.
+  useEffect(() => {
+    if (screen !== "match" || urlMode !== "match") return;
+    matchResults.current = [];
+    matchWrong.current = {};
+    setLoading(true);
+    fetch("/api/match")
+      .then((r) => safeJson<{ rounds: MatchPair[][] }>(r))
+      .then((d) => {
+        setMatchRounds(d.rounds ?? []);
+        setMatchRound(0);
+        setLoading(false);
+      })
+      .catch(() => setLoading(false));
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
   // Restore tes periodik dari URL (?mode=toefl) — refresh gak balikin ke picker.
   useEffect(() => {
     if ((urlMode !== "toefl" && urlMode !== "bulanan") || screen !== "quiz" || data) return;
@@ -475,7 +546,7 @@ export default function ReviewPage() {
   const startQuiz = (m: Mode) => {
     setMode(m);
     setScreen("quiz");
-    setParams(m === "daily" ? {} : { mode: m }, { preventScrollReset: true });
+    setParams({ mode: m }, { preventScrollReset: true });
     load(m);
   };
 
@@ -500,7 +571,7 @@ export default function ReviewPage() {
   const startFlash = () => {
     setMode("daily");
     setScreen("flash");
-    setParams({}, { preventScrollReset: true });
+    setParams({ mode: "flash" }, { preventScrollReset: true });
     setLoading(true);
     fetch("/api/flash")
       .then((r) => safeJson<{ cards: FlashCard[] }>(r))
@@ -520,6 +591,7 @@ export default function ReviewPage() {
 
   const startMatch = () => {
     setScreen("match");
+    setParams({ mode: "match" }, { preventScrollReset: true });
     setLoading(true);
     matchResults.current = [];
     matchWrong.current = {};
@@ -551,6 +623,7 @@ export default function ReviewPage() {
       setGenBusy(null);
       setMode(m);
       setScreen("quiz");
+      setParams({ mode: m }, { preventScrollReset: true });
       loadSetById(d.setId!);
     } catch (e) {
       setGenMsg(e instanceof Error ? e.message : "Gagal generate");
@@ -621,11 +694,11 @@ export default function ReviewPage() {
     answer(String(i) === q.answer);
   };
 
-  // Susun Kata: susun ulang chip tiap ganti soal.
+  // Susun Kata: susun ulang chip tiap ganti soal — JP pakai token AI, EN split spasi.
   useEffect(() => {
     if (screen !== "quiz" || mode !== "scramble" || !q) return;
     setPickedWords([]);
-    const words = (q.answer ?? "").split(/\s+/).filter(Boolean);
+    const words = q.tokens && q.tokens.length >= 2 ? q.tokens : (q.answer ?? "").split(/\s+/).filter(Boolean);
     setScrambleOrder(words.map((_, i) => i).sort(() => Math.random() - 0.5));
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [screen, mode, currentIndex]);
@@ -931,6 +1004,10 @@ export default function ReviewPage() {
                   </button>
                 ) : null}
               </div>
+              {/* JA: kana redup di bawah kanji — bantu baca tanpa jadi jawaban utama */}
+              {!reverse && c.reading ? (
+                <p className="-mt-2 text-sm text-zinc-400 dark:text-zinc-500">{c.reading}</p>
+              ) : null}
 
               {reveal ? (
                 <div className="space-y-3 border-t border-zinc-100 pt-4 text-left dark:border-zinc-800">
@@ -961,7 +1038,7 @@ export default function ReviewPage() {
                     <div>
                       <p className="label">Contoh</p>
                       <div className="flex items-start gap-2">
-                        <p className="flex-1 text-sm font-medium">{c.firstEn}</p>
+                        <p className="flex-1 whitespace-pre-line text-sm font-medium">{c.firstEn}</p>
                         <button
                           className="shrink-0 rounded-lg p-1 text-zinc-400 hover:bg-zinc-100 hover:text-teal-600 dark:hover:bg-zinc-800"
                           onClick={(e) => {
@@ -1219,6 +1296,8 @@ export default function ReviewPage() {
   const isScrambleUI = mode === "scramble";
   const meta = TYPE_META[isScrambleUI ? "typing" : q.type];
   const spokenEn = q.options[Number(q.answer)]; // teks EN untuk TTS (listen/audio)
+  // JP: token per-kata dari segmentasi AI (partikel sendiri); EN: split spasi.
+  const scrambleWords = q.tokens && q.tokens.length >= 2 ? q.tokens : (q.answer ?? "").split(/\s+/).filter(Boolean);
 
   return (
     <div className="space-y-4">
@@ -1343,7 +1422,7 @@ export default function ReviewPage() {
                       setPickedWords((w) => w.filter((_, p) => p !== pos2))
                     }
                   >
-                    {q.answer.split(/\s+/)[wi]}
+                    {scrambleWords[wi]}
                   </button>
                 ))
               )}
@@ -1358,7 +1437,7 @@ export default function ReviewPage() {
                     disabled={typedResult !== null}
                     onClick={() => setPickedWords((w) => [...w, wi])}
                   >
-                    {q.answer.split(/\s+/)[wi]}
+                    {scrambleWords[wi]}
                   </button>
                 ),
               )}
@@ -1375,9 +1454,7 @@ export default function ReviewPage() {
               <button
                 className="btn-primary mt-3 w-full"
                 disabled={pickedWords.length === 0}
-                onClick={() =>
-                  submitAnswerText(pickedWords.map((wi) => q.answer.split(/\s+/)[wi]).join(" "))
-                }
+                onClick={() => submitAnswerText(pickedWords.map((wi) => scrambleWords[wi]).join(" "))}
               >
                 Periksa
               </button>

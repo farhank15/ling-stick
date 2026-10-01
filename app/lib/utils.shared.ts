@@ -34,6 +34,15 @@ export function clamp(n: number, min: number, max: number): number {
   return Math.min(max, Math.max(min, n));
 }
 
+/**
+ * Deteksi bahasa buat TTS dari isi teks (client-safe, tanpa node API):
+ * ada hiragana/katakana/kanji → ja-JP, selain itu en-US.
+ * Dipakai semua tombol speaker biar otomatis bunyi bahasa yang bener di mode JP.
+ */
+export function ttsLang(text: string): string {
+  return /[\u3040-\u30ff\u4e00-\u9faf]/.test(text) ? "ja-JP" : "en-US";
+}
+
 export function startOfDay(d: Date = new Date()): Date {
   const x = new Date(d);
   x.setHours(0, 0, 0, 0);

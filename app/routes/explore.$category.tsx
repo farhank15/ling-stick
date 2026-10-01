@@ -6,6 +6,7 @@ import { requireUser } from "~/lib/auth.server";
 import { db } from "~/lib/db/client.server";
 import { exploreItems, items, settings } from "~/lib/db/schema";
 import { EXPLORE_CATEGORIES } from "~/lib/explore.categories";
+import { getTargetLang } from "~/lib/lang.server";
 import { and, asc, eq, inArray } from "drizzle-orm";
 import { saveExploreRow } from "~/lib/items.server";
 import { useToast } from "~/components/Toast";
@@ -16,10 +17,12 @@ export const meta: MetaFunction = () => [{ title: "Explore — LingStick" }];
 /** Lock anti dobel-generate per kategori (StrictMode / multi-tab). */
 const genLocks = new Map<string, number>();
 
-function speak(text: string, lang = "en-US") {
+import { ttsLang } from "~/lib/utils.shared";
+
+function speak(text: string, lang?: string) {
   if (typeof window === "undefined" || !window.speechSynthesis) return;
   const u = new SpeechSynthesisUtterance(text);
-  u.lang = lang;
+  u.lang = lang ?? ttsLang(text);
   window.speechSynthesis.cancel();
   window.speechSynthesis.speak(u);
 }
@@ -38,7 +41,13 @@ export async function loader({ request, params }: LoaderFunctionArgs) {
   const rows = await db
     .select()
     .from(exploreItems)
-    .where(and(eq(exploreItems.category, category), eq(exploreItems.hidden, 0)))
+    .where(
+      and(
+        eq(exploreItems.category, category),
+        eq(exploreItems.hidden, 0),
+        eq(exploreItems.lang, await getTargetLang()),
+      ),
+    )
     .orderBy(asc(exploreItems.id));
 
   const normTexts = rows.map((r) => r.text.trim().toLowerCase());
@@ -47,7 +56,7 @@ export async function loader({ request, params }: LoaderFunctionArgs) {
     const saved = await db
       .select({ textNorm: items.textNorm })
       .from(items)
-      .where(inArray(items.textNorm, normTexts));
+      .where(and(eq(items.lang, await getTargetLang()), inArray(items.textNorm, normTexts)));
     for (const s of saved) savedNorms.add(s.textNorm);
   }
 
@@ -264,7 +273,7 @@ export default function ExploreCategory() {
       </div>
 
       {/* Pindah kategori — chip scroll sticky, kategori aktif disorot */}
-      <div className="sticky top-[52px] z-10 -mx-4 bg-zinc-50/95 px-4 py-2 backdrop-blur dark:bg-zinc-950/95">
+      <div className="sticky top-13 z-10 -mx-4 bg-zinc-50/95 px-4 py-2 backdrop-blur dark:bg-zinc-950/95">
         <div className="no-scrollbar flex gap-1.5 overflow-x-auto">
           {EXPLORE_CATEGORIES.map((c) => (
             <Link

@@ -1,4 +1,5 @@
 import type { Client } from "@libsql/client";
+import { SEED_BANK_JP } from "./seed.ja";
 
 /**
  * DDL lengkap (BLUEPRINT §6 + sessions + llm_usage + quiz).
@@ -215,6 +216,14 @@ export const MIGRATIONS: string[] = [
  */
 const TOLERANT_MIGRATIONS: string[] = [
   `ALTER TABLE explore_items ADD COLUMN examples_json TEXT`,
+  // Multi-bahasa target (EN/JP): kolom lang, existing data = 'en'.
+  `ALTER TABLE items ADD COLUMN lang TEXT NOT NULL DEFAULT 'en'`,
+  `ALTER TABLE wordbank ADD COLUMN lang TEXT NOT NULL DEFAULT 'en'`,
+  `ALTER TABLE explore_items ADD COLUMN lang TEXT NOT NULL DEFAULT 'en'`,
+  // Mode Jepang: cara baca kana (+ romaji) di Bank Kata — ikut pindah ke items saat mulai belajar.
+  `ALTER TABLE wordbank ADD COLUMN reading TEXT`,
+  // Mode Jepang: cara baca kana (+ romaji) untuk kata kanji — tampil redup di kartu.
+  `ALTER TABLE items ADD COLUMN reading TEXT`,
 ];
 
 /** Seed awal Bank Kata — jalan sekali (skip kalau bank sudah berisi). */
@@ -252,24 +261,48 @@ const SEED_BANK: {
 
 async function seedWordbank(client: Client): Promise<void> {
   const cnt = await client.execute("SELECT COUNT(*) AS c FROM wordbank");
-  if (Number(cnt.rows[0]?.c ?? 0) > 0) return;
-  const now = Date.now();
-  for (const w of SEED_BANK) {
-    await client.execute({
-      sql: `INSERT INTO wordbank (text, text_norm, type, register, cefr, meaning_id, use_when_id, examples_json, status, source, created_at)
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, 'new', 'seed', ?)`,
-      args: [
-        w.text,
-        w.text.toLowerCase(),
-        w.type,
-        w.register,
-        w.cefr,
-        w.meaning,
-        w.useWhen,
-        JSON.stringify(w.examples),
-        now,
-      ],
-    });
+  if (Number(cnt.rows[0]?.c ?? 0) === 0) {
+    const now = Date.now();
+    for (const w of SEED_BANK) {
+      await client.execute({
+        sql: `INSERT INTO wordbank (text, text_norm, type, register, cefr, meaning_id, use_when_id, examples_json, status, source, created_at, lang)
+              VALUES (?, ?, ?, ?, ?, ?, ?, ?, 'new', 'seed', ?, 'en')`,
+        args: [
+          w.text,
+          w.text.toLowerCase(),
+          w.type,
+          w.register,
+          w.cefr,
+          w.meaning,
+          w.useWhen,
+          JSON.stringify(w.examples),
+          now,
+        ],
+      });
+    }
+  }
+  // Seed JP sekali (per bahasa).
+  const cntJa = await client.execute("SELECT COUNT(*) AS c FROM wordbank WHERE lang = 'ja'");
+  if (Number(cntJa.rows[0]?.c ?? 0) === 0) {
+    const now = Date.now();
+    for (const w of SEED_BANK_JP) {
+      await client.execute({
+        sql: `INSERT INTO wordbank (text, text_norm, type, register, cefr, meaning_id, use_when_id, examples_json, status, source, created_at, lang, reading)
+              VALUES (?, ?, ?, ?, ?, ?, ?, ?, 'new', 'seed', ?, 'ja', ?)`,
+        args: [
+          w.text,
+          w.text.toLowerCase(),
+          w.type,
+          w.register,
+          w.cefr,
+          w.meaning,
+          w.useWhen,
+          JSON.stringify(w.examples),
+          now,
+          w.reading ?? null,
+        ],
+      });
+    }
   }
 }
 
@@ -286,16 +319,18 @@ export async function runMigrations(client: Client): Promise<void> {
     }
   }
 
-  // Rebuild quiz_sets jika kolom mode belum ada (UNIQUE(day) lama → UNIQUE(day, mode)).
+  // Rebuild quiz_sets jika skema lama: UNIQUE(day) → UNIQUE(day,mode) → UNIQUE(day,mode,lang).
+  // Data lama selalu ikut kepindah dengan lang='en' (existing = bahasa Inggris).
   const cols = await client.execute("PRAGMA table_info(quiz_sets)");
-  const hasMode = cols.rows.some((r) => r.name === "mode");
-  if (!hasMode) {
+  const names = new Set(cols.rows.map((r) => String(r.name ?? "")));
+  if (!names.has("mode") || !names.has("lang")) {
     await client.executeMultiple(`
       ALTER TABLE quiz_sets RENAME TO quiz_sets_legacy;
       CREATE TABLE quiz_sets (
         id         INTEGER PRIMARY KEY,
         day        TEXT NOT NULL,
         mode       TEXT NOT NULL DEFAULT 'daily',
+        lang       TEXT NOT NULL DEFAULT 'en',
         title      TEXT NOT NULL,
         questions  TEXT NOT NULL,
         order_json TEXT NOT NULL,
@@ -304,14 +339,18 @@ export async function runMigrations(client: Client): Promise<void> {
         correct    INTEGER NOT NULL DEFAULT 0,
         completed  INTEGER NOT NULL DEFAULT 0,
         created_at INTEGER NOT NULL,
-        UNIQUE(day, mode)
+        UNIQUE(day, mode, lang)
       );
-      INSERT INTO quiz_sets (id, day, mode, title, questions, order_json, total, done, correct, completed, created_at)
-        SELECT id, day, 'daily', title, questions, order_json, total, done, correct, completed, created_at FROM quiz_sets_legacy;
+      INSERT INTO quiz_sets (id, day, mode, lang, title, questions, order_json, total, done, correct, completed, created_at)
+        SELECT id, day,
+               ${names.has("mode") ? "mode" : "'daily'"},
+               ${names.has("lang") ? "lang" : "'en'"},
+               title, questions, order_json, total, done, correct, completed, created_at
+        FROM quiz_sets_legacy;
       DROP TABLE quiz_sets_legacy;
     `);
   }
 
-  // Seed awal Bank Kata sekali di awal.
+  // Seed awal Bank Kata sekali di awal (per bahasa — EN & JP beda set).
   await seedWordbank(client);
 }

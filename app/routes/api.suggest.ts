@@ -3,8 +3,9 @@ import { requireUser } from "~/lib/auth.server";
 import { db } from "~/lib/db/client.server";
 import { items } from "~/lib/db/schema";
 import { env } from "~/lib/env.server";
+import { getTargetLang } from "~/lib/lang.server";
 import { normalizeText } from "~/lib/utils.shared";
-import { like } from "drizzle-orm";
+import { and, eq, like } from "drizzle-orm";
 
 /**
  * GET /api/suggest?q= — autocomplete kata (BLUEPRINT §7).
@@ -16,11 +17,11 @@ export async function loader({ request }: LoaderFunctionArgs) {
   const q = normalizeText(url.searchParams.get("q") ?? "").slice(0, 60);
   if (q.length < 2) return Response.json({ suggestions: [] });
 
-  // 1) Dari library sendiri (paling relevan).
+  // 1) Dari library sendiri (paling relevan) — ter-scope bahasa aktif.
   const own = await db
     .select({ text: items.text })
     .from(items)
-    .where(like(items.textNorm, `%${q}%`))
+    .where(and(like(items.textNorm, `%${q}%`), eq(items.lang, await getTargetLang())))
     .limit(5);
 
   // 2) Datamuse ( gratis, tanpa key ) — gagal diam-diam.

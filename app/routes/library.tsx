@@ -9,10 +9,12 @@ import { useToast } from "~/components/Toast";
 
 export const meta: MetaFunction = () => [{ title: "Library — LingStick" }];
 
-function speak(text: string, lang = "en-US") {
+import { ttsLang } from "~/lib/utils.shared";
+
+function speak(text: string, lang?: string) {
   if (typeof window === "undefined" || !window.speechSynthesis) return;
   const u = new SpeechSynthesisUtterance(text);
-  u.lang = lang;
+  u.lang = lang ?? ttsLang(text);
   window.speechSynthesis.cancel();
   window.speechSynthesis.speak(u);
 }
@@ -190,7 +192,7 @@ export default function Library() {
   return (
     <div className="space-y-3">
       {/* Toolbar sticky: search + tab + chip filter — nggak ikut ke-scroll */}
-      <div className="sticky top-[52px] z-20 -mx-4 space-y-2 bg-zinc-50 px-4 pb-2 pt-1 dark:bg-zinc-950">
+      <div className="sticky top-13 z-20 -mx-4 space-y-2 bg-zinc-50 px-4 pb-2 pt-1 dark:bg-zinc-950">
       {/* Search */}
       <form role="search" onSubmit={(e) => e.preventDefault()}>
         <div className="relative">

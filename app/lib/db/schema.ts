@@ -28,6 +28,8 @@ export const items = sqliteTable(
     confidence: text("confidence").default("medium"),
     status: text("status").notNull().default("learning"),
     hideMeaning: integer("hide_meaning").notNull().default(0),
+    lang: text("lang").notNull().default("en"), // en | ja — bahasa target item
+    reading: text("reading"), // JA: kana (+ romaji), tampil redup di bawah kanji
     createdAt: integer("created_at").notNull(),
   },
   (t) => [
@@ -125,6 +127,7 @@ export const exploreItems = sqliteTable(
     exampleId: text("example_id"),
     examplesJson: text("examples_json"), // JSON {en,id}[] — 3–5 contoh kalimat
     hidden: integer("hidden").notNull().default(0),
+    lang: text("lang").notNull().default("en"), // en | ja
     createdAt: integer("created_at").notNull(),
   },
   (t) => [uniqueIndex("explore_category_text_uq").on(t.category, t.text)],
@@ -189,6 +192,7 @@ export const quizSets = sqliteTable(
     id: integer("id").primaryKey({ autoIncrement: true }),
     day: text("day").notNull(), // YYYY-MM-DD
     mode: text("mode").notNull().default("daily"), // daily|extra|typing|intens
+    lang: text("lang").notNull().default("en"), // en | ja — bahasa target set
     title: text("title").notNull(),
     questions: text("questions").notNull(), // JSON QuizQuestion[]
     order: text("order_json").notNull(), // JSON number[] urutan soal (bisa bertambah)
@@ -231,6 +235,8 @@ export const wordbank = sqliteTable(
     status: text("status").notNull().default("new"), // new|learning|known
     itemId: integer("item_id"),
     source: text("source").notNull().default("seed"),
+    lang: text("lang").notNull().default("en"), // en | ja — bahasa target entri
+    reading: text("reading"), // JA: kana (+ romaji), ikut ke items saat mulai belajar
     createdAt: integer("created_at").notNull(),
   },
   (t) => [index("wordbank_cefr_idx").on(t.cefr), index("wordbank_status_idx").on(t.status)],

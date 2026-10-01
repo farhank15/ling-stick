@@ -1,12 +1,13 @@
-import type { LoaderFunctionArgs, MetaFunction } from "react-router";
-import { CircleCheck, CircleX, Download, FileUp } from "lucide-react";
+import type { ActionFunctionArgs, LoaderFunctionArgs, MetaFunction } from "react-router";
+import { CircleCheck, CircleX, Download, FileUp, Languages } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
-import { Form, useLoaderData, useNavigation } from "react-router";
+import { Form, useFetcher, useLoaderData, useNavigation } from "react-router";
 import { useToast } from "~/components/Toast";
 import { requireUser } from "~/lib/auth.server";
 import { db } from "~/lib/db/client.server";
 import { llmUsage } from "~/lib/db/schema";
 import { env } from "~/lib/env.server";
+import { getTargetLang, setTargetLang, isTargetLang, type TargetLang } from "~/lib/lang.server";
 import { laraStatus } from "~/lib/lara.server";
 import { eq } from "drizzle-orm";
 import { todayStr } from "~/lib/utils.shared";
@@ -15,15 +16,23 @@ import { llmConfigured } from "~/lib/llm.server";
 export const meta: MetaFunction = () => [{ title: "Pengaturan — LingStick" }];
 export const handle = { title: "Pengaturan" };
 
+const LANGS: TargetLang[] = ["en", "ja"]; // bukan import — module server gak boleh nyusul ke bundle client
+const LANG_META: Record<TargetLang, { label: string; desc: string }> = {
+  en: { label: "English", desc: "Kosakata EN per level CEFR, TTS en-US" },
+  ja: { label: "日本語", desc: "Kana, kanji & tata bahasa per level JLPT, TTS ja-JP" },
+};
+
 export async function loader({ request }: LoaderFunctionArgs) {
   await requireUser(request);
   // Paralel — hemat 1 round-trip Turso (dulu berurutan).
-  const [[usage], lara] = await Promise.all([
+  const [[usage], lara, targetLang] = await Promise.all([
     db.select().from(llmUsage).where(eq(llmUsage.day, todayStr())).limit(1),
     laraStatus(),
+    getTargetLang(),
   ]);
   return {
     lara,
+    targetLang,
     llmCallsToday: usage?.calls ?? 0,
     llmLimit: env.DAILY_LLM_CALL_LIMIT,
     llmConfigured: llmConfigured(),
@@ -34,6 +43,17 @@ export async function loader({ request }: LoaderFunctionArgs) {
     baseUrl: env.GROQ_BASE_URL,
     newCardsPerDay: env.NEW_CARDS_PER_DAY,
   };
+}
+
+/** POST action — ganti bahasa target aktif (en/ja). */
+export async function action({ request }: ActionFunctionArgs) {
+  await requireUser(request);
+  const body = (await request.json().catch(() => ({}))) as { lang?: string };
+  if (!isTargetLang(body.lang)) {
+    return Response.json({ ok: false, error: "Bahasa tidak dikenal" }, { status: 400 });
+  }
+  await setTargetLang(body.lang);
+  return Response.json({ ok: true, lang: body.lang });
 }
 
 type Stats = {
@@ -93,7 +113,10 @@ export default function Settings() {
 
   return (
     <div className="space-y-4">
-      {stats ? <StatsSection stats={stats} /> : null}      <section className="card space-y-1.5">
+      {stats ? <StatsSection stats={stats} /> : null}
+      <LangPicker current={data.targetLang} />
+
+      <section className="card space-y-1.5">
         <h2 className="label">LLM</h2>
         <Row k="Status" v={data.llmConfigured ? "terkonfigurasi" : "belum diset"} ok={data.llmConfigured} />
         <Row
@@ -184,6 +207,52 @@ export default function Settings() {
         </Form>
       </section>
     </div>
+  );
+}
+
+/** Pemilih bahasa target (satu aktif global) — ganti di sini, seluruh app ikut. */
+function LangPicker({ current }: { current: TargetLang }) {
+  const fetcher = useFetcher();
+  const toast = useToast();
+  const busy = fetcher.state !== "idle";
+  const done = (fetcher.data as { ok?: boolean } | undefined)?.ok;
+
+  useEffect(() => {
+    if (fetcher.state === "idle" && done) {
+      toast("Bahasa diganti — Library, bank, quiz & statistik ikut bahasa baru");
+      window.location.reload(); // pastikan semua cache loader segar
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [fetcher.state, done]);
+
+  return (
+    <section className="card space-y-2">
+      <h2 className="label flex items-center gap-1.5">
+        <Languages className="h-3.5 w-3.5" /> Bahasa target
+      </h2>
+      <div className="grid grid-cols-2 gap-2">
+        {LANGS.map((l) => (
+          <button
+            key={l}
+            type="button"
+            disabled={busy}
+            onClick={() => fetcher.submit({ lang: l }, { method: "post", encType: "application/json" })}
+            className={`rounded-xl border-2 px-3 py-2.5 text-left transition disabled:opacity-60 ${
+              current === l
+                ? "border-teal-500 bg-teal-50 dark:border-teal-600 dark:bg-teal-950/40"
+                : "border-zinc-200 hover:border-zinc-300 dark:border-zinc-700 dark:hover:border-zinc-600"
+            }`}
+          >
+            <p className="font-semibold">{LANG_META[l].label}</p>
+            <p className="mt-0.5 text-[11px] leading-snug text-zinc-500">{LANG_META[l].desc}</p>
+          </button>
+        ))}
+      </div>
+      <p className="text-[11px] text-zinc-400">
+        Bahasa Indonesia tetap jadi bahasa penjelasan. Data bahasa lain tersimpan aman —
+        balik lagi kapan pun tanpa kehilangan progres.
+      </p>
+    </section>
   );
 }
 

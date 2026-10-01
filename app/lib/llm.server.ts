@@ -2,12 +2,15 @@ import { eq, sql } from "drizzle-orm";
 import { db, getRawClient } from "./db/client.server";
 import { llmCache, llmUsage } from "./db/schema";
 import { env } from "./env.server";
+import { getTargetLang } from "./lang.server";
 import {
   CHAT_SYSTEM,
+  CHAT_SYSTEM_JA,
   CHECK_SENTENCE_SYSTEM,
   EXTRACT_SYSTEM,
   EXPLORE_CATEGORIES,
   GENERATE_SYSTEM,
+  GENERATE_SYSTEM_JA,
   exploreSystem,
 } from "./prompts";
 import {
@@ -214,13 +217,12 @@ export async function llmGenerate(
   text: string,
 ): Promise<{ data: GenerateOutput; cached: boolean; provider: string }> {
   const clean = text.trim().slice(0, 120);
-  return chatJson(
-    GENERATE_SYSTEM,
-    `Word or phrase: "${clean}"`,
-    generateOutputSchema,
-    "generate:v1",
-    clean,
-  );
+  const lang = await getTargetLang();
+  // Mode JA: prompt Jepang — headword kanji + reading kana; input boleh arti Indonesia.
+  const system = lang === "ja" ? GENERATE_SYSTEM_JA : GENERATE_SYSTEM;
+  const user = lang === "ja" ? `Kata/frasa/arti: "${clean}"` : `Word or phrase: "${clean}"`;
+  const cacheNs = lang === "ja" ? "generate:ja:v1" : "generate:v1";
+  return chatJson(system, user, generateOutputSchema, cacheNs, `${cacheNs}|${clean}`);
 }
 
 export async function llmExtract(
@@ -282,8 +284,9 @@ ${transcript}
 
 Learner's new message: "${message.slice(0, 1000)}"`
     : `Learner's message: "${message.slice(0, 1000)}"`;
+  const lang = await getTargetLang();
   const { data, provider } = await chatJson(
-    CHAT_SYSTEM,
+    lang === "ja" ? CHAT_SYSTEM_JA : CHAT_SYSTEM,
     user,
     chatOutputSchema,
     "", // sengaja kosong — chat tidak di-cache

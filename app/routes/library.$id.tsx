@@ -9,10 +9,12 @@ import { redirect } from "react-router";
 
 export const meta: MetaFunction = () => [{ title: "Detail Item — LingStick" }];
 
-function speak(text: string, lang = "en-US") {
+import { ttsLang } from "~/lib/utils.shared";
+
+function speak(text: string, lang?: string) {
   if (typeof window === "undefined" || !window.speechSynthesis) return;
   const u = new SpeechSynthesisUtterance(text);
-  u.lang = lang;
+  u.lang = lang ?? ttsLang(text);
   window.speechSynthesis.cancel();
   window.speechSynthesis.speak(u);
 }

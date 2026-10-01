@@ -2,6 +2,7 @@ import { and, desc, eq, sql } from "drizzle-orm";
 import { db } from "~/lib/db/client.server";
 import { cards, items, quizSets, quizAnswers, wordbank } from "~/lib/db/schema";
 import { env } from "~/lib/env.server";
+import { getTargetLang } from "~/lib/lang.server";
 
 /**
  * Latihan harian & multi-metode — BLUEPRINT §3 F3 (diupgrade):
@@ -67,6 +68,7 @@ export type QuizQuestion = {
   answer: string;
   meaningId: string | null;
   exampleEn: string | null;
+  tokens?: string[]; // JA Susun Kata: token per-kata dari segmentasi AI
 };
 
 type ItemRow = {
@@ -98,11 +100,33 @@ export function localDayStr(): string {
     .slice(0, 10);
 }
 
-type BuildOpts = { sources?: ("library" | "bank")[]; bankLevel?: string };
+type BuildOpts = { sources?: ("library" | "bank")[]; bankLevel?: string; scrambleTokens?: boolean };
 
-/** Kumpulan kandidat: dari Library, dari Bank Kata (status learning), atau keduanya. */
+/**
+ * Segmentasi kalimat Jepang jadi token per-kata via AI (partikel selalu token
+ * sendiri). Hasil divalidasi: token digabung harus = kalimat asli, else gagal.
+ * Di-cache di llm_cache (ns seg:ja:v1) — 1 kali per kalimat.
+ */
+async function segmentJa(sentence: string): Promise<string[]> {
+  try {
+    const clean = sentence.replace(/\s+/g, "").slice(0, 200);
+    if (!clean) return [];
+    const { chatJson } = await import("~/lib/llm.server");
+    const { SEGMENT_SYSTEM_JA } = await import("~/lib/prompts");
+    const { z } = await import("zod");
+    const schema = z.object({ tokens: z.array(z.string().min(1)).min(2).max(40) });
+    const { data } = await chatJson(SEGMENT_SYSTEM_JA, clean, schema, "seg:ja:v1", clean);
+    const joined = data.tokens.join("").replace(/\s+/g, "");
+    return joined === clean ? data.tokens : [];
+  } catch {
+    return []; // AI gagal → caller fallback ke soal lain
+  }
+}
+
+/** Kumpulan kandidat: dari Library, dari Bank Kata (status learning), atau keduanya. Ter-scope bahasa aktif. */
 async function collectRows(opts: BuildOpts) {
   const sources = opts.sources ?? ["library", "bank"];
+  const lang = await getTargetLang();
   const lib = sources.includes("library")
     ? await db
         .select({
@@ -114,13 +138,13 @@ async function collectRows(opts: BuildOpts) {
           firstEn: sql<string | null>`(SELECT en FROM examples WHERE item_id = ${items.id} ORDER BY id LIMIT 1)`,
         })
         .from(items)
-        .where(eq(items.status, "learning"))
+        .where(and(eq(items.status, "learning"), eq(items.lang, lang)))
         .limit(300)
     : [];
 
   let bank: ItemRow[] = [];
   if (sources.includes("bank")) {
-    const conds = [eq(wordbank.status, "learning"), sql`${wordbank.itemId} IS NULL`];
+    const conds = [eq(wordbank.status, "learning"), sql`${wordbank.itemId} IS NULL`, eq(wordbank.lang, lang)];
     if (opts.bankLevel) conds.push(eq(wordbank.cefr, opts.bankLevel));
     const bankRows = await db
       .select({
@@ -155,7 +179,8 @@ async function buildQuestions(
       await db
         .select({ itemId: cards.itemId })
         .from(cards)
-        .where(sql`${cards.due} <= ${Date.now() + 86_400_000}`)
+        .innerJoin(items, eq(items.id, cards.itemId))
+        .where(and(sql`${cards.due} <= ${Date.now() + 86_400_000}`, eq(items.lang, await getTargetLang())))
         .limit(100)
     ).map((r) => r.itemId),
   );
@@ -172,6 +197,7 @@ async function buildQuestions(
   const types: QuizQuestion["type"][] = opts.forceType
     ? [opts.forceType]
     : opts.typeMix ?? ["mcq_en_id", "mcq_id_en", "cloze", "listen"];
+  const lang = await getTargetLang();
   const questions: QuizQuestion[] = [];
 
   for (let i = 0; questions.length < limit; i++) {
@@ -181,13 +207,32 @@ async function buildQuestions(
     const distractors = shuffle(others).slice(0, 3);
 
     if (type === "typing") {
-      // Ketik frasa bahasa Inggris dari arti Indonesia — dinilai di server.
+      // Susun Kata JP: pakai kalimat contoh, dipecah jadi token per-kata oleh AI.
+      if (lang === "ja" && opts.scrambleTokens && item.firstEn) {
+        const sentence = item.firstEn.split("\n")[0].trim(); // buang baris romaji
+        const tokens = sentence ? await segmentJa(sentence) : [];
+        if (tokens.length >= 2) {
+          questions.push({
+            itemId: item.id,
+            type: "typing",
+            prompt: item.meaningId!,
+            options: [],
+            answer: sentence,
+            meaningId: item.meaningId,
+            exampleEn: item.firstEn,
+            tokens,
+          });
+          if (i > limit * 10) break; // pengaman
+          continue;
+        }
+      }
+      // Ketik frasa dari arti Indonesia — dinilai di server.
       questions.push({
         itemId: item.id,
         type: "typing",
         prompt: item.meaningId!,
         options: [],
-        answer: item.text.toLowerCase().trim(),
+        answer: lang === "ja" ? item.text.trim() : item.text.toLowerCase().trim(),
         meaningId: item.meaningId,
         exampleEn: item.firstEn,
       });
@@ -293,14 +338,15 @@ export async function getTodaySet() {
 
 /** Set harian per mode (satu per mode per hari). */
 export async function getSetForDay(mode: QuizMode, day: string, limit: number, opts: BuildOpts = {}) {
+  const lang = await getTargetLang();
   const [existing] = await db
     .select()
     .from(quizSets)
-    .where(and(eq(quizSets.day, day), eq(quizSets.mode, mode)))
+    .where(and(eq(quizSets.day, day), eq(quizSets.mode, mode), eq(quizSets.lang, lang)))
     .limit(1);
   if (existing) return existing;
 
-  const questions = await buildQuestions(limit, { ...opts, forceType: forceTypeFor(mode) });
+  const questions = await buildQuestions(limit, { ...opts, forceType: forceTypeFor(mode), scrambleTokens: mode === "scramble" });
   if (questions.length === 0) return null;
 
   const [created] = await db
@@ -308,6 +354,7 @@ export async function getSetForDay(mode: QuizMode, day: string, limit: number, o
     .values({
       day,
       mode,
+      lang,
       title: modeTitle(mode, day),
       questions: JSON.stringify(questions),
       order: JSON.stringify(questions.map((_, i) => i)),
@@ -323,7 +370,7 @@ export async function getSetForDay(mode: QuizMode, day: string, limit: number, o
   const [again] = await db
     .select()
     .from(quizSets)
-    .where(and(eq(quizSets.day, day), eq(quizSets.mode, mode)))
+    .where(and(eq(quizSets.day, day), eq(quizSets.mode, mode), eq(quizSets.lang, lang)))
     .limit(1);
   return again ?? null;
 }
@@ -334,9 +381,10 @@ export async function createExtraSet(
   limit: number,
   opts: BuildOpts = {},
 ) {
-  const questions = await buildQuestions(limit, { ...opts, forceType: forceTypeFor(mode) });
+  const questions = await buildQuestions(limit, { ...opts, forceType: forceTypeFor(mode), scrambleTokens: mode === "scramble" });
   if (questions.length === 0) return null;
   const today = localDayStr();
+  const lang = await getTargetLang();
 
   // Slot (day, mode) unik di DB — kalau udah kepakai, pakai suffix #n biar
   // generate kedua/ketiga gak 500. Urutan ronde tetap masuk riwayat.
@@ -349,6 +397,7 @@ export async function createExtraSet(
         .values({
           day,
           mode,
+          lang,
           title,
           questions: JSON.stringify(questions),
           order: JSON.stringify(questions.map((_, i) => i)),
@@ -376,8 +425,7 @@ export async function getSetById(id: number) {
 /** Jawab soal by id set (semua mode). */
 export async function answerQuestionById(
   setId: number,
-  index: number,
-  correct: boolean,
+  index: number, correct: boolean,
   typedText?: string,
 ) {
   const [set] = await db.select().from(quizSets).where(eq(quizSets.id, setId)).limit(1);
@@ -385,12 +433,27 @@ export async function answerQuestionById(
 
   const questions = JSON.parse(set.questions) as QuizQuestion[];
 
-  // Mode typing dinilai dari teks yang diketik.
+  // Mode typing dinilai dari teks yang diketik. Normalisasi beda per bahasa:
+  // EN buang semua kecuali huruf/angka; JA hanya rapikan spasi & full-width.
   let isCorrect = correct;
   if (questions[index]?.type === "typing" && typeof typedText === "string") {
-    isCorrect =
-      typedText.toLowerCase().replace(/[^a-z0-9' ]/g, "").trim() ===
-      questions[index].answer.replace(/[^a-z0-9' ]/g, "").trim();
+    const normJa = (s: string) =>
+      s
+        .replace(/\u3000/g, " ")
+        .replace(/[\uFF01-\uFF5E]/g, (c) => String.fromCharCode(c.charCodeAt(0) - 0xfee0))
+        .replace(/\s+/g, " ")
+        .trim();
+    if (set.lang === "ja") {
+      // JP: bandingkan tanpa spasi sama sekali (Susun Kata join pakai spasi,
+      // kalimat Jepang asli nggak ada spasi) + rapikan full-width.
+      isCorrect =
+        normJa(typedText).replace(/\s+/g, "") ===
+        normJa(questions[index].answer).replace(/\s+/g, "");
+    } else {
+      isCorrect =
+        typedText.toLowerCase().replace(/[^a-z0-9' ]/g, "").trim() ===
+        questions[index].answer.replace(/[^a-z0-9' ]/g, "").trim();
+    }
   }
 
   return applyAnswer(set, questions, index, isCorrect);
@@ -497,12 +560,14 @@ export async function getFlashQueue(limit = 30) {
   const today = localDayStr();
   const dayStart = new Date(today + "T00:00:00+07:00").getTime();
   const dayEnd = dayStart + 86_400_000;
+  const lang = await getTargetLang();
   const firstEn = sql<string | null>`(SELECT en FROM examples WHERE item_id = ${items.id} ORDER BY id LIMIT 1)`;
   const firstId = sql<string | null>`(SELECT id_text FROM examples WHERE item_id = ${items.id} ORDER BY id LIMIT 1)`;
   const dueRows = await db
     .select({
       itemId: items.id,
       text: items.text,
+      reading: items.reading,
       meaningId: items.meaningId,
       notesId: items.notesId,
       firstEn,
@@ -512,13 +577,14 @@ export async function getFlashQueue(limit = 30) {
     })
     .from(cards)
     .innerJoin(items, eq(items.id, cards.itemId))
-    .where(and(eq(items.status, "learning"), sql`${cards.due} < ${Date.now()}`))
+    .where(and(eq(items.status, "learning"), eq(items.lang, lang), sql`${cards.due} < ${Date.now()}`))
     .orderBy(cards.due)
     .limit(limit);
   const newRows = await db
     .select({
       itemId: items.id,
       text: items.text,
+      reading: items.reading,
       meaningId: items.meaningId,
       notesId: items.notesId,
       firstEn,
@@ -528,7 +594,7 @@ export async function getFlashQueue(limit = 30) {
     })
     .from(cards)
     .innerJoin(items, eq(items.id, cards.itemId))
-    .where(and(eq(items.status, "learning"), sql`${cards.due} >= ${dayStart}`, sql`${cards.due} < ${dayEnd}`, eq(cards.reps, 0)))
+    .where(and(eq(items.status, "learning"), eq(items.lang, lang), sql`${cards.due} >= ${dayStart}`, sql`${cards.due} < ${dayEnd}`, eq(cards.reps, 0)))
     .limit(Math.max(0, limit - dueRows.length));
   return [...dueRows, ...newRows];
 }
@@ -539,12 +605,13 @@ export async function getFlashQueue(limit = 30) {
  * bulanan: 50 soal campuran + typing, tersedia mulai tgl 25.
  */
 export async function getPeriodicSet(mode: "toefl" | "bulanan") {
+  const lang = await getTargetLang();
   if (mode === "toefl") {
     const week = isoWeekKey();
     const [existing] = await db
       .select()
       .from(quizSets)
-      .where(and(eq(quizSets.mode, "toefl"), eq(quizSets.day, week)))
+      .where(and(eq(quizSets.mode, "toefl"), eq(quizSets.day, week), eq(quizSets.lang, lang)))
       .limit(1);
     if (existing) return existing;
 
@@ -563,6 +630,7 @@ export async function getPeriodicSet(mode: "toefl" | "bulanan") {
       .values({
         day: week,
         mode: "toefl",
+        lang,
         title: `TOEFL Test ${week}`,
         questions: JSON.stringify(questions),
         order: JSON.stringify(questions.map((_, i) => i)),
@@ -578,7 +646,7 @@ export async function getPeriodicSet(mode: "toefl" | "bulanan") {
     const [again] = await db
       .select()
       .from(quizSets)
-      .where(and(eq(quizSets.mode, "toefl"), eq(quizSets.day, week)))
+      .where(and(eq(quizSets.mode, "toefl"), eq(quizSets.day, week), eq(quizSets.lang, lang)))
       .limit(1);
     return again ?? null;
   }
@@ -589,7 +657,7 @@ export async function getPeriodicSet(mode: "toefl" | "bulanan") {
   const [existing] = await db
     .select()
     .from(quizSets)
-    .where(and(eq(quizSets.mode, "bulanan"), eq(quizSets.day, month)))
+    .where(and(eq(quizSets.mode, "bulanan"), eq(quizSets.day, month), eq(quizSets.lang, lang)))
     .limit(1);
   if (existing) return existing;
 
@@ -603,6 +671,7 @@ export async function getPeriodicSet(mode: "toefl" | "bulanan") {
     .values({
       day: month,
       mode: "bulanan",
+      lang,
       title: modeTitle("bulanan", month),
       questions: JSON.stringify(questions),
       order: JSON.stringify(questions.map((_, i) => i)),
@@ -618,23 +687,24 @@ export async function getPeriodicSet(mode: "toefl" | "bulanan") {
   const [again] = await db
     .select()
     .from(quizSets)
-    .where(and(eq(quizSets.mode, "bulanan"), eq(quizSets.day, month)))
+    .where(and(eq(quizSets.mode, "bulanan"), eq(quizSets.day, month), eq(quizSets.lang, lang)))
     .limit(1);
   return again ?? null;
 }
 
 /** Badge periodik untuk bel notifikasi: tes minggu/bulan ini sudah selesai? */
 export async function periodicStatus() {
+  const lang = await getTargetLang();
   const [toefl] = await db
     .select({ id: quizSets.id, done: quizSets.done, completed: quizSets.completed })
     .from(quizSets)
-    .where(and(eq(quizSets.mode, "toefl"), eq(quizSets.day, isoWeekKey())))
+    .where(and(eq(quizSets.mode, "toefl"), eq(quizSets.day, isoWeekKey()), eq(quizSets.lang, lang)))
     .limit(1);
   const available = dayOfMonth() >= 25;
   const [bulanan] = await db
     .select({ id: quizSets.id, done: quizSets.done, completed: quizSets.completed })
     .from(quizSets)
-    .where(and(eq(quizSets.mode, "bulanan"), eq(quizSets.day, monthKey())))
+    .where(and(eq(quizSets.mode, "bulanan"), eq(quizSets.day, monthKey()), eq(quizSets.lang, lang)))
     .limit(1);
   return {
     toefl: {
@@ -663,7 +733,7 @@ export async function getMatchRounds(rounds = 5, perRound = 4): Promise<MatchPai
     await db
       .select({ id: items.id, text: items.text, meaningId: items.meaningId })
       .from(items)
-      .where(and(eq(items.status, "learning"), sql`${items.meaningId} IS NOT NULL`))
+      .where(and(eq(items.status, "learning"), eq(items.lang, await getTargetLang()), sql`${items.meaningId} IS NOT NULL`))
       .limit(200)
   ).map((r) => ({ itemId: r.id, word: r.text, meaning: r.meaningId! }));
   if (rows.length < perRound) return [];

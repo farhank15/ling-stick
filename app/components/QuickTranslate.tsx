@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import { Link } from "react-router";
 import { ArrowLeftRight, Languages, Loader2, Volume2, X } from "lucide-react";
+import { ttsLang } from "~/lib/utils.shared";
 
 type UsageResult = { pronunciation: string; examples: { en: string; id: string }[] };
 
@@ -119,10 +120,10 @@ export function QuickTranslate() {
     };
   }, [shown, from, text]);
 
-  const speak = (s: string, lang: string) => {
+  const speak = (s: string, lang?: string) => {
     if (typeof window === "undefined" || !window.speechSynthesis) return;
     const u = new SpeechSynthesisUtterance(s);
-    u.lang = lang;
+    u.lang = lang ?? ttsLang(s);
     window.speechSynthesis.cancel();
     window.speechSynthesis.speak(u);
   };
@@ -198,7 +199,7 @@ export function QuickTranslate() {
                   <span className="text-xs text-zinc-600 dark:text-zinc-400">{pron}</span>
                   <button
                     className="rounded-full p-0.5"
-                    onClick={() => speak(englishSide, "en-US")}
+                    onClick={() => speak(englishSide)}
                     title="Dengarkan"
                     aria-label="Dengarkan"
                   >

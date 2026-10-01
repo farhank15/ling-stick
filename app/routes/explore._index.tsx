@@ -6,6 +6,7 @@ import { requireUser } from "~/lib/auth.server";
 import { db } from "~/lib/db/client.server";
 import { exploreItems, items } from "~/lib/db/schema";
 import { EXPLORE_CATEGORIES } from "~/lib/explore.categories";
+import { getTargetLang } from "~/lib/lang.server";
 import { and, eq, inArray, sql } from "drizzle-orm";
 import { useToast } from "~/components/Toast";
 
@@ -18,6 +19,7 @@ export async function loader({ request }: LoaderFunctionArgs) {
   // "Expression of the day": 3 ekspresi acak dari cache, urutan stabil per hari.
   // Dijalankan paralel dengan query count kategori — hemat 1 round-trip Turso.
   const dayNumber = Math.floor(Date.now() / 86_400_000);
+  const lang = await getTargetLang();
   const [eotdRaw, counts] = await Promise.all([
     db
       .select()
@@ -25,6 +27,7 @@ export async function loader({ request }: LoaderFunctionArgs) {
       .where(
         and(
           eq(exploreItems.hidden, 0),
+          eq(exploreItems.lang, lang),
           // Ekspresi yang udah tersimpan di Library gak muncul lagi.
           sql`NOT EXISTS (SELECT 1 FROM items i WHERE i.text_norm = trim(lower(${exploreItems.text})))`,
         ),
@@ -35,7 +38,7 @@ export async function loader({ request }: LoaderFunctionArgs) {
     db
       .select({ category: exploreItems.category, total: sql<number>`count(*)` })
       .from(exploreItems)
-      .where(eq(exploreItems.hidden, 0))
+      .where(and(eq(exploreItems.hidden, 0), eq(exploreItems.lang, lang)))
       .groupBy(exploreItems.category),
   ]);
 
@@ -45,7 +48,7 @@ export async function loader({ request }: LoaderFunctionArgs) {
     const saved = await db
       .select({ textNorm: items.textNorm })
       .from(items)
-      .where(inArray(items.textNorm, eotdRaw.map((r) => r.text.trim().toLowerCase())));
+      .where(and(eq(items.lang, lang), inArray(items.textNorm, eotdRaw.map((r) => r.text.trim().toLowerCase()))));
     for (const s of saved) savedNorms.add(s.textNorm);
   }
   const eotd = eotdRaw.map((r) => ({
@@ -131,7 +134,7 @@ export default function ExploreIndex() {
   return (
     <div className="space-y-5">
       {/* Kategori — chip scroll sticky, langsung lompat ke kategori mana pun */}
-      <div className="sticky top-[52px] z-10 -mx-4 bg-zinc-50/95 px-4 py-2 backdrop-blur dark:bg-zinc-950/95">
+      <div className="sticky top-13 z-10 -mx-4 bg-zinc-50/95 px-4 py-2 backdrop-blur dark:bg-zinc-950/95">
         <div className="no-scrollbar flex gap-1.5 overflow-x-auto">
           {categories.map((c) => (
             <Link

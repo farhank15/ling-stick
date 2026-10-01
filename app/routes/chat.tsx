@@ -57,15 +57,17 @@ function parseSuggestions(json: string | null): Suggestion[] | undefined {
   }
 }
 
+import { ttsLang } from "~/lib/utils.shared";
+
 export async function loader({ request }: LoaderFunctionArgs) {
   await requireUser(request);
   return null;
 }
 
-function speak(s: string, lang: string) {
+function speak(s: string, lang?: string) {
   if (typeof window === "undefined" || !window.speechSynthesis) return;
   const u = new SpeechSynthesisUtterance(s);
-  u.lang = lang;
+  u.lang = lang ?? ttsLang(s);
   window.speechSynthesis.cancel();
   window.speechSynthesis.speak(u);
 }
@@ -249,9 +251,9 @@ export default function Chat() {
   };
 
   return (
-    <div className="relative flex flex-[1] flex-col space-y-3">
+    <div className="relative flex flex-1 flex-col space-y-3">
       {/* Header kecil: riwayat + obrolan baru — sticky di bawah app header */}
-      <div className="sticky top-[52px] z-10 -mx-4 flex items-center justify-between gap-2 bg-zinc-50/95 px-4 py-1.5 backdrop-blur dark:bg-zinc-950/95">
+      <div className="sticky top-13 z-10 -mx-4 flex items-center justify-between gap-2 bg-zinc-50/95 px-4 py-1.5 backdrop-blur dark:bg-zinc-950/95">
         <div className="relative">
           <button className="chip min-h-9 gap-1.5" onClick={() => setHistOpen((o) => !o)} aria-label="Riwayat obrolan">
             <History className="h-4 w-4" /> Riwayat

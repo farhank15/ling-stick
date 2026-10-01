@@ -7,6 +7,8 @@ type GenExample = { register: string; en: string; id: string };
 type GenSense = { label: string; examples: GenExample[] };
 type GenResult = {
   headword: string;
+  reading?: string; // JA: kana
+  romaji?: string; // JA: hepburn
   type: string;
   register: string;
   meaning_id: string;
@@ -159,6 +161,7 @@ export function Capture() {
           text: t,
           type: result?.type ?? "word",
           register: result?.register ?? "neutral",
+          reading: result?.reading || undefined,
           meaningId: result?.meaning_id ?? manual.meaning,
           notesId: result?.notes_id ?? "",
           source: source.trim(),
@@ -362,6 +365,13 @@ export function Capture() {
                 ) : null}
               </div>
             </div>
+            {/* JA: kana redup di bawah kanji — bantu baca tanpa nimpa */}
+            {result.reading ? (
+              <p className="mt-0.5 text-sm text-zinc-400 dark:text-zinc-500">
+                {result.reading}
+                {result.romaji ? <span className="ml-1.5 text-xs">({result.romaji})</span> : null}
+              </p>
+            ) : null}
             <p className="mt-1 text-sm text-zinc-600 dark:text-zinc-400">{result.meaning_id}</p>
             {result.notes_id ? (
               <p className="mt-2 text-xs italic text-zinc-500">

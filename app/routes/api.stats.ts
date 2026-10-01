@@ -1,8 +1,9 @@
 import type { LoaderFunctionArgs } from "react-router";
-import { desc, eq, gte, sql } from "drizzle-orm";
+import { and, desc, eq, gte, sql } from "drizzle-orm";
 import { requireUser } from "~/lib/auth.server";
 import { db } from "~/lib/db/client.server";
 import { items, llmUsage, quizSets } from "~/lib/db/schema";
+import { getTargetLang } from "~/lib/lang.server";
 import { laraStatus } from "~/lib/lara.server";
 import { todayStr } from "~/lib/utils.shared";
 
@@ -10,10 +11,12 @@ import { todayStr } from "~/lib/utils.shared";
 export async function loader({ request }: LoaderFunctionArgs) {
   await requireUser(request);
 
-  // Ringkasan item per status.
+  // Ringkasan item per status — ter-scope bahasa aktif (statistik ikut mode EN/JP).
+  const lang = await getTargetLang();
   const statusRows = await db
     .select({ status: items.status, total: sql<number>`count(*)` })
     .from(items)
+    .where(eq(items.lang, lang))
     .groupBy(items.status);
   const byStatus = Object.fromEntries(statusRows.map((r) => [r.status, Number(r.total)]));
 
@@ -25,7 +28,7 @@ export async function loader({ request }: LoaderFunctionArgs) {
       total: sql<number>`count(*)`,
     })
     .from(items)
-    .where(gte(items.createdAt, since))
+    .where(and(gte(items.createdAt, since), eq(items.lang, lang)))
     .groupBy(sql`1`);
   const recentMap = Object.fromEntries(recentRows.map((r) => [r.day, Number(r.total)]));
   const last7: { day: string; total: number }[] = [];
@@ -77,7 +80,7 @@ export async function loader({ request }: LoaderFunctionArgs) {
   const knownCount = await db
     .select({ total: sql<number>`count(*)` })
     .from(items)
-    .where(eq(items.status, "known"));
+    .where(and(eq(items.status, "known"), eq(items.lang, lang)));
 
   return {
     byStatus: {
