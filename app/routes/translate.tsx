@@ -312,7 +312,7 @@ export default function Translate() {
               {hasJa(result.translation ?? "") ? (
                 /* JP: kalimat + furigana redup di atas kanji + romaji di-balik icon */
                 <div className="text-xl leading-relaxed font-medium">
-                  <JaText text={result.translation} className="text-xl font-medium" />
+                  <JaText text={result.translation} kanjiClassName="text-teal-700 dark:text-teal-400" className="text-xl font-medium" />
                 </div>
               ) : (
                 <p className="whitespace-pre-wrap text-xl leading-relaxed font-medium">
@@ -408,7 +408,7 @@ export default function Translate() {
                       <li key={i} className="text-sm">
                         {hasJa(ex.en) ? (
                           <span className="block text-zinc-800 dark:text-zinc-200">
-                            <JaText text={ex.en} className="text-sm" />
+                            <JaText text={ex.en} kanjiClassName="text-teal-700 dark:text-teal-400" className="text-sm" />
                           </span>
                         ) : (
                           <span className="block text-zinc-800 dark:text-zinc-200">{ex.en}</span>

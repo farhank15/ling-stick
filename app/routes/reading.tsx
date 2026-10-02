@@ -155,7 +155,8 @@ function ReadingList({
         body: JSON.stringify({ action: "generate", level: level ?? levels[0]! }),
       });
       const data = (await res.json().catch(() => ({}))) as { ok?: boolean; id?: number; error?: string };
-      if (!res.ok || !data.ok) throw new Error(data.error || "Generate gagal");
+      if (!res.ok || data.error) throw new Error(data.error || "Generate gagal");
+      if (data.id == null) throw new Error("Generate gagal");
       // Langsung buka bacaan barunya.
       window.location.href = `/reading?open=${data.id}`;
     } catch (e) {
@@ -174,7 +175,7 @@ function ReadingList({
         body: JSON.stringify({ action: "delete", id: deleteId }),
       });
       const data = (await res.json().catch(() => ({}))) as { ok?: boolean; error?: string };
-      if (!res.ok || !data.ok) throw new Error(data.error || "Gagal menghapus");
+      if (!res.ok || data.error) throw new Error(data.error || "Gagal menghapus");
       toast("Bacaan dihapus");
       setDeleteId(null);
       window.location.reload();
@@ -260,7 +261,7 @@ function ReadingList({
                 </span>
                 <span className="min-w-0 flex-1">
                   {hasJa(r.title) ? (
-                    <JaText text={r.title} className="block font-semibold" />
+                    <JaText text={r.title} kanjiClassName="text-teal-700 dark:text-teal-400" className="block font-semibold" />
                   ) : (
                     <span className="block font-semibold">{r.title}</span>
                   )}
@@ -355,7 +356,7 @@ function ReadingReader({
       <div className="text-center">
         {hasJa(reading.title) ? (
           <h1 className="text-xl font-bold tracking-tight">
-            <JaText text={reading.title} className="text-xl font-bold" />
+            <JaText text={reading.title} kanjiClassName="text-teal-700 dark:text-teal-400" className="text-xl font-bold" />
           </h1>
         ) : (
           <h1 className="text-xl font-bold tracking-tight">{reading.title}</h1>

@@ -183,7 +183,7 @@ export default function BankPage() {
         body: JSON.stringify({ action: "generate", level: genLevel, count: genCount, topic: genTopic }),
       });
       const d = await r.json();
-      if (!r.ok || !d.ok) throw new Error(d.error || "Generate gagal");
+      if (!r.ok || d.error) throw new Error(d.error || "Generate gagal");
       toast(`${d.added} kata baru masuk bank${d.skipped ? ` (${d.skipped} duplikat dilewati)` : ""}`);
       setGenOpen(false);
       refresh(genLevel);
@@ -413,7 +413,7 @@ export default function BankPage() {
                           /* JA: kanji + furigana redup di atas. Tanpa icon toggle di sini
                              — baris list harus bersih; romaji di-toggle di detail. */
                           <span className="block font-semibold">
-                            <JaText text={e.text} reading={e.reading} romajiToggle={false} className="font-semibold" />
+                            <JaText text={e.text} reading={e.reading} romajiToggle={false} kanjiClassName="text-teal-700 dark:text-teal-400" className="font-semibold" />
                           </span>
                         ) : (
                           <span className="block truncate font-semibold">{e.text}</span>
@@ -473,6 +473,7 @@ export default function BankPage() {
                                         text={jpLine}
                                         romaji={romajiLine}
                                         reading={ex.kana ?? undefined}
+                                        kanjiClassName="text-teal-700 dark:text-teal-400"
                                         className="text-sm font-medium"
                                       />
                                     ) : (

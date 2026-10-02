@@ -212,6 +212,7 @@ export default function WritePage() {
             text={target.text}
             reading={target.reading}
             romajiToggle={false}
+            kanjiClassName="text-teal-700 dark:text-teal-400"
             className="text-2xl font-bold"
           />
         </p>

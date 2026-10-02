@@ -161,6 +161,41 @@ export async function action({ request }: ActionFunctionArgs) {
   return Response.json({ error: "action nggak dikenal" }, { status: 400 });
 }
 
+/* ── Generate kanji per N-level — reuse /api/bank (generateBankWords JA) ── */
+function GenKanjiButton({ level }: { level: string }) {
+  const [busy, setBusy] = useState(false);
+  const [msg, setMsg] = useState<string | null>(null);
+  const generate = async () => {
+    if (busy) return;
+    setBusy(true);
+    setMsg(null);
+    try {
+      const r = await fetch("/api/bank", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ action: "generate", level, count: 10 }),
+      });
+      const d = (await r.json().catch(() => ({}))) as { error?: string; added?: number; skipped?: number };
+      if (!r.ok || d.error) throw new Error(d.error || "Generate gagal");
+      setMsg(`${d.added ?? 0} kanji baru level ${level} ditambahkan`);
+      setBusy(false);
+      window.location.reload();
+    } catch (e) {
+      setMsg(e instanceof Error ? e.message : "Generate gagal");
+      setBusy(false);
+    }
+  };
+  return (
+    <span className="ml-auto inline-flex items-center gap-2">
+      {msg ? <span className="text-xs text-zinc-500">{msg}</span> : null}
+      <button onClick={generate} disabled={busy} className="btn-secondary inline-flex items-center gap-1.5 text-xs">
+        {busy ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : null}
+        {busy ? "Generate…" : `Generate ${level} via AI`}
+      </button>
+    </span>
+  );
+}
+
 /* ── Latihan kanji: pilihan ganda (bacaan / arti) ── */
 type Method = "list" | "reading" | "arti";
 type Mcq = { word: AksaraWord; options: string[]; answer: number };
@@ -251,7 +286,7 @@ function KanjiPractice({
             {words.map((w) => (
               <li key={w.id} className="card flex items-center gap-3 p-3.5">
                 <span className="min-w-0 flex-1">
-                  <JaText text={w.text} reading={w.reading} className="text-xl font-semibold" />
+                  <JaText text={w.text} reading={w.reading} kanjiClassName="text-teal-700 dark:text-teal-400" className="text-xl font-semibold" />
                   {showKey && w.reading ? (
                     <span className="mt-0.5 block text-xs text-zinc-400 dark:text-zinc-500">{w.reading}</span>
                   ) : null}
@@ -367,7 +402,7 @@ function KanjiPractice({
           /* Pilih bacaan: kanji TANPA furigana — itu latihannya */
           <p className="text-4xl font-bold">{q.word.text}</p>
         ) : (
-          <JaText text={q.word.text} reading={q.word.reading} className="text-4xl font-bold" />
+          <JaText text={q.word.text} reading={q.word.reading} kanjiClassName="text-teal-700 dark:text-teal-400" className="text-4xl font-bold" />
         )}
         <p className="mt-1 text-xs text-zinc-400">
           {isReading ? "Pilih cara baca yang tepat" : "Pilih arti yang tepat"}
@@ -497,8 +532,8 @@ export default function AksaraPage() {
     setParams(p, { preventScrollReset: true });
   };
 
-  // Filter status client-side (Semua / Belajar / Hafal) — snapshot loader, no refetch.
-  const [statusFilter, setStatusFilter] = useState<"all" | "learning" | "known">("all");
+  // Filter status client-side — default "learning" (Sedang dipelajari), snapshot loader, no refetch.
+  const [statusFilter, setStatusFilter] = useState<"all" | "learning" | "known">("learning");
   const [overrides, setOverrides] = useState<Record<number, string>>({});
 
   const statusOf = (w: AksaraWord) => overrides[w.id] ?? w.status;
@@ -565,13 +600,13 @@ export default function AksaraPage() {
         </div>
       ) : (
         <div className="space-y-4">
-          {/* Level kanji N5–N1 */}
-          <div className="no-scrollbar -mx-4 flex gap-1.5 overflow-x-auto px-4">
+          {/* Level kanji N5–N1 — full width rapi */}
+          <div className="grid w-full grid-cols-5 gap-1.5">
             {LEVELS.map((l) => (
               <button
                 key={l}
                 onClick={() => go({ level: l })}
-                className={`flex shrink-0 items-center gap-1.5 rounded-full border px-3 py-1.5 text-xs font-semibold transition-colors ${
+                className={`flex items-center justify-center gap-1.5 rounded-full border px-3 py-1.5 text-xs font-semibold transition-colors ${
                   level === l
                     ? "border-teal-500 bg-teal-50 text-teal-700 dark:bg-teal-950/60 dark:text-teal-300"
                     : "border-zinc-200 bg-white text-zinc-600 dark:border-zinc-800 dark:bg-zinc-900 dark:text-zinc-300"
@@ -582,19 +617,27 @@ export default function AksaraPage() {
             ))}
           </div>
 
-          {/* Filter status + metode latihan */}
-          <div className="flex gap-1.5">
+          {/* Generate kanji per level N — via Bank Kata (sumber sama: wordbank + LLM) */}
+          <div className="flex w-full items-center gap-2">
+            <p className="text-xs text-zinc-500">
+              Kurang kosakata {level}? Generate langsung ke level ini.
+            </p>
+            <GenKanjiButton level={level} />
+          </div>
+
+          {/* Filter status full-width: Sedang belajar + Hafal di tengah, Semua di kanan */}
+          <div className="grid w-full grid-cols-3 gap-1.5">
             {(
               [
-                ["all", "Semua"],
                 ["learning", "Sedang belajar"],
                 ["known", "Hafal"],
+                ["all", "Semua"],
               ] as const
             ).map(([key, label]) => (
               <button
                 key={key}
                 onClick={() => setStatusFilter(key)}
-                className={`chip justify-center ${statusFilter === key ? "chip-active" : ""}`}
+                className={`chip w-full justify-center ${statusFilter === key ? "chip-active" : ""}`}
               >
                 {label}
               </button>

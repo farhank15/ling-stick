@@ -210,7 +210,7 @@ export function QuickTranslate() {
         <div className="mt-2 rounded-2xl border border-teal-200/70 bg-teal-50/50 p-3 dark:border-teal-900/60 dark:bg-teal-950/30">
           {hasJa(shown) ? (
             <div className="text-sm">
-              <JaText text={shown} className="text-sm" />
+              <JaText text={shown} kanjiClassName="text-teal-700 dark:text-teal-400" className="text-sm" />
             </div>
           ) : (
             <p className="whitespace-pre-wrap text-sm">{shown}</p>

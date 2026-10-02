@@ -386,7 +386,7 @@ export default function Chat() {
                           <div className="flex items-start justify-between gap-2">
                             {hasJa(s.text) ? (
                               <p className="min-w-0 flex-1 font-semibold">
-                                <JaText text={s.text} reading={s.reading} className="font-semibold" />
+                                <JaText text={s.text} reading={s.reading} kanjiClassName="text-teal-700 dark:text-teal-400" className="font-semibold" />
                               </p>
                             ) : (
                               <p className="font-semibold">{s.text}</p>

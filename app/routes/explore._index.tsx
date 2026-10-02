@@ -181,7 +181,7 @@ export default function ExploreIndex() {
                 <div className="flex items-start justify-between gap-2">
                   {ja && hasJa(e.text) ? (
                     <p className="min-w-0 font-semibold">
-                      <JaText text={e.text} reading={e.reading} className="font-semibold" />
+                      <JaText text={e.text} reading={e.reading} kanjiClassName="text-teal-700 dark:text-teal-400" className="font-semibold" />
                     </p>
                   ) : (
                     <p className="font-semibold">{e.text}</p>
@@ -197,7 +197,7 @@ export default function ExploreIndex() {
                   <p className="mt-1.5 text-sm italic">
                     {ja && hasJa(e.exampleEn) ? (
                       /* kana penuh = furigana per kanji */
-                      <JaText text={e.exampleEn} reading={e.exampleKana ?? undefined} className="text-sm italic" />
+                      <JaText text={e.exampleEn} reading={e.exampleKana ?? undefined} kanjiClassName="text-teal-700 dark:text-teal-400" className="text-sm italic" />
                     ) : (
                       <>“{e.exampleEn}”</>
                     )}

@@ -365,6 +365,7 @@ export function Capture() {
                     text={result.headword}
                     reading={result.reading}
                     romaji={result.romaji}
+                    kanjiClassName="text-teal-700 dark:text-teal-400"
                     className="text-lg font-bold"
                   />
                 </h2>
@@ -471,7 +472,7 @@ export function Capture() {
                                 return hasJa(jpLine) ? (
                                   <span className="block text-sm">
                                     <span className="flex items-start gap-1">
-                                      <JaText text={jpLine} romaji={romaji} className="min-w-0 flex-1 text-sm" />
+                                      <JaText text={jpLine} romaji={romaji} kanjiClassName="text-teal-700 dark:text-teal-400" className="min-w-0 flex-1 text-sm" />
                                       <SpeakButton
                                         text={jpLine}
                                         buttonClassName="shrink-0 rounded-lg p-1 text-zinc-400 hover:bg-zinc-100 hover:text-teal-600 dark:hover:bg-zinc-800"

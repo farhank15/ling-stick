@@ -336,7 +336,7 @@ export default function ExploreCategory() {
                 {ja && hasJa(r.text) ? (
                   /* JA: kanji + furigana redup + romaji di-balik icon toggle */
                   <p className="min-w-0 truncate font-semibold">
-                    <JaText text={r.text} reading={r.reading} className="font-semibold" />
+                    <JaText text={r.text} reading={r.reading} kanjiClassName="text-teal-700 dark:text-teal-400" className="font-semibold" />
                   </p>
                 ) : (
                   <p className="truncate font-semibold">{r.text}</p>
@@ -370,7 +370,7 @@ export default function ExploreCategory() {
                       {hasJa(jpLine) ? (
                         <div className="min-w-0 flex-1">
                           {/* kana penuh = sumber furigana per kanji */}
-                          <JaText text={jpLine} romaji={romajiLine} reading={ex.kana ?? undefined} className="text-sm" />
+                          <JaText text={jpLine} romaji={romajiLine} reading={ex.kana ?? undefined} kanjiClassName="text-teal-700 dark:text-teal-400" className="text-sm" />
                         </div>
                       ) : (
                         <p className="flex-1 text-sm">{ex.en}</p>

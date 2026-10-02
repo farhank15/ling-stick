@@ -141,6 +141,15 @@ const TYPE_META: Record<QuestionType, { label: string; icon: typeof Ear }> = {
 };
 
 function normalizeAnswer(s: string): string {
+  // Kana-aware: latin dilowercase + strip simbol, tapi hiragana/katakana/kanji dipertahankan.
+  // matcha: JA typing ("きく") sebelumnya dinormalisasi jadi "" → selalu salah.
+  if (/[\u3040-\u30ff\u4e00-\u9faf]/.test(s)) {
+    // Lipat katakana → hiragana biar キク == きく, buang semua whitespace.
+    const folded = s.replace(/[\u30a1-\u30f6]/g, (ch) =>
+      String.fromCharCode(ch.charCodeAt(0) - 0x60),
+    );
+    return folded.replace(/[\s　]+/g, "").trim();
+  }
   return s.toLowerCase().replace(/[^a-z0-9' ]/g, "").replace(/\s+/g, " ").trim();
 }
 
@@ -1080,7 +1089,7 @@ export default function ReviewPage() {
                   <p className="text-2xl font-bold">{reverse ? c.meaningId ?? "(tanpa arti)" : c.text}</p>
                 ) : (
                   /* JA: kanji + furigana redup di atas, romaji di-balik icon toggle */
-                  <JaText text={c.text} reading={c.reading} className="text-2xl font-bold" />
+                  <JaText text={c.text} reading={c.reading} kanjiClassName="text-teal-700 dark:text-teal-400" className="text-2xl font-bold" />
                 )}
                 {!reverse ? (
                   <button
@@ -1133,7 +1142,7 @@ export default function ReviewPage() {
                           <div className="flex items-start gap-2">
                             {hasJa(jpLine) ? (
                               <div className="flex-1">
-                                <JaText text={jpLine} romaji={romajiLine} className="text-sm font-medium" />
+                                <JaText text={jpLine} romaji={romajiLine} kanjiClassName="text-teal-700 dark:text-teal-400" className="text-sm font-medium" />
                               </div>
                             ) : (
                               <p className="flex-1 whitespace-pre-line text-sm font-medium">{c.firstEn}</p>

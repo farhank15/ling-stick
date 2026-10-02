@@ -220,7 +220,7 @@ export default function ItemDetail() {
                   return (
                     <>
                       <p className="mt-1.5 text-sm">
-                        <JaText text={jpLine} className="text-sm" />
+                        <JaText text={jpLine} kanjiClassName="text-teal-700 dark:text-teal-400" className="text-sm" />
                       </p>
                       {romajiLine ? (
                         <p className="text-xs text-zinc-400 dark:text-zinc-500">{romajiLine}</p>
