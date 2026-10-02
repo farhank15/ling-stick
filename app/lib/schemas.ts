@@ -3,7 +3,8 @@ import { z } from "zod";
 /** Kontrak output LLM — BLUEPRINT §8. Divalidasi Zod; retry 1x jika gagal. */
 
 export const exampleSchema = z.object({
-  register: z.enum(["casual", "neutral", "formal"]),
+  // matcha: strict enum bikin seluruh generate gagal kalau LLM kirim varian lain ("informal"/"slang").
+  register: z.enum(["casual", "neutral", "formal"]).catch("neutral"),
   en: z.string().min(1),
   id: z.string().min(1),
   romaji: z.string().catch("").optional(), // JA: romaji kalimat
@@ -25,17 +26,20 @@ export const generateOutputSchema = z.object({
   headword: z.string().min(1),
   reading: z.string().optional().nullable().default(""), // JA: kana
   romaji: z.string().optional().nullable().default(""), // JA: hepburn
-  type: z.enum([
-    "word",
-    "phrasal_verb",
-    "idiom",
-    "collocation",
-    "slang",
-    "reaction",
-    "sentence",
-    "particle",
-  ]),
-  register: z.enum(["formal", "neutral", "informal", "slang"]),
+  // matcha: strict enum bikin seluruh generate gagal kalau LLM kirim varian tak dikenal.
+  type: z
+    .enum([
+      "word",
+      "phrasal_verb",
+      "idiom",
+      "collocation",
+      "slang",
+      "reaction",
+      "sentence",
+      "particle",
+    ])
+    .catch("word"),
+  register: z.enum(["formal", "neutral", "informal", "slang"]).catch("neutral"),
   meaning_id: z.string().min(1),
   senses: z.array(senseSchema).min(1).max(4),
   unnatural_registers: z.array(z.enum(["casual", "neutral", "formal"])).default([]),
@@ -119,7 +123,9 @@ export const readingOutputSchema = z.object({
     .array(
       z.object({
         text: z.string().min(1),
-        kana: z.string().min(1), // bacaan penuh — sumber furigana per kanji
+        // EN tidak pakai kana ("" dari LLM) — default "" biar validasi tidak gagal.
+        // matcha: kana min(1) bikin generate bacaan EN selalu 502.
+        kana: z.string().catch(""),
         romaji: z.string().catch("").optional(),
         arti: z.string().catch("").optional(), // terjemahan Indonesia kalimat
       }),
