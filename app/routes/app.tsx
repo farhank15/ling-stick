@@ -57,6 +57,9 @@ export default function AppLayout() {
   const notifRef = useRef<HTMLDivElement | null>(null);
 
   const loadNotifs = () => {
+    // Dot bel cuma butuh status (ringan). Riwayat (14 set + order JSON) hanya
+    // diambil saat bel dibuka — dulu ikut tiap pindah page, buang 1 request.
+    // matcha: 2 fetch per pathname change → 1; history lazy di onToggleNotif.
     fetch("/api/quiz?status=1")
       .then((r) => r.json())
       .then((d) => {
@@ -64,10 +67,18 @@ export default function AppLayout() {
         if (d.periodic) setPeriodic(d.periodic);
       })
       .catch(() => {});
-    fetch("/api/quiz?history=1")
-      .then((r) => r.json())
-      .then((d) => setHistory(d.history ?? []))
-      .catch(() => {});
+  };
+
+  const onToggleNotif = () => {
+    setNotifOpen((o) => {
+      if (!o) {
+        fetch("/api/quiz?history=1")
+          .then((r) => r.json())
+          .then((d) => setHistory(d.history ?? []))
+          .catch(() => {});
+      }
+      return !o;
+    });
   };
 
   useEffect(() => {
@@ -104,7 +115,7 @@ export default function AppLayout() {
               className="relative rounded-lg px-2 py-1.5 text-zinc-500 hover:bg-zinc-100 hover:text-zinc-700 dark:text-zinc-400 dark:hover:bg-zinc-900 dark:hover:text-zinc-200"
               title="Notifikasi"
               aria-label="Notifikasi"
-              onClick={() => setNotifOpen((o) => !o)}
+              onClick={onToggleNotif}
             >
               <Bell className="h-5 w-5" strokeWidth={1.75} />
               {/* Dot notif: SATU dot merah — nyala kalau ada latihan harian yang belum
@@ -234,6 +245,13 @@ export default function AppLayout() {
           </Link>
         </div>
       </header>
+      {/* Bar loading global saat pindah page — umpan balik instan biar jeda
+          loader kerasa responsif, bukan macet. */}
+      <div className="h-0.5 w-full bg-transparent">
+        {nav.state !== "idle" ? (
+          <div className="h-0.5 origin-left animate-pulse bg-teal-500 transition-all" style={{ width: "70%" }} />
+        ) : null}
+      </div>
 
       <main className={`flex-1 px-4 pb-36 pt-4 ${nav.state !== "idle" ? "opacity-60 transition-opacity" : ""}`}>
         {/* Halaman dgn header sendiri (mis. detail explore) pasang h1-nya sendiri */}

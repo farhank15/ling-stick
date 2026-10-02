@@ -11,6 +11,7 @@ import {
   Loader2,
   PencilLine,
   RotateCcw,
+  Sparkles,
   Volume2,
   XCircle,
 } from "lucide-react";
@@ -186,13 +187,17 @@ function GenKanjiButton({ level }: { level: string }) {
     }
   };
   return (
-    <span className="ml-auto inline-flex items-center gap-2">
-      {msg ? <span className="text-xs text-zinc-500">{msg}</span> : null}
-      <button onClick={generate} disabled={busy} className="btn-secondary inline-flex items-center gap-1.5 text-xs">
-        {busy ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : null}
-        {busy ? "Generate…" : `Generate ${level} via AI`}
+    <div className="flex flex-col items-center gap-1.5">
+      <button
+        onClick={generate}
+        disabled={busy}
+        className="btn-secondary w-full justify-center gap-1.5 py-2.5 text-sm"
+      >
+        {busy ? <Loader2 className="h-4 w-4 animate-spin" /> : <Sparkles className="h-4 w-4" />}
+        {busy ? "Lagi generate…" : `Generate ${level} via AI`}
       </button>
-    </span>
+      {msg ? <span className="text-xs text-zinc-500 dark:text-zinc-400">{msg}</span> : null}
+    </div>
   );
 }
 
@@ -618,11 +623,16 @@ export default function AksaraPage() {
           </div>
 
           {/* Generate kanji per level N — via Bank Kata (sumber sama: wordbank + LLM) */}
-          <div className="flex w-full items-center gap-2">
-            <p className="text-xs text-zinc-500">
-              Kurang kosakata {level}? Generate langsung ke level ini.
+          <div className="w-full rounded-2xl border border-dashed border-teal-300 bg-teal-50/50 p-4 text-center dark:border-teal-800 dark:bg-teal-950/30">
+            <p className="text-sm font-semibold text-teal-800 dark:text-teal-200">
+              Kurang kosakata {level}?
             </p>
-            <GenKanjiButton level={level} />
+            <p className="mt-0.5 text-xs text-zinc-500 dark:text-zinc-400">
+              Generate langsung ke level ini via AI — otomatis masuk list & latihan.
+            </p>
+            <div className="mt-3">
+              <GenKanjiButton level={level} />
+            </div>
           </div>
 
           {/* Filter status full-width: Sedang belajar + Hafal di tengah, Semua di kanan */}

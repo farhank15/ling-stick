@@ -90,21 +90,29 @@ const ACTION_LABEL: Record<string, string> = {
 
 export async function loader({ request }: { request: Request }) {
   await requireUser(request);
-  // Level label ikut bahasa target: CEFR (EN) atau JLPT (JA).
-  return { lang: await getTargetLang() };
+  // Data awal ikut SSR biar buka Bank langsung tampil (tanpa spinner fetch).
+  // Filter level tetap client-fetch (refresh). Import server di-dynamic (RRv7).
+  // matcha: dulu entries kosong + loading=true → tiap kunjungan ada jeda spinner.
+  const { listBank, getBankStats } = await import("~/lib/bank.server");
+  const [entries, stats] = await Promise.all([
+    listBank({ status: "new" }),
+    getBankStats(),
+  ]);
+  return { lang: await getTargetLang(), entries, stats };
 }
 
 export default function BankPage() {
-  const { lang } = useLoaderData<typeof loader>();
+  const { lang, entries: initialEntries, stats: initialStats } = useLoaderData<typeof loader>();
   // Level ikut bahasa target: CEFR (EN) / JLPT (JA). Default gen: tengah level list.
   const LEVEL_TABS = lang === "ja" ? LEVELS_JA : LEVELS;
-  const [entries, setEntries] = useState<Entry[]>([]);
-  const [stats, setStats] = useState<Stats | null>(null);
+  // State awal dari SSR — halaman langsung tampil isi, tanpa jeda loading.
+  const [entries, setEntries] = useState<Entry[]>(initialEntries);
+  const [stats, setStats] = useState<Stats | null>(initialStats);
   const [level, setLevel] = useState<string>("all");
   const [query, setQuery] = useState("");
   const [expanded, setExpanded] = useState<number | null>(null);
   const [showRomajiId, setShowRomajiId] = useState<number | null>(null); // toggle romaji di detail
-  const [loading, setLoading] = useState(true);
+  const [loading, setLoading] = useState(false);
   const [genOpen, setGenOpen] = useState(false);
   const [genLevel, setGenLevel] = useState<string>(lang === "ja" ? "N4" : "B1");
   const [genCount, setGenCount] = useState(10);
@@ -150,8 +158,9 @@ export default function BankPage() {
   }, []);
 
   useEffect(() => {
-    refresh("all");
-  }, [refresh]);
+    // Data awal sudah dari SSR — tidak perlu fetch ulang saat mount.
+    processedIds.current.clear();
+  }, []);
 
   /** Aksi sukses → entri langsung hilang dari bank (udah pindah ke Library / ditandai tahu).
    * Optimistic: UI update instan, request jalan di belakang — spam-swipe aman. */
