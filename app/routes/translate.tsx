@@ -25,7 +25,8 @@ export async function loader({ request }: { request: Request }) {
   return { lang: await getTargetLang() };
 }
 
-type UsageResult = { pronunciation: string; examples: { en: string; id: string }[] };
+type UsageExample = { en: string; id: string; kana?: string | null; romaji?: string | null };
+type UsageResult = { pronunciation: string; examples: UsageExample[] };
 
 /** Preset gaya bahasa — dialek/level formalitas diteruskan ke LLM. */
 const STYLE_PRESETS: { key: "gaul" | "umum" | "formal"; style: "fluid" | "faithful" | "creative"; tone: string; label: string }[] = [
@@ -169,6 +170,31 @@ export default function Translate() {
       // jadi kalau translate ID→EN kolomnya kebalik).
       const en = from === "en" ? src : (result.translation ?? "").trim();
       const idText = from === "en" ? (result.translation ?? "").trim() : src;
+      // Pasangan terjemahan + SEMUA contoh generate ikut tersimpan (dulu cuma
+      // pasangan). Contoh JA dilipat romaji bank-style ("kalimat\nromaji") biar
+      // baris romaji tetap tampil di Library. Dedup biar gak dobel.
+      // matcha: tabel examples gak punya kolom kana → furigana contoh JA hasil
+      // simpan belum bisa dipertahankan (perlu migrasi skema); romaji aman.
+      const seen = new Set<string>();
+      const pushEx = (enText: string, idLine: string) => {
+        const e = enText.trim().slice(0, 300);
+        const key = e.toLowerCase();
+        if (!e || !idLine.trim() || seen.has(key)) return null;
+        seen.add(key);
+        return { register: "neutral", en: e, idText: idLine.trim().slice(0, 300) };
+      };
+      const examples = [
+        en ? pushEx(en, idText) : null,
+        ...(usage?.examples ?? []).map((u) =>
+          pushEx(
+            u.romaji ? `${u.en.trim()}\n${u.romaji.trim()}` : u.en,
+            u.id,
+          ),
+        ),
+      ].filter((e): e is { register: string; en: string; idText: string } => e !== null);
+      // Headword JA (input JP / hasil JP) dapat reading dari pronunciation
+      // "かな (romaji)" biar di Library ada furigana + toggle romaji.
+      const jaSide = hasJa(src) ? src : hasJa(result.translation ?? "") ? (result.translation ?? "") : "";
       const payload = {
         text: src.slice(0, 120),
         type: "sentence",
@@ -176,7 +202,8 @@ export default function Translate() {
         meaningId: (result.translation ?? "").slice(0, 300),
         source: "Terjemah",
         confidence: "medium",
-        examples: en ? [{ register: "neutral", en: en.slice(0, 300), idText: idText.slice(0, 300) }] : [],
+        reading: jaSide && usage?.pronunciation ? usage.pronunciation : undefined,
+        examples,
       };
       let res = await fetch("/api/items", {
         method: "POST",
@@ -310,9 +337,15 @@ export default function Translate() {
           ) : (
             <>
               {hasJa(result.translation ?? "") ? (
-                /* JP: kalimat + furigana redup di atas kanji + romaji di-balik icon */
+                /* JP: kanji hijau + furigana (kana dari pronunciation "かな (romaji)"
+                   yang dimuat otomatis) + romaji di-balik icon toggle */
                 <div className="text-xl leading-relaxed font-medium">
-                  <JaText text={result.translation} kanjiClassName="text-teal-700 dark:text-teal-400" className="text-xl font-medium" />
+                  <JaText
+                    text={result.translation}
+                    reading={usage?.pronunciation ?? undefined}
+                    kanjiClassName="text-teal-700 dark:text-teal-400"
+                    className="text-xl font-medium"
+                  />
                 </div>
               ) : (
                 <p className="whitespace-pre-wrap text-xl leading-relaxed font-medium">
@@ -407,8 +440,15 @@ export default function Translate() {
                     {usage.examples.map((ex, i) => (
                       <li key={i} className="text-sm">
                         {hasJa(ex.en) ? (
+                          /* JP: format sama — kanji hijau + furigana kana + romaji toggle */
                           <span className="block text-zinc-800 dark:text-zinc-200">
-                            <JaText text={ex.en} kanjiClassName="text-teal-700 dark:text-teal-400" className="text-sm" />
+                            <JaText
+                              text={ex.en}
+                              reading={ex.kana ?? undefined}
+                              romaji={ex.romaji ?? undefined}
+                              kanjiClassName="text-teal-700 dark:text-teal-400"
+                              className="text-sm"
+                            />
                           </span>
                         ) : (
                           <span className="block text-zinc-800 dark:text-zinc-200">{ex.en}</span>
