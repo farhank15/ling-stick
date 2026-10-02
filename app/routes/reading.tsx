@@ -91,6 +91,21 @@ export async function action({ request }: ActionFunctionArgs) {
     return Response.json({ ok: true });
   }
 
+  // Recovery generate: kalau response generate hilang di jalan (timeout koneksi
+  // setelah row kepalang masuk DB), client tanya bacaan terbaru setelah timestamp
+  // ini — kalau ada, langsung dibuka biar gak perlu refresh manual.
+  if (body.action === "latest") {
+    const after = Number(body.id);
+    const level: ReadingLevel = isReadingLevelFor(lang, body.level)
+      ? body.level!
+      : (readingLevels(lang)[0]! as ReadingLevel);
+    const [row] = await listReadings(lang, level);
+    if (row && (!Number.isFinite(after) || row.createdAt > after)) {
+      return Response.json({ ok: true, id: row.id, title: row.title });
+    }
+    return Response.json({ ok: false });
+  }
+
   if (body.action === "generate") {
     const level: ReadingLevel = isReadingLevelFor(lang, body.level)
       ? body.level!
@@ -148,11 +163,13 @@ function ReadingList({
     setBusy(true);
     setGenError(null);
     setGenOk(null);
+    const startedAt = Date.now();
+    const genLevel = level ?? levels[0]!;
     try {
       const res = await fetch("/reading", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ action: "generate", level: level ?? levels[0]! }),
+        body: JSON.stringify({ action: "generate", level: genLevel }),
       });
       const data = (await res.json().catch(() => ({}))) as { ok?: boolean; id?: number; error?: string };
       if (!res.ok || data.error) throw new Error(data.error || "Generate gagal");
@@ -160,6 +177,23 @@ function ReadingList({
       // Langsung buka bacaan barunya.
       window.location.href = `/reading?open=${data.id}`;
     } catch (e) {
+      // Response hilang di jalan tapi row kepalang masuk DB (kasus EN kemarin) →
+      // tanya bacaan terbaru; kalau ada yang lebih baru dari mulai-generate,
+      // itu pasti hasil generate ini — langsung buka, jangan tunjukin error.
+      try {
+        const r = await fetch("/reading", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ action: "latest", level: genLevel, id: startedAt }),
+        });
+        const d = (await r.json().catch(() => ({}))) as { ok?: boolean; id?: number };
+        if (r.ok && d.ok && d.id != null) {
+          window.location.href = `/reading?open=${d.id}`;
+          return;
+        }
+      } catch {
+        /* recovery gagal → tunjukin error asli */
+      }
       setGenError(e instanceof Error ? e.message : "Generate gagal");
       setBusy(false);
     }
@@ -329,6 +363,8 @@ function ReadingReader({
   const [showRomaji, setShowRomaji] = useState(false);
   const [showArti, setShowArti] = useState(false);
   const [showVocab, setShowVocab] = useState(false);
+  // EN gak punya romaji → chip Romaji disembunyikan total (bukan cuma nonaktif).
+  const hasRomaji = reading.body.paragraphs.some((p) => Boolean(p.romaji));
 
   // Hitung sekali per bacaan.
   const counted = useRef<number | null>(null);
@@ -364,15 +400,17 @@ function ReadingReader({
         {reading.titleEn ? <p className="mt-0.5 text-xs text-zinc-400">{reading.titleEn}</p> : null}
       </div>
 
-      {/* Toggle sesi baca: romaji, arti kalimat, arti kata */}
+      {/* Toggle sesi baca: romaji (khusus JA), arti kalimat, arti kata */}
       <div className="flex flex-wrap justify-center gap-1.5">
-        <button
-          className={`chip justify-center ${showRomaji ? "chip-active" : ""}`}
-          onClick={() => setShowRomaji((v) => !v)}
-          title="Tampilkan romaji di bawah tiap paragraf"
-        >
-          <Type className="h-3.5 w-3.5" /> Romaji
-        </button>
+        {hasRomaji ? (
+          <button
+            className={`chip justify-center ${showRomaji ? "chip-active" : ""}`}
+            onClick={() => setShowRomaji((v) => !v)}
+            title="Tampilkan romaji di bawah tiap paragraf"
+          >
+            <Type className="h-3.5 w-3.5" /> Romaji
+          </button>
+        ) : null}
         <button
           className={`chip justify-center ${showArti ? "chip-active" : ""}`}
           onClick={() => setShowArti((v) => !v)}
@@ -404,7 +442,8 @@ function ReadingReader({
                     className="text-lg"
                   />
                 ) : (
-                  <p className="text-lg">{p.text}</p>
+                  /* EN: tipografi readable — ukuran lega, leading longgar, kontras lembut */
+                  <p className="text-[17px] leading-[1.9] text-zinc-800 dark:text-zinc-100">{p.text}</p>
                 )}
                 {showRomaji && p.romaji ? (
                   <p className="mt-1 text-xs text-zinc-400 dark:text-zinc-500">{p.romaji}</p>
@@ -424,17 +463,7 @@ function ReadingReader({
         ))}
       </div>
 
-      {/* Arti kalimat seluruh bacaan — blok sendiri di bawah */}
-      {showArti ? (
-        <div className="card space-y-2">
-          <p className="label">Arti kalimat</p>
-          {reading.body.paragraphs.map((p, i) => (
-            <p key={i} className="text-sm leading-snug text-zinc-600 dark:text-zinc-400">
-              {p.arti ?? "—"}
-            </p>
-          ))}
-        </div>
-      ) : null}
+      {/* matcha: blok "Arti kalimat" duplikat dibuang — arti cukup inline per paragraf biar EN gak baca terjemahan 2x */}
 
       {/* Kosakata penting — hidden by default */}
       {showVocab ? (

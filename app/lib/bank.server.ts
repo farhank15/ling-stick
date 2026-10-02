@@ -88,19 +88,23 @@ export async function listBank(filter: { cefr?: string; status?: string } = {}) 
 }
 
 /** Badge count per level CEFR/JLPT + per status — 1 query GROUP BY. Ter-scope bahasa aktif.
- *  Mode JA kana di-exclude biar badge count = isi list Bank (kana dihitung di menu Aksara). */
+ *  Mode JA kana di-exclude biar badge count = isi list Bank (kana dihitung di menu Aksara).
+ *  byLevel/total = status "new" SAJA (selaras list Bank yang filter status=new);
+ *  row belajar/hafal dipertahankan di DB tapi tidak dihitung sebagai katalog. */
 export async function getBankStats() {
   const lang = await getTargetLang();
-  const statConds = lang === "ja" ? [eq(wordbank.lang, lang), ne(wordbank.type, "kana")] : [eq(wordbank.lang, lang)];
+  const baseConds =
+    lang === "ja" ? [eq(wordbank.lang, lang), ne(wordbank.type, "kana")] : [eq(wordbank.lang, lang)];
+  const statConds = and(...baseConds);
   const perLevel = await db
     .select({ cefr: wordbank.cefr, total: sql<number>`count(*)` })
     .from(wordbank)
-    .where(and(...statConds))
+    .where(and(statConds, eq(wordbank.status, "new")))
     .groupBy(wordbank.cefr);
   const perStatus = await db
     .select({ status: wordbank.status, total: sql<number>`count(*)` })
     .from(wordbank)
-    .where(and(...statConds))
+    .where(statConds)
     .groupBy(wordbank.status);
   const byLevel = Object.fromEntries(perLevel.map((r) => [r.cefr, Number(r.total)])) as Record<string, number>;
   const byStatus = Object.fromEntries(perStatus.map((r) => [r.status, Number(r.total)])) as Record<string, number>;

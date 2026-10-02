@@ -48,6 +48,7 @@ type Entry = {
 };
 type Stats = {
   byLevel: Record<string, number>;
+  byStatus?: Record<string, number>;
   total: number;
 };
 
@@ -124,11 +125,23 @@ export default function BankPage() {
     setLoading(true);
     try {
       const params = new URLSearchParams();
+      // Bank = katalog yang BELUM diproses. Tanpa status=new, entri yang udah
+      // digeser ke belajar/hafal (row wordbank dipertahankan) nongol lagi di sini.
+      // matcha: markKnown/learnBankKeep keep row → list wajib filter status=new.
+      params.set("status", "new");
       if (nextLevel !== "all") params.set("cefr", nextLevel);
       const r = await fetch(`/api/bank?${params.toString()}`);
       const d = await r.json();
       setEntries(d.entries ?? []);
-      setStats(d.stats ? { byLevel: d.stats.byLevel ?? {}, total: d.stats.total ?? 0 } : null);
+      setStats(
+        d.stats
+          ? {
+              byLevel: d.stats.byLevel ?? {},
+              byStatus: d.stats.byStatus ?? {},
+              total: d.stats.total ?? 0,
+            }
+          : null,
+      );
     } catch {
       /* biarkan data lama */
     } finally {
@@ -147,6 +160,7 @@ export default function BankPage() {
     processedIds.current.add(id);
     const done = entries.find((e) => e.id === id);
     setEntries((list) => list.filter((e) => e.id !== id));
+    // stats = katalog "new" saja → geser satu kartu = total & badge level turun 1.
     setStats((s) =>
       s
         ? {
