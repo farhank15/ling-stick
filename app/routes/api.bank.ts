@@ -7,20 +7,9 @@ import {
   markKnown,
   startLearning,
   isCefr,
-  isLevel,
   type Cefr,
 } from "~/lib/bank.server";
 import { getTargetLang } from "~/lib/lang.server";
-
-/**
- * Level yang valid sesuai bahasa aktif: CEFR (EN) / JLPT (JA).
- * Dulu pakai isCefr doang — "N5" gak dikenal → semua generate JA ke-catat "B1".
- */
-async function parseLevel(raw: string | null | undefined): Promise<Cefr> {
-  const lang = await getTargetLang();
-  if (lang === "ja") return raw && /^N[1-5]$/.test(raw) ? (raw as Cefr) : "N4";
-  return isCefr(raw) ? raw : "B1";
-}
 
 /**
  * GET /api/bank              → semua entri + stat
@@ -48,8 +37,21 @@ export async function loader({ request }: LoaderFunctionArgs) {
   return Response.json({ entries, stats });
 }
 
+/**
+ * Level yang valid sesuai bahasa aktif: CEFR (EN) / JLPT (JA).
+ * Dulu pakai isCefr doang — "N5" gak dikenal → semua generate JA ke-catat "B1".
+ * DIDEFINISI DI DALAM action: kalau module-level, import server ikut ke bundle
+ * client (RRv7 code-splitting cuma strip kode yang direferensikan loader/action).
+ */
 export async function action({ request }: ActionFunctionArgs) {
   await requireUser(request);
+
+  const parseLevel = async (raw: string | null | undefined): Promise<Cefr> => {
+    const lang = await getTargetLang();
+    if (lang === "ja") return raw && /^N[1-5]$/.test(raw) ? (raw as Cefr) : "N4";
+    return isCefr(raw) ? raw : "B1";
+  };
+
   const body = (await request.json().catch(() => ({}))) as {
     id?: number;
     action?: string;

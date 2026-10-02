@@ -1,7 +1,7 @@
 import type { LoaderFunctionArgs, MetaFunction } from "react-router";
 import { Link, useLoaderData } from "react-router";
 import { useCallback, useEffect, useRef, useState } from "react";
-import { ArrowRight, Eraser, Eye, EyeOff, PencilLine } from "lucide-react";
+import { ArrowRight, Eraser, Eye, EyeOff, PencilLine, Type } from "lucide-react";
 import { requireUser } from "~/lib/auth.server";
 import { db } from "~/lib/db/client.server";
 import { cards, items, wordbank } from "~/lib/db/schema";
@@ -153,20 +153,21 @@ export default function WritePage() {
         </span>
         <span className="flex gap-1">
           <button
-            className="btn-ghost text-xs"
+            className="btn-ghost min-h-8 min-w-8 p-1.5"
             onClick={() => setShowGuide((v) => !v)}
-            title={showGuide ? "Sembunyikan panduan" : "Tampilkan panduan samar"}
+            title={showGuide ? "Panduan nyala — klik buat matiin" : "Panduan mati — klik buat nyalain"}
+            aria-label={showGuide ? "Matikan panduan samar" : "Nyalakan panduan samar"}
           >
-            {showGuide ? <Eye className="h-3.5 w-3.5" /> : <EyeOff className="h-3.5 w-3.5" />}
-            {showGuide ? "Panduan nyala" : "Panduan mati"}
+            {showGuide ? <Eye className="h-4 w-4" /> : <EyeOff className="h-4 w-4" />}
           </button>
           {lang === "ja" ? (
             <button
-              className="btn-ghost text-xs"
+              className="btn-ghost min-h-8 min-w-8 p-1.5"
               onClick={() => setShowRomaji((v) => !v)}
-              title={showRomaji ? "Sembunyikan romaji" : "Tampilkan romaji (buat yang gagap)"}
+              title={showRomaji ? "Romaji nyala — klik buat matiin" : "Tampilkan romaji (buat yang gagap)"}
+              aria-label={showRomaji ? "Matikan romaji" : "Nyalakan romaji"}
             >
-              {showRomaji ? "Romaji nyala" : "Romaji mati"}
+              <Type className={`h-4 w-4 ${showRomaji ? "text-teal-600 dark:text-teal-400" : ""}`} />
             </button>
           ) : null}
         </span>

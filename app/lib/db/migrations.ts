@@ -224,6 +224,8 @@ const TOLERANT_MIGRATIONS: string[] = [
   `ALTER TABLE wordbank ADD COLUMN reading TEXT`,
   // Mode Jepang: cara baca kana (+ romaji) untuk kata kanji — tampil redup di kartu.
   `ALTER TABLE items ADD COLUMN reading TEXT`,
+  // Mode Jepang: reading kana (romaji) buat kartu explore — furigana & romaji di UI.
+  `ALTER TABLE explore_items ADD COLUMN reading TEXT`,
 ];
 
 /** Seed awal Bank Kata — jalan sekali (skip kalau bank sudah berisi). */
@@ -294,6 +296,16 @@ async function seedWordbank(client: Client): Promise<void> {
   await client.execute(
     "DELETE FROM wordbank WHERE lang = 'ja' AND source LIKE 'bank%' AND reading IS NULL AND cefr = 'B1'",
   );
+  // Kartu explore EN yang ke-generate pas mode JA (sebelum prompt lang-aware):
+  // teks tanpa kana/kanji di lang='ja' pasti salah scope → dibuang biar bisa
+  // di-generate ulang sebagai konten Jepang beneran.
+  const exploreJa = await client.execute("SELECT id, text FROM explore_items WHERE lang = 'ja'");
+  for (const r of exploreJa.rows) {
+    const text = String(r.text ?? "");
+    if (!/[\u3040-\u30ff\u4e00-\u9faf]/.test(text)) {
+      await client.execute({ sql: "DELETE FROM explore_items WHERE id = ?", args: [Number(r.id)] });
+    }
+  }
   // Seed jalan kalau BELUM ADA row seed JA (row generate/import user gak nimblokir).
   const cntJa = await client.execute(
     "SELECT COUNT(*) AS c FROM wordbank WHERE lang = 'ja' AND source LIKE 'seed%'",

@@ -1,6 +1,6 @@
 import type { MetaFunction } from "react-router";
 import { useEffect, useRef, useState } from "react";
-import { useSearchParams } from "react-router";
+import { useLoaderData, useSearchParams } from "react-router";
 import {
   ArrowLeftRight,
   Bookmark,
@@ -10,11 +10,19 @@ import {
   Volume2,
   X,
 } from "lucide-react";
+import { requireUser } from "~/lib/auth.server";
+import { getTargetLang } from "~/lib/lang.server";
+import { JaText, hasJa } from "~/components/JaText";
 import { useToast } from "~/components/Toast";
 import { ttsLang } from "~/lib/utils.shared";
 
 export const meta: MetaFunction = () => [{ title: "Terjemah — LingStick" }];
 export const handle = { title: "Terjemah" };
+
+export async function loader({ request }: { request: Request }) {
+  await requireUser(request);
+  return { lang: await getTargetLang() };
+}
 
 type UsageResult = { pronunciation: string; examples: { en: string; id: string }[] };
 
@@ -27,10 +35,17 @@ const STYLE_PRESETS: { key: "gaul" | "umum" | "formal"; style: "fluid" | "faithf
 
 export default function Translate() {
   const toast = useToast();
+  const { lang } = useLoaderData<typeof loader>();
+  const ja = lang === "ja";
   const [params] = useSearchParams();
 
   const [text, setText] = useState(() => (params.get("text") ?? "").slice(0, 2000));
-  const [from, setFrom] = useState<"en" | "id">(() => (params.get("from") === "id" ? "id" : "en"));
+  const [from, setFrom] = useState<"en" | "id" | "ja">(() => {
+    const p = params.get("from");
+    if (p === "id") return "id";
+    if (p === "ja" && ja) return "ja";
+    return ja ? "ja" : "en";
+  });
   const [preset, setPreset] = useState<"gaul" | "umum" | "formal">("umum");
   const [result, setResult] = useState<{ translation: string; via?: string; cached?: boolean; note?: string } | null>(null);
   const [usage, setUsage] = useState<UsageResult | null>(null);
@@ -59,7 +74,7 @@ export default function Translate() {
           body: JSON.stringify({
             text: t.slice(0, 2000),
             from,
-            to: from === "en" ? "id" : "en",
+            to: from === "ja" ? "id" : from === "en" ? "id" : ja ? "ja" : "en",
             style: active.style,
             tone: active.tone || undefined,
             prefer: "lara",
@@ -84,7 +99,7 @@ export default function Translate() {
     return () => clearTimeout(timer);
   }, [text, from, preset, toast, active.style, active.tone]);
 
-  const swapTo = (target: "en" | "id") => {
+  const swapTo = (target: "en" | "id" | "ja") => {
     if (target === from) return;
     const prev = result?.translation?.trim();
     setFrom(target);
@@ -105,9 +120,9 @@ export default function Translate() {
   const usageKey = useRef("");
   useEffect(() => {
     if (!result) return;
-    const english = (from === "en" ? text : result.translation ?? "").trim();
-    if (!english) return;
-    const key = `${from}:${english.slice(0, 300)}`;
+    const foreign = (from === "id" ? (result.translation ?? "") : text).trim();
+    if (!foreign) return;
+    const key = `${from}:${foreign.slice(0, 300)}`;
     if (usageKey.current === key) return;
     usageKey.current = key;
     let alive = true;
@@ -118,8 +133,8 @@ export default function Translate() {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({
-            text: english.slice(0, 300),
-            direction: from === "en" ? "en2id" : "id2en",
+            text: foreign.slice(0, 300),
+            direction: from === "ja" ? "ja2id" : from === "en" ? "en2id" : ja ? "id2ja" : "id2en",
           }),
         });
         const data = await res.json();
@@ -194,23 +209,32 @@ export default function Translate() {
     }
   };
 
-  // Teks di sisi Inggris: input (EN→ID) atau hasil terjemahan (ID→EN).
-  const englishSide = from === "en" ? text.trim() : result?.translation?.trim() ?? "";
+  // Teks di sisi bahasa target (EN/JP): input atau hasil terjemahan.
+  const foreignSide = from === "id" ? result?.translation?.trim() ?? "" : text.trim();
 
   return (
     <div className="space-y-3">
       {/* Input */}
       <div className="card space-y-3">
         <div className="flex items-center gap-1.5">
-          <button
-            className={`chip flex-1 justify-center ${from === "en" ? "chip-active" : ""}`}
-            onClick={() => swapTo("en")}
-          >
-            EN
-          </button>
+          {ja ? (
+            <button
+              className={`chip flex-1 justify-center ${from === "ja" ? "chip-active" : ""}`}
+              onClick={() => swapTo("ja")}
+            >
+              日本語
+            </button>
+          ) : (
+            <button
+              className={`chip flex-1 justify-center ${from === "en" ? "chip-active" : ""}`}
+              onClick={() => swapTo("en")}
+            >
+              EN
+            </button>
+          )}
           <button
             className="btn-ghost shrink-0 rounded-full px-2"
-            onClick={() => swapTo(from === "en" ? "id" : "en")}
+            onClick={() => swapTo(from === "id" ? (ja ? "ja" : "en") : "id")}
             title="Balik arah — terjemahan ikut pindah ke input"
             aria-label="Balik arah"
           >
@@ -230,9 +254,11 @@ export default function Translate() {
             maxLength={2000}
             onChange={(e) => setText(e.target.value)}
             placeholder={
-              from === "en"
-                ? "Tulis bahasa Inggris… berhenti ngetik = auto translate"
-                : "Tulis bahasa Indonesia… berhenti ngetik = auto translate"
+              from === "ja"
+                ? "Tulis bahasa Jepang… berhenti ngetik = auto translate"
+                : from === "en"
+                  ? "Tulis bahasa Inggris… berhenti ngetik = auto translate"
+                  : "Tulis bahasa Indonesia… berhenti ngetik = auto translate"
             }
           />
           {text ? (
@@ -282,11 +308,28 @@ export default function Translate() {
             </p>
           ) : (
             <>
-              <p className="whitespace-pre-wrap text-xl leading-relaxed font-medium">
-                {result.translation}
-              </p>
-              {/* Mesin penerjemah: Lara (hemat kuota AI) atau fallback AI */}
+              {hasJa(result.translation ?? "") ? (
+                /* JP: kalimat + furigana redup di atas kanji + romaji di-balik icon */
+                <div className="text-xl leading-relaxed font-medium">
+                  <JaText text={result.translation} className="text-xl font-medium" />
+                </div>
+              ) : (
+                <p className="whitespace-pre-wrap text-xl leading-relaxed font-medium">
+                  {result.translation}
+                </p>
+              )}
               <div className="mt-1.5 flex items-center gap-1.5">
+                {hasJa(result.translation ?? "") ? (
+                  <button
+                    className="rounded-lg p-1 text-teal-600 hover:bg-teal-50 dark:text-teal-400 dark:hover:bg-teal-950"
+                    onClick={() => speak(result.translation)}
+                    title="Dengarkan"
+                    aria-label="Dengarkan"
+                  >
+                    <Volume2 className="h-4 w-4" />
+                  </button>
+                ) : null}
+                {/* Mesin penerjemah: Lara (hemat kuota AI) atau fallback AI */}
                 <span
                   className={`badge text-[10px] ${
                     result.via === "lara"
@@ -302,8 +345,8 @@ export default function Translate() {
                   <span className="text-[10px] text-zinc-400">Lara gagal: {result.note}</span>
                 ) : null}
               </div>
-              {/* Cara baca — langsung tampil otomatis untuk teks Inggris */}
-              {englishSide ? (
+              {/* Cara baca — auto-tampil buat teks bahasa target (EN/JP) */}
+              {foreignSide && !hasJa(foreignSide) ? (
                 <div className="mt-2 flex min-h-6 items-center gap-1.5">
                   {usage ? (
                     <>
@@ -312,7 +355,7 @@ export default function Translate() {
                       </span>
                       <button
                         className="rounded-full p-0.5"
-                        onClick={() => speak(englishSide)}
+                        onClick={() => speak(foreignSide)}
                         title="Dengarkan"
                         aria-label="Dengarkan"
                       >
@@ -369,7 +412,13 @@ export default function Translate() {
                   <ul className="space-y-2">
                     {usage.examples.map((ex, i) => (
                       <li key={i} className="text-sm">
-                        <span className="block text-zinc-800 dark:text-zinc-200">{ex.en}</span>
+                        {hasJa(ex.en) ? (
+                          <span className="block text-zinc-800 dark:text-zinc-200">
+                            <JaText text={ex.en} className="text-sm" />
+                          </span>
+                        ) : (
+                          <span className="block text-zinc-800 dark:text-zinc-200">{ex.en}</span>
+                        )}
                         <span className="block text-xs text-zinc-500 dark:text-zinc-400">{ex.id}</span>
                       </li>
                     ))}

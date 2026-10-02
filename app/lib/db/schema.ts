@@ -126,6 +126,7 @@ export const exploreItems = sqliteTable(
     exampleEn: text("example_en"),
     exampleId: text("example_id"),
     examplesJson: text("examples_json"), // JSON {en,id}[] — 3–5 contoh kalimat
+    reading: text("reading"), // JA: kana (romaji) — furigana & romaji di UI
     hidden: integer("hidden").notNull().default(0),
     lang: text("lang").notNull().default("en"), // en | ja
     createdAt: integer("created_at").notNull(),

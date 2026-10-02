@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from "react";
-import { Link } from "react-router";
+import { Link, useRouteLoaderData } from "react-router";
 import { ArrowLeftRight, Languages, Loader2, Volume2, X } from "lucide-react";
+import { JaText, hasJa } from "~/components/JaText";
 import { ttsLang } from "~/lib/utils.shared";
 
 type UsageResult = { pronunciation: string; examples: { en: string; id: string }[] };
@@ -10,8 +11,11 @@ type UsageResult = { pronunciation: string; examples: { en: string; id: string }
  * cara baca auto-tampil + tombol suara untuk hasil EN, link ke halaman Terjemah bawa teks.
  */
 export function QuickTranslate() {
+  // Bahasa target dari loader layout (routes/app) — mode JP: arah ja↔id.
+  const appData = useRouteLoaderData("routes/app") as { lang?: string } | undefined;
+  const ja = appData?.lang === "ja";
   const [text, setText] = useState("");
-  const [from, setFrom] = useState<"en" | "id">("en");
+  const [from, setFrom] = useState<"en" | "id" | "ja">(ja ? "ja" : "en");
   const [result, setResult] = useState<{ translation: string } | null>(null);
   const [pron, setPron] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
@@ -41,7 +45,7 @@ export function QuickTranslate() {
           body: JSON.stringify({
             text: t.slice(0, 1000),
             from,
-            to: from === "en" ? "id" : "en",
+            to: from === "ja" ? "id" : from === "en" ? "id" : ja ? "ja" : "en",
             style: "fluid",
             prefer: "llm",
           }),
@@ -71,7 +75,7 @@ export function QuickTranslate() {
 
   const swap = () => {
     const prev = result?.translation?.trim();
-    setFrom(from === "en" ? "id" : "en");
+    setFrom(from === "id" ? (ja ? "ja" : "en") : "id");
     setText(prev && prev.length <= 1000 ? prev : "");
     setResult(null);
     setPron(null);
@@ -89,12 +93,12 @@ export function QuickTranslate() {
 
   // Cara baca dimuat OTOMATIS untuk teks di sisi Inggris — tanpa klik.
   // Dipicu saat hasil terjemahan muncul supaya tidak fetch di tiap ketikan.
-  const englishSide = from === "en" ? text.trim() : shown?.trim() ?? "";
+  const foreignSide = from === "id" ? shown?.trim() ?? "" : text.trim();
   useEffect(() => {
     if (!shown) return;
-    const english = (from === "en" ? text : shown).trim();
-    if (!english) return;
-    const key = `${from}:${english.slice(0, 300)}`;
+    const foreign = (from === "id" ? shown : text).trim();
+    if (!foreign) return;
+    const key = `${from}:${foreign.slice(0, 300)}`;
     if (pronKey.current === key) return;
     pronKey.current = key;
     setPron(null);
@@ -105,8 +109,8 @@ export function QuickTranslate() {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({
-            text: english.slice(0, 300),
-            direction: from === "en" ? "en2id" : "id2en",
+            text: foreign.slice(0, 300),
+            direction: from === "ja" ? "ja2id" : from === "en" ? "en2id" : ja ? "id2ja" : "id2en",
           }),
         });
         const data = await res.json();
@@ -135,13 +139,23 @@ export function QuickTranslate() {
           <Languages className="h-3.5 w-3.5" /> Terjemah cepat
         </h2>
         <div className="flex items-center gap-1">
-          <button
-            type="button"
-            onClick={() => from !== "en" && swap()}
-            className={`chip min-h-7 px-2.5 text-[11px] ${from === "en" ? "chip-active" : ""}`}
-          >
-            EN
-          </button>
+          {ja ? (
+            <button
+              type="button"
+              onClick={() => from !== "ja" && swap()}
+              className={`chip min-h-7 px-2.5 text-[11px] ${from === "ja" ? "chip-active" : ""}`}
+            >
+              日本語
+            </button>
+          ) : (
+            <button
+              type="button"
+              onClick={() => from !== "en" && swap()}
+              className={`chip min-h-7 px-2.5 text-[11px] ${from === "en" ? "chip-active" : ""}`}
+            >
+              EN
+            </button>
+          )}
           <button
             type="button"
             onClick={swap}
@@ -164,9 +178,11 @@ export function QuickTranslate() {
         <textarea
           className="input-area min-h-20 pr-10"
           placeholder={
-            from === "en"
-              ? "Tulis bahasa Inggris… berhenti ngetik = auto translate"
-              : "Tulis bahasa Indonesia… berhenti ngetik = auto translate"
+            from === "ja"
+              ? "Tulis bahasa Jepang… berhenti ngetik = auto translate"
+              : from === "en"
+                ? "Tulis bahasa Inggris… berhenti ngetik = auto translate"
+                : "Tulis bahasa Indonesia… berhenti ngetik = auto translate"
           }
           value={text}
           maxLength={1000}
@@ -191,15 +207,21 @@ export function QuickTranslate() {
       {error ? <p className="mt-2 text-xs text-red-500">{error}</p> : null}
       {shown ? (
         <div className="mt-2 rounded-2xl border border-teal-200/70 bg-teal-50/50 p-3 dark:border-teal-900/60 dark:bg-teal-950/30">
-          <p className="whitespace-pre-wrap text-sm">{shown}</p>
-          {englishSide ? (
+          {hasJa(shown) ? (
+            <div className="text-sm">
+              <JaText text={shown} className="text-sm" />
+            </div>
+          ) : (
+            <p className="whitespace-pre-wrap text-sm">{shown}</p>
+          )}
+          {foreignSide && !hasJa(foreignSide) ? (
             <div className="mt-1 flex min-h-5 items-center gap-1.5">
               {pron ? (
                 <>
                   <span className="text-xs text-zinc-600 dark:text-zinc-400">{pron}</span>
                   <button
                     className="rounded-full p-0.5"
-                    onClick={() => speak(englishSide)}
+                    onClick={() => speak(foreignSide)}
                     title="Dengarkan"
                     aria-label="Dengarkan"
                   >
@@ -210,6 +232,14 @@ export function QuickTranslate() {
                 <span className="text-[11px] text-zinc-400">memuat cara baca…</span>
               )}
             </div>
+          ) : null}
+          {hasJa(shown) ? (
+            <button
+              className="mt-1 inline-flex items-center gap-1 text-[11px] text-zinc-500 hover:text-teal-600 dark:text-zinc-400"
+              onClick={() => speak(shown)}
+            >
+              <Volume2 className="h-3.5 w-3.5" /> Dengarkan
+            </button>
           ) : null}
         </div>
       ) : null}

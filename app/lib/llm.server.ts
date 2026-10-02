@@ -9,6 +9,7 @@ import {
   CHECK_SENTENCE_SYSTEM,
   EXTRACT_SYSTEM,
   EXPLORE_CATEGORIES,
+  EXPLORE_CATEGORIES_JA,
   GENERATE_SYSTEM,
   GENERATE_SYSTEM_JA,
   exploreSystem,
@@ -38,7 +39,8 @@ import { hashKey, normalizeText, todayStr } from "./utils.shared";
  * - Rate-limit harian via llm_usage
  */
 
-const TIMEOUT_MS = 30_000;
+// 60s: generate batch (Explore JA / Bank) keluar JSON panjang — 30s sering kepotong.
+const TIMEOUT_MS = 60_000;
 
 type Provider = {
   name: string;
@@ -251,17 +253,20 @@ export async function llmExplore(
   existing: string[] = [],
   variant = 0,
 ): Promise<{ data: ExploreOutput; cached: boolean; provider: string }> {
-  const cat = EXPLORE_CATEGORIES.find((c) => c.slug === categorySlug);
+  const lang = await getTargetLang();
+  // Mode JA pakai kategori & prompt Jepang — frasa JP beneran, bukan terjemahan EN.
+  const pool = lang === "ja" ? EXPLORE_CATEGORIES_JA : EXPLORE_CATEGORIES;
+  const cat = pool.find((c) => c.slug === categorySlug);
   if (!cat) throw new LlmError("Kategori tidak dikenal");
   const avoid = existing.length
     ? ` Do NOT repeat or paraphrase these existing expressions: ${existing.slice(0, 50).join("; ")}. Give completely fresh ones.`
     : "";
   const user = `Category: "${cat.label}". Seed examples (reference only, extend don't copy): ${cat.seed.join(", ")}.${avoid}`;
   return chatJson(
-    exploreSystem(cat.label),
+    exploreSystem(cat.label, lang),
     user,
     exploreOutputSchema,
-    "explore:v2",
+    lang === "ja" ? "explore:ja:v1" : "explore:v2",
     `${categorySlug}|v${variant}`,
   );
 }
@@ -363,7 +368,17 @@ export async function llmTranslate(
     return { translation: JSON.parse(hit.response).translation, cached: true };
   }
 
-  const dir = from.startsWith("en") ? "ke Indonesia" : "ke Inggris";
+  // Arah terjemahan umum — mode JA: ja↔id juga (dulu cuma en↔id, makanya
+  // translate di mode Jepang masih ke EN).
+  const dirMap: Record<string, string> = {
+    "en-US>id-ID": "into Indonesian",
+    "id-ID>en-US": "into English",
+    "ja-JP>id-ID": "into Indonesian",
+    "id-ID>ja-JP": "into natural Japanese (kanji where appropriate)",
+    "en-US>ja-JP": "into natural Japanese (kanji where appropriate)",
+    "ja-JP>en-US": "into English",
+  };
+  const dir = dirMap[`${from}>${to}`] ?? `from ${from} ${to}`;
   const styleNote =
     style === "faithful"
       ? "Translate literally, preserving structure."

@@ -322,6 +322,76 @@ async function insertGeneratedJa(
   return { added, skipped };
 }
 
+/**
+ * Tandai entri bank "mau dipelajari" TANPA menghapus row-nya (dipakai halaman
+ * Aksara/kanji: daftar tetap lengkap, status berubah jadi filter belajar/hafal).
+ * startLearning (Bank) vs ini: Bank menghapus entri yang sudah diproses.
+ */
+export async function learnBankKeep(bankId: number): Promise<number | null> {
+  const [entry] = await db.select().from(wordbank).where(eq(wordbank.id, bankId)).limit(1);
+  if (!entry) return null;
+  let itemId = entry.itemId;
+  const norm = normalizeText(entry.text);
+  if (!itemId) {
+    const [existing] = await db
+      .select({ id: items.id })
+      .from(items)
+      .where(and(eq(items.textNorm, norm), eq(items.lang, entry.lang)))
+      .limit(1);
+    if (existing) {
+      itemId = existing.id;
+    } else {
+      const [created] = await db
+        .insert(items)
+        .values({
+          text: entry.text,
+          textNorm: norm,
+          type: entry.type,
+          lang: entry.lang,
+          reading: entry.reading ?? null,
+          register: entry.register,
+          meaningId: entry.meaningId,
+          notesId: entry.useWhenId ? `Dipakai saat: ${entry.useWhenId}` : null,
+          source: `Aksara (${entry.cefr})`,
+          status: "learning",
+          createdAt: Date.now(),
+        })
+        .onConflictDoNothing()
+        .returning();
+      itemId = created?.id ?? null;
+    }
+    if (itemId) {
+      await db.update(wordbank).set({ itemId, status: "learning" }).where(eq(wordbank.id, bankId));
+      const [card] = await db.select().from(cards).where(eq(cards.itemId, itemId)).limit(1);
+      if (!card) {
+        await db.insert(cards).values({ itemId, due: Date.now(), reps: 0, lapses: 0, state: 0, learningSteps: 0 });
+      }
+      // Contoh dari bank ikut dibuatin sekali.
+      const exs = (JSON.parse(entry.examplesJson || "[]") as BankExample[]).slice(0, 3);
+      if (exs.length) {
+        await db
+          .insert(examples)
+          .values(exs.map((e) => ({ itemId: itemId!, register: "neutral", en: e.en, idText: e.id })))
+          .onConflictDoNothing();
+      }
+    }
+  } else {
+    await db.update(items).set({ status: "learning" }).where(eq(items.id, itemId));
+    await db.update(wordbank).set({ status: "learning" }).where(eq(wordbank.id, bankId));
+  }
+  return itemId;
+}
+
+/** Tandai entri bank "sudah hafal" (status saja — row tetap ada buat filter). */
+export async function markBankKnownKeep(bankId: number): Promise<void> {
+  const [entry] = await db.select().from(wordbank).where(eq(wordbank.id, bankId)).limit(1);
+  if (!entry) return;
+  if (entry.itemId) {
+    await db.update(items).set({ status: "known" }).where(eq(items.id, entry.itemId));
+  }
+  await db.update(wordbank).set({ status: "known" }).where(eq(wordbank.id, bankId));
+}
+
 /** Sinkronkan status bank dari status item Library (mis. item di-known dari quiz). */
 export async function syncBankFromItems() {
   const rows = await db.select().from(wordbank).where(eq(wordbank.status, "learning"));

@@ -1,3 +1,40 @@
+/**
+ * Kategori explore khusus bahasa Jepang (mode JA) — frasa & ungkapan JEPANG,
+ * bukan terjemahan idiom Inggris. Seed = contoh referensi buat LLM.
+ */
+export const EXPLORE_CATEGORIES_JA: { slug: string; label: string; seed: string[] }[] = [
+  {
+    slug: "reaksi-jp",
+    label: "Reaksi spontan",
+    seed: ["やばい", "うそでしょ", "すごい", "えー", "マジで", "びっくりした"],
+  },
+  {
+    slug: "semangat-jp",
+    label: "Ngedoain / semangatin",
+    seed: ["がんばって", "その調子", "大丈夫だよ", "きっとできる"],
+  },
+  {
+    slug: "setuju-jp",
+    label: "Setuju & nggak setuju",
+    seed: ["そうだね", "たしかに", "いいね", "ちょっと難しいな", "無理かも"],
+  },
+  {
+    slug: "obrolan-santai-jp",
+    label: "Obrolan santai",
+    seed: ["元気？", "ひま？", "あとでね", "ありがと", "また今度"],
+  },
+  {
+    slug: "kantor-jp",
+    label: "Di kantor",
+    seed: ["お疲れさまです", "確認します", "少しお時間いいですか", "承知しました"],
+  },
+  {
+    slug: "perasaan-jp",
+    label: "Perasaan sehari-hari",
+    seed: ["疲れた", "うれしい", "寂しい", "イライラする", "眠い"],
+  },
+];
+
 /** Kategori explore — BLUEPRINT §8 seed. */
 export const EXPLORE_CATEGORIES: { slug: string; label: string; seed: string[] }[] = [
   {

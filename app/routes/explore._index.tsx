@@ -5,8 +5,9 @@ import { useState } from "react";
 import { requireUser } from "~/lib/auth.server";
 import { db } from "~/lib/db/client.server";
 import { exploreItems, items } from "~/lib/db/schema";
-import { EXPLORE_CATEGORIES } from "~/lib/explore.categories";
+import { EXPLORE_CATEGORIES, EXPLORE_CATEGORIES_JA } from "~/lib/explore.categories";
 import { getTargetLang } from "~/lib/lang.server";
+import { JaText, hasJa } from "~/components/JaText";
 import { and, eq, inArray, sql } from "drizzle-orm";
 import { useToast } from "~/components/Toast";
 
@@ -57,9 +58,11 @@ export async function loader({ request }: LoaderFunctionArgs) {
   }));
 
   const countMap = Object.fromEntries(counts.map((c) => [c.category, Number(c.total)]));
+  const pool = lang === "ja" ? EXPLORE_CATEGORIES_JA : EXPLORE_CATEGORIES;
 
   return {
-    categories: EXPLORE_CATEGORIES.map((c) => ({ ...c, total: countMap[c.slug] ?? 0 })),
+    lang,
+    categories: pool.map((c) => ({ ...c, total: countMap[c.slug] ?? 0 })),
     eotd,
   };
 }
@@ -67,6 +70,7 @@ export async function loader({ request }: LoaderFunctionArgs) {
 type EotdRow = {
   id: number;
   text: string;
+  reading?: string | null;
   type: string | null;
   register: string | null;
   meaningId: string | null;
@@ -77,7 +81,8 @@ type EotdRow = {
 };
 
 export default function ExploreIndex() {
-  const { categories, eotd } = useLoaderData<typeof loader>();
+  const { lang, categories, eotd } = useLoaderData<typeof loader>();
+  const ja = lang === "ja";
   const revalidator = useRevalidator();
   const toast = useToast();
 
@@ -171,7 +176,13 @@ export default function ExploreIndex() {
             {visible.map((e: EotdRow) => (
               <div key={e.id} className="card">
                 <div className="flex items-start justify-between gap-2">
-                  <p className="font-semibold">{e.text}</p>
+                  {ja && hasJa(e.text) ? (
+                    <p className="min-w-0 font-semibold">
+                      <JaText text={e.text} reading={e.reading} className="font-semibold" />
+                    </p>
+                  ) : (
+                    <p className="font-semibold">{e.text}</p>
+                  )}
                   {isSaved(e) ? (
                     <span className="badge inline-flex shrink-0 items-center gap-1 bg-teal-50 text-teal-700 dark:bg-teal-950 dark:text-teal-400">
                       <CheckCircle2 className="h-3.5 w-3.5" /> Tersimpan

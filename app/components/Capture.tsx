@@ -1,8 +1,17 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { Link } from "react-router";
-import { Bookmark, CheckCircle2, ClipboardPaste, Lightbulb, Loader2 } from "lucide-react";
+import { Bookmark, CheckCircle2, ClipboardPaste, Lightbulb, Loader2, Volume2 } from "lucide-react";
 import { JaText, hasJa } from "~/components/JaText";
 import { useToast } from "~/components/Toast";
+
+/** TTS lokal (konvensi komponen client): kana/kanji → ja-JP, selain itu en-US. */
+function speak(text: string) {
+  if (typeof window === "undefined" || !window.speechSynthesis) return;
+  const u = new SpeechSynthesisUtterance(text);
+  u.lang = /[\u3040-\u30ff\u4e00-\u9faf]/.test(text) ? "ja-JP" : "en-US";
+  window.speechSynthesis.cancel();
+  window.speechSynthesis.speak(u);
+}
 
 type GenExample = { register: string; en: string; id: string; romaji?: string };
 type GenSense = { label: string; examples: GenExample[] };
@@ -460,7 +469,18 @@ export function Capture() {
                                 const romaji = ex.romaji || romajiLine || null;
                                 return hasJa(jpLine) ? (
                                   <span className="block text-sm">
-                                    <JaText text={jpLine} romaji={romaji} className="text-sm" />
+                                    <span className="flex items-start gap-1">
+                                      <JaText text={jpLine} romaji={romaji} className="min-w-0 flex-1 text-sm" />
+                                      <button
+                                        type="button"
+                                        className="shrink-0 rounded-lg p-1 text-zinc-400 hover:bg-zinc-100 hover:text-teal-600 dark:hover:bg-zinc-800"
+                                        title="Dengarkan"
+                                        aria-label="Dengarkan contoh"
+                                        onClick={() => speak(jpLine)}
+                                      >
+                                        <Volume2 className="h-4 w-4" />
+                                      </button>
+                                    </span>
                                   </span>
                                 ) : (
                                   <span className="block text-sm">{ex.en}</span>

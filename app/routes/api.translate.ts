@@ -22,8 +22,9 @@ export async function action({ request }: ActionFunctionArgs) {
   if (!text || text.length > 5000) {
     return Response.json({ error: "Teks wajib 1–5000 karakter" }, { status: 400 });
   }
-  const from = body.from === "id" ? "id-ID" : "en-US";
-  const to = body.to === "en" ? "en-US" : "id-ID";
+  // Kode BCP-47: ja khusus mode Jepang (dulu ternary en/id doang — "ja" jatuh ke en-US).
+  const from = body.from === "id" ? "id-ID" : body.from === "ja" ? "ja-JP" : "en-US";
+  const to = body.to === "en" ? "en-US" : body.to === "ja" ? "ja-JP" : "id-ID";
   const style = body.style ?? "fluid";
   const tone = body.tone?.trim() || undefined;
   const preferLlm = body.prefer === "llm";

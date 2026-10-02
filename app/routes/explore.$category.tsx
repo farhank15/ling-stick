@@ -5,8 +5,9 @@ import { ArrowLeft, CheckCircle2, Loader2, Sparkles, Volume2 } from "lucide-reac
 import { requireUser } from "~/lib/auth.server";
 import { db } from "~/lib/db/client.server";
 import { exploreItems, items, settings } from "~/lib/db/schema";
-import { EXPLORE_CATEGORIES } from "~/lib/explore.categories";
+import { EXPLORE_CATEGORIES, EXPLORE_CATEGORIES_JA } from "~/lib/explore.categories";
 import { getTargetLang } from "~/lib/lang.server";
+import { JaText, hasJa } from "~/components/JaText";
 import { and, asc, eq, inArray } from "drizzle-orm";
 import { saveExploreRow } from "~/lib/items.server";
 import { useToast } from "~/components/Toast";
@@ -31,11 +32,16 @@ function autoGenKey(category: string) {
   return `explore_autogen:${category}`;
 }
 
+function categoriesFor(lang: string) {
+  return lang === "ja" ? EXPLORE_CATEGORIES_JA : EXPLORE_CATEGORIES;
+}
+
 /** Loader CUMA baca DB — cepat. Row dianotasi `saved` (sudah ada di Library?). */
 export async function loader({ request, params }: LoaderFunctionArgs) {
   await requireUser(request);
   const category = String(params.category ?? "");
-  const cat = EXPLORE_CATEGORIES.find((c) => c.slug === category);
+  const lang = await getTargetLang();
+  const cat = categoriesFor(lang).find((c) => c.slug === category);
   if (!cat) throw new Response("Kategori tidak dikenal", { status: 404 });
 
   const rows = await db
@@ -73,9 +79,11 @@ export async function loader({ request, params }: LoaderFunctionArgs) {
   return {
     category,
     label: cat.label,
+    lang,
     rows: shown.map((r) => ({
       id: r.id,
       text: r.text,
+      reading: r.reading,
       type: r.type,
       register: r.register,
       meaningId: r.meaningId,
@@ -93,7 +101,8 @@ export async function loader({ request, params }: LoaderFunctionArgs) {
 export async function action({ request, params }: ActionFunctionArgs) {
   await requireUser(request);
   const category = String(params.category ?? "");
-  const cat = EXPLORE_CATEGORIES.find((c) => c.slug === category);
+  const lang = await getTargetLang();
+  const cat = categoriesFor(lang).find((c) => c.slug === category);
   if (!cat) return Response.json({ ok: false, error: "Kategori tidak dikenal" }, { status: 404 });
 
   const now = Date.now();
@@ -132,6 +141,7 @@ export async function action({ request, params }: ActionFunctionArgs) {
         meaningId: e.meaning_id,
         useWhenId: e.use_when_id ?? "",
         examplesJson: JSON.stringify(e.examples ?? []),
+        reading: e.reading || e.romaji ? [e.reading || "", e.romaji ? `(${e.romaji})` : ""].filter(Boolean).join(" ").trim() : undefined,
       });
       existingSet.add(e.text);
       added++;
@@ -157,6 +167,7 @@ export async function action({ request, params }: ActionFunctionArgs) {
 type Row = {
   id: number;
   text: string;
+  reading?: string | null;
   type: string | null;
   register: string | null;
   meaningId: string | null;
@@ -168,7 +179,8 @@ type Row = {
 };
 
 export default function ExploreCategory() {
-  const { category, label, rows, autoGenStarted } = useLoaderData<typeof loader>();
+  const { category, label, lang, rows, autoGenStarted } = useLoaderData<typeof loader>();
+  const ja = lang === "ja";
   const revalidator = useRevalidator();
   const genFetcher = useFetcher<{ ok: boolean; added?: number; error?: string }>();
   const toast = useToast();
@@ -275,7 +287,7 @@ export default function ExploreCategory() {
       {/* Pindah kategori — chip scroll sticky, kategori aktif disorot */}
       <div className="sticky top-13 z-10 -mx-4 bg-zinc-50/95 px-4 py-2 backdrop-blur dark:bg-zinc-950/95">
         <div className="no-scrollbar flex gap-1.5 overflow-x-auto">
-          {EXPLORE_CATEGORIES.map((c) => (
+          {(ja ? EXPLORE_CATEGORIES_JA : EXPLORE_CATEGORIES).map((c) => (
             <Link
               key={c.slug}
               to={`/explore/${c.slug}`}
@@ -320,7 +332,14 @@ export default function ExploreCategory() {
           <div key={r.id} className="card">
             <div className="flex items-start justify-between gap-2">
               <div className="flex min-w-0 items-center gap-1.5">
-                <p className="truncate font-semibold">{r.text}</p>
+                {ja && hasJa(r.text) ? (
+                  /* JA: kanji + furigana redup + romaji di-balik icon toggle */
+                  <p className="min-w-0 truncate font-semibold">
+                    <JaText text={r.text} reading={r.reading} className="font-semibold" />
+                  </p>
+                ) : (
+                  <p className="truncate font-semibold">{r.text}</p>
+                )}
                 <button
                   className="shrink-0 rounded-lg p-1 text-zinc-400 hover:bg-zinc-100 hover:text-teal-600 dark:hover:bg-zinc-800"
                   title="Cara baca"
@@ -345,22 +364,32 @@ export default function ExploreCategory() {
             {examplesOf(r).length > 0 ? (
               <div className="mt-2 space-y-1.5 border-t border-zinc-100 pt-2 dark:border-zinc-800">
                 <p className="label">Contoh</p>
-                {examplesOf(r).map((ex, i) => (
+                {examplesOf(r).map((ex, i) => {
+                  const jpLine = ex.en.split("\n")[0] ?? ex.en;
+                  const romajiLine = ex.en.includes("\n") ? ex.en.split("\n").slice(1).join(" ") : null;
+                  return (
                   <div key={i}>
                     <div className="flex items-start gap-1.5">
-                      <p className="flex-1 text-sm">{ex.en}</p>
+                      {hasJa(jpLine) ? (
+                        <div className="min-w-0 flex-1">
+                          <JaText text={jpLine} romaji={romajiLine} className="text-sm" />
+                        </div>
+                      ) : (
+                        <p className="flex-1 text-sm">{ex.en}</p>
+                      )}
                       <button
                         className="shrink-0 rounded-lg p-0.5 text-zinc-400 hover:text-teal-600 dark:hover:text-teal-300"
                         title="Dengarkan contoh"
                         aria-label="Dengarkan contoh"
-                        onClick={() => speak(ex.en)}
+                        onClick={() => speak(jpLine)}
                       >
                         <Volume2 className="h-3.5 w-3.5" />
                       </button>
                     </div>
                     <p className="text-xs text-zinc-500 dark:text-zinc-400">{ex.id}</p>
                   </div>
-                ))}
+                  );
+                })}
               </div>
             ) : null}
             <div className="mt-1.5 flex gap-1">

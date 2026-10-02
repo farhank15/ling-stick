@@ -1,8 +1,9 @@
-import type { LoaderFunctionArgs, MetaFunction } from "react-router";
+import type { ActionFunctionArgs, LoaderFunctionArgs, MetaFunction } from "react-router";
 import { Link, redirect, useLoaderData, useSearchParams } from "react-router";
 import { useEffect, useState } from "react";
 import {
   ArrowRight,
+  BadgeCheck,
   BookOpenCheck,
   CheckCircle2,
   Eye,
@@ -31,7 +32,7 @@ function speak(s: string, lang?: string) {
   window.speechSynthesis.speak(u);
 }
 
-/* ── Tabel kana (gojūon + dakuten/handakuten) ── */
+/* ── Tabel kana — DIPECAH PER SECTION (gojūon / dakuten / yōon) biar gak jadi satu adonan ── */
 const HIRAGANA: [string, string][] = [
   ["あ", "a"], ["い", "i"], ["う", "u"], ["え", "e"], ["お", "o"],
   ["か", "ka"], ["き", "ki"], ["く", "ku"], ["け", "ke"], ["こ", "ko"],
@@ -71,6 +72,20 @@ const KANA_TABLES: Record<"hiragana" | "katakana", [string, string][]> = {
   katakana: KATAKANA,
 };
 
+/** Section kana: posisi 0–45 gojūon (dasar), 46–66 dakuten/handakuten — sisanya yōon digabung dakuten. */
+const KANA_SECTIONS: { label: string; desc: string; slice: [number, number] }[] = [
+  {
+    label: "Gojūon — dasar",
+    desc: "46 kana asli: 5 kolom bunyi (a-i-u-e-o) × 10 baris konsonan",
+    slice: [0, 46],
+  },
+  {
+    label: "Dakuten & handakuten",
+    desc: "Variasi bertitik (が) & bundar (ぱ) — bunyinya jadi bersuara",
+    slice: [46, 71],
+  },
+];
+
 const SCRIPTS = ["hiragana", "katakana", "kanji"] as const;
 type Script = (typeof SCRIPTS)[number];
 const SCRIPT_LABEL: Record<Script, string> = {
@@ -87,6 +102,7 @@ type AksaraWord = {
   text: string;
   reading: string | null;
   meaningId: string | null;
+  status: string; // new | learning | known (dari wordbank)
 };
 
 export async function loader({ request }: LoaderFunctionArgs) {
@@ -104,7 +120,7 @@ export async function loader({ request }: LoaderFunctionArgs) {
 
   // Kanji words per level (buat list & target latihan) + pool lintas level (distraktor MCQ).
   const rows = await db
-    .select({ id: wordbank.id, text: wordbank.text, reading: wordbank.reading, meaningId: wordbank.meaningId, cefr: wordbank.cefr })
+    .select({ id: wordbank.id, text: wordbank.text, reading: wordbank.reading, meaningId: wordbank.meaningId, cefr: wordbank.cefr, status: wordbank.status })
     .from(wordbank)
     .where(and(eq(wordbank.lang, "ja"), ne(wordbank.type, "kana")))
     .limit(500);
@@ -117,7 +133,31 @@ export async function loader({ request }: LoaderFunctionArgs) {
     level,
     levelWords: levelRows.slice(0, 100) as AksaraWord[],
     poolWords: poolRows.slice(0, 300) as AksaraWord[],
-  };}
+  };
+}
+
+/** Tombol tandai di daftar kanji: mulai belajar / hafal — row wordbank TETAP ada (cuma ganti status). */
+export async function action({ request }: ActionFunctionArgs) {
+  await requireUser(request);
+  if ((await getTargetLang()) !== "ja") {
+    return Response.json({ error: "Khusus mode Jepang" }, { status: 400 });
+  }
+  const body = (await request.json().catch(() => ({}))) as { id?: number; action?: string };
+  const id = Number(body.id);
+  if (!Number.isInteger(id) || id <= 0) {
+    return Response.json({ error: "id nggak valid" }, { status: 400 });
+  }
+  const { learnBankKeep, markBankKnownKeep } = await import("~/lib/bank.server");
+  if (body.action === "learn") {
+    const itemId = await learnBankKeep(id);
+    return Response.json({ ok: true, itemId });
+  }
+  if (body.action === "known") {
+    await markBankKnownKeep(id);
+    return Response.json({ ok: true });
+  }
+  return Response.json({ error: "action nggak dikenal" }, { status: 400 });
+}
 
 /* ── Latihan kanji: pilihan ganda (bacaan / arti) ── */
 type Method = "list" | "reading" | "arti";
@@ -145,7 +185,21 @@ function buildMcqs(words: AksaraWord[], pool: AksaraWord[], method: "reading" | 
   return qs;
 }
 
-function KanjiPractice({ words, pool, level }: { words: AksaraWord[]; pool: AksaraWord[]; level: string }) {
+function KanjiPractice({
+  words,
+  pool,
+  level,
+  statusOf,
+  onMark,
+  emptyHint,
+}: {
+  words: AksaraWord[];
+  pool: AksaraWord[];
+  level: string;
+  statusOf: (w: AksaraWord) => string;
+  onMark: (id: number, action: "learn" | "known") => void;
+  emptyHint?: string;
+}) {
   const [method, setMethod] = useState<Method>("list");
   const [mcqs, setMcqs] = useState<Mcq[]>([]);
   const [qi, setQi] = useState(0);
@@ -184,7 +238,7 @@ function KanjiPractice({ words, pool, level }: { words: AksaraWord[]; pool: Aksa
             <Layers className="mx-auto h-10 w-10 text-teal-600 dark:text-teal-400" strokeWidth={1.5} />
             <p className="mt-3 font-medium">Belum ada kosakata kanji di level ini</p>
             <p className="mt-1 text-sm text-zinc-500">
-              Generate kata di Bank Kata level {level} — nanti otomatis nongol di sini.
+              {emptyHint ?? `Generate kata di Bank Kata level ${level} — nanti otomatis nongol di sini.`}
             </p>
             <Link to="/bank" className="btn-secondary mt-4 inline-flex">
               Buka Bank Kata <ArrowRight className="h-4 w-4" />
@@ -201,6 +255,32 @@ function KanjiPractice({ words, pool, level }: { words: AksaraWord[]; pool: Aksa
                   ) : null}
                   <span className="block truncate text-xs text-zinc-500">{w.meaningId}</span>
                 </span>
+                {/* Tandai status: new→belajar (BookOpenCheck), learning→hafal (CheckCircle2), known→balikin (BadgeCheck) */}
+                {statusOf(w) === "known" ? (
+                  <button
+                    className="shrink-0 rounded-lg p-1.5 text-teal-600 dark:text-teal-400"
+                    title="Sudah hafal — klik buat belajar lagi"
+                    onClick={() => onMark(w.id, "learn")}
+                  >
+                    <BadgeCheck className="h-4.5 w-4.5" />
+                  </button>
+                ) : statusOf(w) === "learning" ? (
+                  <button
+                    className="shrink-0 rounded-lg p-1.5 text-zinc-400 hover:bg-zinc-100 hover:text-teal-600 dark:hover:bg-zinc-800"
+                    title="Tandai hafal"
+                    onClick={() => onMark(w.id, "known")}
+                  >
+                    <CheckCircle2 className="h-4.5 w-4.5" />
+                  </button>
+                ) : (
+                  <button
+                    className="shrink-0 rounded-lg p-1.5 text-zinc-400 hover:bg-zinc-100 hover:text-teal-600 dark:hover:bg-zinc-800"
+                    title="Mulai belajar (masuk review)"
+                    onClick={() => onMark(w.id, "learn")}
+                  >
+                    <BookOpenCheck className="h-4.5 w-4.5" />
+                  </button>
+                )}
                 <button
                   className="shrink-0 rounded-lg p-1.5 text-zinc-400 hover:bg-zinc-100 hover:text-teal-600 dark:hover:bg-zinc-800"
                   title="Dengarkan"
@@ -375,6 +455,26 @@ export default function AksaraPage() {
     setParams(p, { preventScrollReset: true });
   };
 
+  // Filter status client-side (Semua / Belajar / Hafal) — snapshot loader, no refetch.
+  const [statusFilter, setStatusFilter] = useState<"all" | "learning" | "known">("all");
+  const [overrides, setOverrides] = useState<Record<number, string>>({});
+
+  const statusOf = (w: AksaraWord) => overrides[w.id] ?? w.status;
+  const filteredWords = levelWords.filter((w) => {
+    if (statusFilter === "all") return true;
+    return statusOf(w) === statusFilter;
+  });
+
+  /** Tandai dari daftar kanji: optimistic update + POST ke action route ini. */
+  const mark = (id: number, act: "learn" | "known") => {
+    setOverrides((prev) => ({ ...prev, [id]: act === "learn" ? "learning" : "known" }));
+    void fetch("/aksara", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ id, action: act }),
+    }).catch(() => {});
+  };
+
   return (
     <div className="space-y-4">
       {/* Tab aksara */}
@@ -400,18 +500,28 @@ export default function AksaraPage() {
             Tap karakternya buat dengar cara bacanya — belajar 5 kolom per baris (gojūon), lanjut
             dakuten/handakuten di bawah.
           </p>
-          <div className="grid grid-cols-5 gap-1.5">
-            {KANA_TABLES[script].map(([kana, romaji]) => (
-              <button
-                key={kana}
-                onClick={() => speak(kana, "ja-JP")}
-                className="flex flex-col items-center gap-0.5 rounded-xl border border-zinc-200 bg-white py-2.5 transition-colors hover:border-teal-300 active:bg-teal-50 dark:border-zinc-800 dark:bg-zinc-900 dark:hover:border-teal-800 dark:active:bg-teal-950/60"
-              >
-                <span className="text-xl font-semibold">{kana}</span>
-                <span className="text-[10px] text-zinc-400">{romaji}</span>
-              </button>
-            ))}
-          </div>
+          {KANA_SECTIONS.map((sec, si) => {
+            const cells = KANA_TABLES[script].slice(sec.slice[0], sec.slice[1]);
+            if (cells.length === 0) return null;
+            return (
+              <div key={sec.label} className={si > 0 ? "pt-3" : ""}>
+                <p className="mb-1.5 text-sm font-semibold">{sec.label}</p>
+                <p className="mb-2.5 text-xs text-zinc-400">{sec.desc}</p>
+                <div className="grid grid-cols-5 gap-1.5">
+                  {cells.map(([kana, romaji]) => (
+                    <button
+                      key={kana}
+                      onClick={() => speak(kana, "ja-JP")}
+                      className="flex flex-col items-center gap-0.5 rounded-xl border border-zinc-200 bg-white py-2.5 transition-colors hover:border-teal-300 active:bg-teal-50 dark:border-zinc-800 dark:bg-zinc-900 dark:hover:border-teal-800 dark:active:bg-teal-950/60"
+                    >
+                      <span className="text-xl font-semibold">{kana}</span>
+                      <span className="text-[10px] text-zinc-400">{romaji}</span>
+                    </button>
+                  ))}
+                </div>
+              </div>
+            );
+          })}
           <p className="pt-1 text-center text-xs text-zinc-400">
             {script === "hiragana"
               ? "Hiragana = bunyi asli bahasa Jepang: partikel & infleksi selalu pakai ini."
@@ -437,8 +547,40 @@ export default function AksaraPage() {
             ))}
           </div>
 
-          {/* Metode latihan */}
-          <KanjiPractice key={level} words={levelWords} pool={poolWords} level={level} />
+          {/* Filter status + metode latihan */}
+          <div className="flex gap-1.5">
+            {(
+              [
+                ["all", "Semua"],
+                ["learning", "Sedang belajar"],
+                ["known", "Hafal"],
+              ] as const
+            ).map(([key, label]) => (
+              <button
+                key={key}
+                onClick={() => setStatusFilter(key)}
+                className={`chip justify-center ${statusFilter === key ? "chip-active" : ""}`}
+              >
+                {label}
+              </button>
+            ))}
+          </div>
+
+          <KanjiPractice
+            key={level}
+            words={filteredWords}
+            pool={poolWords}
+            level={level}
+            statusOf={statusOf}
+            onMark={mark}
+            emptyHint={
+              statusFilter !== "all" && levelWords.length > 0
+                ? statusFilter === "known"
+                  ? "Belum ada yang ditandai hafal — tandai lewat icon centang di daftar."
+                  : "Belum ada yang sedang belajar — tandai lewat icon buku di daftar."
+                : undefined
+            }
+          />
 
           <p className="text-center text-xs text-zinc-400">
             Latihan nulis kanji ada di{" "}

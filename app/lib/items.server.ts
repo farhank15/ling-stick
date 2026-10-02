@@ -577,6 +577,7 @@ export async function saveExploreRow(row: {
   meaningId: string;
   useWhenId: string;
   examplesJson: string; // JSON {en,id}[] — 3–5 contoh
+  reading?: string; // JA: kana (romaji) — furigana & romaji di UI
 }) {
   await db
     .insert(exploreItems)
@@ -588,6 +589,7 @@ export async function saveExploreRow(row: {
       meaningId: row.meaningId,
       useWhenId: row.useWhenId,
       examplesJson: row.examplesJson,
+      reading: row.reading ?? null,
       lang: detectLang(row.text, await getTargetLang()),
       hidden: 0,
       createdAt: Date.now(),

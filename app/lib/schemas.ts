@@ -115,6 +115,8 @@ export const exploreOutputSchema = z.object({
     .array(
       z.object({
         text: z.string().min(1),
+        reading: z.string().catch("").optional(), // JA: kana
+        romaji: z.string().catch("").optional(), // JA: hepburn
         type: z.string().default("idiom"),
         register: z.string().default("informal"),
         meaning_id: z.string().min(1),
