@@ -1,13 +1,7 @@
 /**
- * Seed Bank Kata Jepang (lang="ja") — dikoreksi berdasar review linguistik:
- * - "bentuk masu" (bukan masen — itu negatif), 行って/行った tak beraturan
- * - お kana lesson pakai おと/おとこ, bukan おかね (prefix sopan)
- * - 精神: idiom standar 心を込める; contoh 精神的に強い
- * - 促進: 経済成長の促進 lebih natural
- *
- * CATATAN LEVEL: label JLPT (N5–N1) adalah perkiraan umum — JLPT resmi tidak
- * punya daftar kosakata sejak 2010. Kolom `cefr` dipakai generik utk level
- * (EN=CEFR, JA=JLPT) biar gak perlu rebuild skema.
+ * SEED_BANK_JP — kosakata, partikel & ekspresi Jepang. TANPA kana tunggal:
+ * aksara (あ か ア ク dst.) punya menu sendiri (Home → Aksara) dengan tabel
+ * gojūon/dakuten interaktif — Bank khusus kosakata, partikel & ekspresi.
  *
  * Konvensi field (contoh di examplesJson):
  * - `en`  = kalimat JEPANG, baris kedua romaji (pre-line di UI)
@@ -27,27 +21,6 @@ export type SeedWordJp = {
 };
 
 export const SEED_BANK_JP: SeedWordJp[] = [
-  // ── Hiragana dasar (N5) ──
-  { text: "あ", reading: "a", type: "kana", register: "neutral", cefr: "N5", meaning: "a — huruf hiragana 'a'", useWhen: "kana pertama, bentuknya seperti 'A' berantam", examples: [{ en: "あめ (ame)", id: "hujan" }, { en: "あさ (asa)", id: "pagi" }] },
-  { text: "い", reading: "i", type: "kana", register: "neutral", cefr: "N5", meaning: "i — huruf hiragana 'i'", useWhen: "dua goresan, mirip angka 2", examples: [{ en: "いぬ (inu)", id: "anjing" }, { en: "いえ (ie)", id: "rumah" }] },
-  { text: "う", reading: "u", type: "kana", register: "neutral", cefr: "N5", meaning: "u — huruf hiragana 'u'", useWhen: "bentuk seperti orang miring, bunyi 'u' tertahan", examples: [{ en: "うみ (umi)", id: "laut" }, { en: "うし (ushi)", id: "sapi" }] },
-  { text: "え", reading: "e", type: "kana", register: "neutral", cefr: "N5", meaning: "e — huruf hiragana 'e'", useWhen: "bentuk seperti 'E' energi", examples: [{ en: "えき (eki)", id: "stasiun" }, { en: "えいが (eiga)", id: "film" }] },
-  {
-    text: "お",
-    reading: "o",
-    type: "kana",
-    register: "neutral",
-    cefr: "N5",
-    meaning: "o — huruf hiragana 'o'",
-    useWhen: "bentuknya mirip 'お'; hati-hati: お juga awalan sopan di おかね (uang), おちゃ (teh) — itu prefix, bukan hurufnya",
-    examples: [{ en: "おと (oto)", id: "suara" }, { en: "おとこ (otoko)", id: "laki-laki" }],
-  },
-  { text: "か", reading: "ka", type: "kana", register: "neutral", cefr: "N5", meaning: "ka — huruf hiragana 'ka'", useWhen: "k + a; jangan tertukar dengan が (ga) yang ada dua goresan tambahan", examples: [{ en: "かさ (kasa)", id: "payung" }, { en: "かみ (kami)", id: "kertas" }] },
-
-  // ── Katakana dasar (N5) ──
-  { text: "ア", reading: "a", type: "kana", register: "neutral", cefr: "N5", meaning: "a — katakana 'a'", useWhen: "dipakai buat kata serapan asing", examples: [{ en: "アメリカ (Amerika)", id: "Amerika" }, { en: "アイス (aisu)", id: "es krim (ice)" }] },
-  { text: "ク", reading: "ku", type: "kana", register: "neutral", cefr: "N5", meaning: "ku — katakana 'ku'", useWhen: "mirip < kurang-dari; buat kata serapan", examples: [{ en: "クラス (kurasu)", id: "kelas (class)" }, { en: "クリスマス (kurisumasu)", id: "Natal (Christmas)" }] },
-
   // ── Kosakata N5 ──
   {
     text: "水",

@@ -287,6 +287,9 @@ async function seedWordbank(client: Client): Promise<void> {
   // + exclude kana) dibuang sekali di sini supaya ke-replace versi baru di bawah.
   // Data generate/import milik user (source lain) gak disentuh.
   await client.execute("DELETE FROM wordbank WHERE lang = 'ja' AND source = 'seed'");
+  // Entri kana tunggal (あ か ア ク…) pindah ranah ke menu Aksara — Bank khusus
+  // kosakata/partikel/ekspresi. Bersihkan sisa seed & generate kana lama sekali di sini.
+  await client.execute("DELETE FROM wordbank WHERE lang = 'ja' AND type = 'kana'");
   // Hasil generate JA dari masa bug ikut dibuang: (a) meaningId format campur
   // "kana (romaji) arti", (b) reading gak kesimpan (schema lama nolak) + level
   // kepaksa B1 — keduanya gak layak tampil di format baru.
