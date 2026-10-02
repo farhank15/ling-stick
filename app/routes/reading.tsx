@@ -4,7 +4,6 @@ import {
   redirect,
   useLoaderData,
   useNavigation,
-  useRevalidator,
   useSearchParams,
 } from "react-router";
 import { useEffect, useRef, useState } from "react";
@@ -13,20 +12,21 @@ import {
   BookOpenCheck,
   Loader2,
   Plus,
-  RotateCcw,
   Sparkles,
+  Trash2,
   Type,
   Volume2,
 } from "lucide-react";
 import { requireUser } from "~/lib/auth.server";
 import { getTargetLang } from "~/lib/lang.server";
 import { ttsLang } from "~/lib/utils.shared";
-// Server fns HANYA dipakai di loader/action — tapi import .server di module level
-// bikin build client gagal (RRv7). Maka server fns di-dynamic import, konstanta
-// client-safe dari reading.shared.
-import { READING_LEVELS, isReadingLevel } from "~/lib/reading.shared";
+// Server fns HANYA dipakai di loader/action — import .server di module level
+// bikin build client gagal (RRv7). Maka di-dynamic import; konstanta client-safe
+// dari reading.shared.
+import { isReadingLevelFor, readingLevels, type ReadingLevel } from "~/lib/reading.shared";
 import { JaText, hasJa } from "~/components/JaText";
 import { SpeakButton } from "~/components/SpeakButton";
+import { ConfirmModal } from "~/components/ConfirmModal";
 import { useToast } from "~/components/Toast";
 
 export const meta: MetaFunction = () => [{ title: "Reading — LingStick" }];
@@ -42,34 +42,39 @@ function speak(text: string, lang?: string) {
 
 export async function loader({ request }: LoaderFunctionArgs) {
   await requireUser(request);
-  if ((await getTargetLang()) !== "ja") throw redirect("/review"); // fitur khusus mode Jepang
+  const lang = await getTargetLang(); // JA (JLPT) & EN (CEFR) — dua-duanya ada Reading
 
-  const { generateReading, getReading, listReadings } = await import("~/lib/reading.server");
-
+  const { getReading, listReadings } = await import("~/lib/reading.server");
   const url = new URL(request.url);
   const openId = Number(url.searchParams.get("open")) || null;
   if (openId) {
-    const reading = await getReading(openId);
+    const reading = await getReading(lang, openId);
     if (!reading) throw redirect("/reading");
-    return { mode: "reader" as const, reading, list: [] };
+    return { mode: "reader" as const, lang, reading, list: [] };
   }
 
   const levelParam = url.searchParams.get("level");
-  const level = isReadingLevel(levelParam) ? levelParam : null;
-  return { mode: "list" as const, level, reading: null, list: await listReadings(level ?? undefined) };
+  const level = isReadingLevelFor(lang, levelParam) ? levelParam! : null;
+  return {
+    mode: "list" as const,
+    lang,
+    level,
+    levels: readingLevels(lang),
+    reading: null,
+    list: await listReadings(lang, level ?? undefined),
+  };
 }
 
 export async function action({ request }: ActionFunctionArgs) {
   await requireUser(request);
-  if ((await getTargetLang()) !== "ja") {
-    return Response.json({ error: "Khusus mode Jepang" }, { status: 400 });
-  }
-  const { bumpReadCount, generateReading, listReadings } = await import("~/lib/reading.server");
+  const lang = await getTargetLang();
+  const { bumpReadCount, deleteReading, generateReading, listReadings } = await import(
+    "~/lib/reading.server"
+  );
   const body = (await request.json().catch(() => ({}))) as {
     action?: string;
     id?: number;
     level?: string;
-    variant?: number;
   };
 
   if (body.action === "read") {
@@ -79,12 +84,21 @@ export async function action({ request }: ActionFunctionArgs) {
     return Response.json({ ok: true });
   }
 
+  if (body.action === "delete") {
+    const id = Number(body.id);
+    if (!Number.isInteger(id)) return Response.json({ error: "id nggak valid" }, { status: 400 });
+    await deleteReading(id);
+    return Response.json({ ok: true });
+  }
+
   if (body.action === "generate") {
-    const level = isReadingLevel(body.level) ? body.level : "N5";
+    const level: ReadingLevel = isReadingLevelFor(lang, body.level)
+      ? body.level!
+      : (readingLevels(lang)[0]! as ReadingLevel);
     try {
-      // Hitung row per level → variant = jumlah yang sudah ada (topik bergilir).
-      const existing = await listReadings(level);
-      const { id, title } = await generateReading(level, existing.length);
+      // Hitung row per level → topik bergilir dari jumlah yang sudah ada.
+      const existing = await listReadings(lang, level);
+      const { id, title } = await generateReading(lang, level, existing.length);
       return Response.json({ ok: true, id, title });
     } catch (e) {
       return Response.json(
@@ -96,60 +110,103 @@ export async function action({ request }: ActionFunctionArgs) {
   return Response.json({ error: "action nggak dikenal" }, { status: 400 });
 }
 
+type ReadingListItem = {
+  id: number;
+  title: string;
+  titleEn: string | null;
+  level: string;
+  topic: string;
+  wordCount: number;
+  readCount: number;
+};
+
 /* ── Halaman list ── */
 function ReadingList({
   list,
   level,
+  lang,
+  levels,
 }: {
-  list: {
-    id: number;
-    title: string;
-    titleEn: string | null;
-    level: string;
-    topic: string;
-    wordCount: number;
-    readCount: number;
-  }[];
+  list: ReadingListItem[];
   level: string | null;
+  lang: string;
+  levels: readonly string[];
 }) {
   const toast = useToast();
-  const revalidator = useRevalidator();
   const navigation = useNavigation();
   const generating = navigation.state !== "idle";
 
-  const generate = async (lv: string) => {
+  // Anti-spam + tahan layar "menulis" sampai selesai (generate LLM bisa 30-60 detik).
+  const [busy, setBusy] = useState(false);
+  const [genError, setGenError] = useState<string | null>(null);
+  const [genOk, setGenOk] = useState<string | null>(null);
+  const [deleteId, setDeleteId] = useState<number | null>(null);
+  const [deleting, setDeleting] = useState(false);
+
+  const generate = async () => {
+    if (busy || generating) return; // debounce — sekali jalan sampai selesai
+    setBusy(true);
+    setGenError(null);
+    setGenOk(null);
     try {
       const res = await fetch("/reading", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ action: "generate", level: lv, variant: Date.now() % 7 }),
+        body: JSON.stringify({ action: "generate", level: level ?? levels[0]! }),
       });
-      const data = (await res.json()) as { ok?: boolean; id?: number; error?: string };
+      const data = (await res.json().catch(() => ({}))) as { ok?: boolean; id?: number; error?: string };
       if (!res.ok || !data.ok) throw new Error(data.error || "Generate gagal");
       // Langsung buka bacaan barunya.
       window.location.href = `/reading?open=${data.id}`;
     } catch (e) {
-      toast(e instanceof Error ? e.message : "Generate gagal");
+      setGenError(e instanceof Error ? e.message : "Generate gagal");
+      setBusy(false);
     }
   };
+
+  const doDelete = async () => {
+    if (deleteId == null || deleting) return;
+    setDeleting(true);
+    try {
+      const res = await fetch("/reading", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ action: "delete", id: deleteId }),
+      });
+      const data = (await res.json().catch(() => ({}))) as { ok?: boolean; error?: string };
+      if (!res.ok || !data.ok) throw new Error(data.error || "Gagal menghapus");
+      toast("Bacaan dihapus");
+      setDeleteId(null);
+      window.location.reload();
+    } catch (e) {
+      toast(e instanceof Error ? e.message : "Gagal menghapus");
+      setDeleting(false);
+    }
+  };
+
+  const delTarget = list.find((r) => r.id === deleteId);
 
   return (
     <div className="space-y-4">
       <p className="text-sm text-zinc-500 dark:text-zinc-400">
-        Bacaan pendek bahasa Jepang — berita, cerpen, topik sehari-hari. Kanji warna{" "}
-        <span className="font-semibold text-teal-600 dark:text-teal-400">hijau</span> biar gampang
-        dilirik, hiragana kecil nempel di atasnya; romaji &amp; arti disembunyikan default.
+        {lang === "ja" ? (
+          <>
+            Bacaan pendek bahasa Jepang — berita, cerpen, topik sehari-hari. Kanji warna{" "}
+            <span className="font-semibold text-teal-600 dark:text-teal-400">hijau</span> (kana
+            tetap netral), hiragana kecil nempel di atas kanji; romaji &amp; arti disembunyikan
+            default.
+          </>
+        ) : (
+          <>Bacaan pendek bahasa Inggris per level CEFR — arti Indonesia disembunyikan default.</>
+        )}
       </p>
 
-      {/* Level chips */}
+      {/* Level chips — JA: N5-N1, EN: A1-C2 */}
       <div className="no-scrollbar -mx-4 flex gap-1.5 overflow-x-auto px-4">
-        <Link
-          to="/reading"
-          className={`chip shrink-0 justify-center ${!level ? "chip-active" : ""}`}
-        >
+        <Link to="/reading" className={`chip shrink-0 justify-center ${!level ? "chip-active" : ""}`}>
           Semua
         </Link>
-        {READING_LEVELS.map((l) => (
+        {levels.map((l) => (
           <Link
             key={l}
             to={`/reading?level=${l}`}
@@ -160,15 +217,26 @@ function ReadingList({
         ))}
       </div>
 
-      {/* Generate bacaan baru — level terpilih atau N5 */}
-      <button className="btn-primary w-full" onClick={() => void generate(level ?? "N5")} disabled={generating}>
-        {generating ? (
+      {genOk ? (
+        <div className="rounded-xl bg-teal-50 px-4 py-3 text-sm text-teal-800 dark:bg-teal-950 dark:text-teal-300">
+          {genOk}
+        </div>
+      ) : null}
+      {genError ? (
+        <div className="rounded-xl bg-red-50 px-4 py-3 text-sm text-red-700 dark:bg-red-950 dark:text-red-400">
+          Gagal: {genError}
+        </div>
+      ) : null}
+
+      {/* Generate bacaan baru — debounce: disabled sampai selesai */}
+      <button className="btn-primary w-full" onClick={() => void generate()} disabled={busy || generating}>
+        {busy || generating ? (
           <>
-            <Loader2 className="h-4 w-4 animate-spin" /> Menulis bacaan…
+            <Loader2 className="h-4 w-4 animate-spin" /> Menulis bacaan… (±30 detik)
           </>
         ) : (
           <>
-            <Sparkles className="h-4 w-4" /> Bacaan baru {level ? `level ${level}` : "N5"}
+            <Sparkles className="h-4 w-4" /> Bacaan baru {level ? `level ${level}` : `level ${levels[0]}`}
           </>
         )}
       </button>
@@ -182,38 +250,60 @@ function ReadingList({
       ) : (
         <div className="space-y-2">
           {list.map((r) => (
-            <Link
+            <div
               key={r.id}
-              to={`/reading?open=${r.id}`}
-              className="card flex items-center gap-3 p-4 transition-colors hover:border-teal-300 dark:hover:border-teal-800"
+              className="card relative flex items-center gap-3 p-4 transition-colors hover:border-teal-300 dark:hover:border-teal-800"
             >
-              <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-teal-50 text-xs font-bold text-teal-700 dark:bg-teal-950 dark:text-teal-300">
-                {r.level}
-              </span>
-              <span className="min-w-0 flex-1">
-                {hasJa(r.title) ? (
-                  <JaText text={r.title} className="block truncate font-semibold" />
-                ) : (
-                  <span className="block truncate font-semibold">{r.title}</span>
-                )}
-                <span className="block truncate text-xs text-zinc-500">
-                  {r.titleEn ?? r.topic} · {r.wordCount} kata · dibaca {r.readCount}×
+              <Link to={`/reading?open=${r.id}`} className="flex min-w-0 flex-1 items-center gap-3">
+                <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-teal-50 text-xs font-bold text-teal-700 dark:bg-teal-950 dark:text-teal-300">
+                  {r.level}
                 </span>
-              </span>
-              <Volume2 className="h-4 w-4 shrink-0 text-zinc-300" />
-            </Link>
+                <span className="min-w-0 flex-1">
+                  {hasJa(r.title) ? (
+                    <JaText text={r.title} className="block font-semibold" />
+                  ) : (
+                    <span className="block font-semibold">{r.title}</span>
+                  )}
+                  {/* Arti judul — FULL WRAP, gak di-truncate biar kebaca semua */}
+                  <span className="mt-0.5 block text-xs leading-snug text-zinc-500">
+                    {r.titleEn ?? r.topic}
+                  </span>
+                  <span className="mt-0.5 block text-[11px] text-zinc-400">
+                    {r.wordCount} kata · dibaca {r.readCount}×
+                  </span>
+                </span>
+              </Link>
+              {/* Delete di luar Link biar gak nested-interactive */}
+              <button
+                className="absolute top-2 right-2 rounded-lg p-1 text-zinc-300 hover:bg-red-50 hover:text-red-500 dark:text-zinc-600 dark:hover:bg-red-950"
+                title="Hapus bacaan"
+                aria-label={`Hapus ${r.title}`}
+                onClick={() => setDeleteId(r.id)}
+              >
+                <Trash2 className="h-3.5 w-3.5" />
+              </button>
+            </div>
           ))}
         </div>
       )}
 
-      {list.length > 0 && !generating ? (
-        <button className="btn-secondary w-full gap-1" onClick={() => void generate(level ?? "N5")}>
-          <Plus className="h-4 w-4" /> Tambah bacaan {level ?? "N5"}
+      {list.length > 0 && !busy && !generating ? (
+        <button className="btn-secondary w-full gap-1" onClick={() => void generate()}>
+          <Plus className="h-4 w-4" /> Tambah bacaan {level ?? levels[0]}
         </button>
       ) : null}
       <p className="text-center text-xs text-zinc-400">
         Bisa dibaca berulang kali — tiap dibuka dihitung, tapi gak pernah habis.
       </p>
+
+      <ConfirmModal
+        open={deleteId != null}
+        title="Hapus bacaan ini?"
+        message={delTarget ? `“${delTarget.titleEn ?? delTarget.title}” akan dihapus permanen.` : ""}
+        busy={deleting}
+        onConfirm={() => void doDelete()}
+        onCancel={() => setDeleteId(null)}
+      />
     </div>
   );
 }
@@ -228,14 +318,15 @@ function ReadingReader({
     titleEn: string | null;
     level: string;
     body: {
-      paragraphs: { text: string; kana: string; romaji?: string }[];
+      paragraphs: { text: string; kana: string; romaji?: string; arti?: string }[];
       vocab?: { text: string; kana?: string; meaning: string }[];
     };
   };
 }) {
   const toast = useToast();
-  // Romaji & arti vocab hidden by default — nyalain per sesi baca.
+  // Romaji & arti hidden by default — nyalain per sesi baca.
   const [showRomaji, setShowRomaji] = useState(false);
+  const [showArti, setShowArti] = useState(false);
   const [showVocab, setShowVocab] = useState(false);
 
   // Hitung sekali per bacaan.
@@ -272,8 +363,8 @@ function ReadingReader({
         {reading.titleEn ? <p className="mt-0.5 text-xs text-zinc-400">{reading.titleEn}</p> : null}
       </div>
 
-      {/* Toggle sesi baca: romaji & arti */}
-      <div className="flex justify-center gap-1.5">
+      {/* Toggle sesi baca: romaji, arti kalimat, arti kata */}
+      <div className="flex flex-wrap justify-center gap-1.5">
         <button
           className={`chip justify-center ${showRomaji ? "chip-active" : ""}`}
           onClick={() => setShowRomaji((v) => !v)}
@@ -282,11 +373,18 @@ function ReadingReader({
           <Type className="h-3.5 w-3.5" /> Romaji
         </button>
         <button
+          className={`chip justify-center ${showArti ? "chip-active" : ""}`}
+          onClick={() => setShowArti((v) => !v)}
+          title="Tampilkan arti kalimat tiap paragraf"
+        >
+          <BookOpenCheck className="h-3.5 w-3.5" /> Arti kalimat
+        </button>
+        <button
           className={`chip justify-center ${showVocab ? "chip-active" : ""}`}
           onClick={() => setShowVocab((v) => !v)}
           title="Tampilkan daftar kosakata penting"
         >
-          <BookOpenCheck className="h-3.5 w-3.5" /> Arti kata
+          Kosakata
         </button>
       </div>
 
@@ -297,7 +395,7 @@ function ReadingReader({
             <div className="flex items-start gap-2">
               <div className="min-w-0 flex-1 leading-loose">
                 {hasJa(p.text) ? (
-                  /* Kanji hijau + furigana redup di atasnya — gaya Reading */
+                  /* JA: kanji hijau + furigana per-run redup di atasnya (kana murni polos) */
                   <JaText
                     text={p.text}
                     reading={p.kana}
@@ -310,6 +408,11 @@ function ReadingReader({
                 {showRomaji && p.romaji ? (
                   <p className="mt-1 text-xs text-zinc-400 dark:text-zinc-500">{p.romaji}</p>
                 ) : null}
+                {showArti ? (
+                  <p className="mt-1 text-sm leading-snug text-zinc-600 dark:text-zinc-400">
+                    {p.arti ?? "—"}
+                  </p>
+                ) : null}
               </div>
               <SpeakButton
                 text={p.text}
@@ -320,7 +423,19 @@ function ReadingReader({
         ))}
       </div>
 
-      {/* Vocab penting — hidden by default */}
+      {/* Arti kalimat seluruh bacaan — blok sendiri di bawah */}
+      {showArti ? (
+        <div className="card space-y-2">
+          <p className="label">Arti kalimat</p>
+          {reading.body.paragraphs.map((p, i) => (
+            <p key={i} className="text-sm leading-snug text-zinc-600 dark:text-zinc-400">
+              {p.arti ?? "—"}
+            </p>
+          ))}
+        </div>
+      ) : null}
+
+      {/* Kosakata penting — hidden by default */}
       {showVocab ? (
         reading.body.vocab && reading.body.vocab.length > 0 ? (
           <div className="card space-y-2">
@@ -335,7 +450,7 @@ function ReadingReader({
                   />
                   <span className="font-semibold">{v.text}</span>
                   {v.kana ? <span className="text-xs text-zinc-400">{v.kana}</span> : null}
-                  <span className="min-w-0 flex-1 truncate text-zinc-600 dark:text-zinc-400">
+                  <span className="min-w-0 flex-1 text-zinc-600 dark:text-zinc-400">
                     — {v.meaning}
                   </span>
                 </li>
@@ -363,9 +478,10 @@ function ReadingReader({
         className="btn-ghost w-full justify-center text-xs"
         onClick={() => {
           toast("Bacaan tersimpan — bisa dibaca lagi kapan pun dari daftar");
+          window.scrollTo({ top: 0, behavior: "smooth" });
         }}
       >
-        <RotateCcw className="h-3.5 w-3.5" /> Baca ulang dari awal
+        Baca ulang dari awal
       </button>
     </div>
   );
@@ -386,7 +502,12 @@ export default function ReadingPage() {
           }}
         />
       ) : (
-        <ReadingList list={data.list} level={"level" in data ? data.level : null} />
+        <ReadingList
+          list={data.list}
+          level={"level" in data ? data.level : null}
+          lang={data.lang}
+          levels={data.levels}
+        />
       )}
     </div>
   );

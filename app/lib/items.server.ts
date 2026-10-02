@@ -15,6 +15,7 @@ import { env } from "./env.server";
 import { getTargetLang, detectLang } from "./lang.server";
 import { newCardRow } from "./fsrs.server";
 import { startOfDay, addDays } from "./utils.shared";
+import { getNewCardsPerDay } from "./prefs.server";
 
 /**
  * Data layer Item — BLUEPRINT §6/§7. Semua akses DB items/cards ada di sini.
@@ -442,6 +443,7 @@ export async function getReviewQueue(): Promise<{
   const today = startOfDay().getTime();
   const tomorrow = addDays(startOfDay(), 1).getTime();
   const lang = await getTargetLang();
+  const newPerDay = await getNewCardsPerDay(); // preferensi user (slider di Pengaturan)
 
   const dueRows = await db
     .select({
@@ -473,7 +475,7 @@ export async function getReviewQueue(): Promise<{
     .innerJoin(items, eq(items.id, cards.itemId))
     .where(and(gte(cards.due, today), lte(cards.due, tomorrow - 1), sql`${cards.reps} = 0`, eq(items.status, "learning"), eq(items.lang, lang)))
     .orderBy(items.createdAt)
-    .limit(env.NEW_CARDS_PER_DAY);
+    .limit(newPerDay);
 
   const all = [...dueRows, ...newRows];
   const exs = all.length
@@ -499,7 +501,7 @@ export async function getReviewQueue(): Promise<{
   return {
     due: dueRows.map(decorate),
     newCards: newRows.map(decorate),
-    newPerDay: env.NEW_CARDS_PER_DAY,
+    newPerDay,
   };
 }
 

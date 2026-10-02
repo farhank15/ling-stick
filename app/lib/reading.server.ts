@@ -1,18 +1,17 @@
 import { db } from "~/lib/db/client.server";
 import { readings } from "~/lib/db/schema";
+import { getTargetLang } from "~/lib/lang.server";
 import { chatJson } from "~/lib/llm.server";
 import { readingOutputSchema } from "~/lib/schemas";
 import { and, desc, eq, sql } from "drizzle-orm";
-// Konstanta/tipe client-safe tinggal di reading.shared — jangan dire-export dari
-// sini (route file yang import .server di module level bikin build gagal).
 import type { ReadingBody, ReadingLevel, ReadingRow } from "./reading.shared";
-import { isReadingLevel } from "./reading.shared";
+import { isReadingLevelFor, readingLevels } from "./reading.shared";
 
 // Re-export (tipe aman buat siapa pun yang konsisten import dari .server di server code).
-export { READING_LEVELS, isReadingLevel } from "./reading.shared";
+export { READING_LEVELS, isReadingLevel, isReadingLevelFor, readingLevels } from "./reading.shared";
 export type { ReadingLevel, ReadingBody, ReadingRow, ReadingParagraph } from "./reading.shared";
 
-const TOPICS_BY_LEVEL: Record<ReadingLevel, string[]> = {
+const TOPICS_JA: Record<string, string[]> = {
   N5: ["perkenalan diri", "makanan favorit", "hobi sehari-hari", "hujan di Tokyo", "kucing di taman"],
   N4: ["liburan ke Kyoto", "kerja part-time", "olahraga di musim panas", "surat ke teman", "restoran ramen"],
   N3: ["berita teknologi", "adat minuman teh", "perjalanan naik kereta", "cerita masa kecil", "festival musim panas"],
@@ -20,33 +19,60 @@ const TOPICS_BY_LEVEL: Record<ReadingLevel, string[]> = {
   N1: ["opini media", "cerpen sastra", "berita politik", "esai pendidikan", "tradisi vs modernisasi"],
 };
 
-function pickTopic(level: ReadingLevel, variant: number): string {
-  const list = TOPICS_BY_LEVEL[level];
+const TOPICS_EN: Record<string, string[]> = {
+  A1: ["my family", "my favorite food", "a day at school", "my cat", "the weather today"],
+  A2: ["a trip to the beach", "my first job", "weekend plans", "shopping online", "a birthday party"],
+  B1: ["social media habits", "learning a language", "public transport", "a childhood memory", "working from home"],
+  B2: ["remote work debate", "environment & recycling", "travel culture", "technology in education", "a short story"],
+  C1: ["media & opinion", "economics news", "urbanization", "an essay on education", "tradition vs modernity"],
+  C2: ["literary short story", "political commentary", "philosophy of technology", "cultural criticism", "satire"],
+};
+
+function pickTopic(lang: string, level: ReadingLevel, variant: number): string {
+  const pool = lang === "ja" ? TOPICS_JA : TOPICS_EN;
+  const list = pool[level] ?? pool[Object.keys(pool)[0]!]!;
   return list[Math.abs(variant) % list.length]!;
 }
 
-/** Generate bacaan baru per level — tiap varian topik beda; body berisi kana penuh per paragraf. */
+/** Generate bacaan baru — lang-aware: JA (JLPT, kana furigana) / EN (CEFR, teks + arti). */
 export async function generateReading(
+  lang: string,
   level: ReadingLevel,
   variant = 0,
 ): Promise<{ id: number; title: string }> {
-  const topic = pickTopic(level, variant);
-  const { data } = await chatJson(
-    `You write short reading passages in natural Japanese for an Indonesian adult learner at JLPT ${level}.
+  const topic = pickTopic(lang, level, variant);
+
+  const system =
+    lang === "ja"
+      ? `You write short reading passages in natural Japanese for an Indonesian adult learner at JLPT ${level}.
 Return ONLY valid JSON. No prose, no markdown fences.
 Rules:
 - 3 to 4 short paragraphs, ${level === "N5" ? "2-3" : "3-4"} sentences each. Grammar & vocabulary must genuinely match level ${level}.
-- Every paragraph: "text" = Japanese as normally written (kanji where natural), "kana" = the FULL kana reading of that paragraph (furigana source — REQUIRED, must cover every kanji), "romaji" = hepburn lowercase of the kana.
+- Every paragraph: "text" = Japanese as normally written (kanji where natural), "kana" = the FULL kana reading of that paragraph (furigana source — REQUIRED, must cover every kanji), "romaji" = hepburn lowercase of the kana, "arti" = natural casual Indonesian translation of the whole paragraph.
 - "title" = Japanese title, "title_en" = Indonesian translation of the title.
 - "vocab" = 5-7 key words: "text" (as written), "kana", "meaning" in casual Indonesian.
 - Everything except Japanese text/kana/romaji MUST be casual Indonesian.
 
 JSON shape:
-{ "title": string, "title_en": string, "paragraphs": [{ "text": string, "kana": string, "romaji": string }], "vocab": [{ "text": string, "kana": string, "meaning": string }] }`,
+{ "title": string, "title_en": string, "paragraphs": [{ "text": string, "kana": string, "romaji": string, "arti": string }], "vocab": [{ "text": string, "kana": string, "meaning": string }] }`
+      : `You write short reading passages in natural English for an Indonesian adult learner at CEFR level ${level}.
+Return ONLY valid JSON. No prose, no markdown fences.
+Rules:
+- 3 to 4 short paragraphs, ${level === "A1" || level === "A2" ? "2-3" : "3-4"} sentences each. Grammar & vocabulary must genuinely match level ${level}.
+- Every paragraph: "text" = the English paragraph, "kana" = "" (not used for English), "arti" = natural casual Indonesian translation of the whole paragraph. "romaji" is omitted.
+- "title" = English title, "title_en" = Indonesian translation of the title.
+- "vocab" = 5-7 key words: "text", "meaning" in casual Indonesian ("kana" omitted).
+- Everything except the English text MUST be casual Indonesian.
+
+JSON shape:
+{ "title": string, "title_en": string, "paragraphs": [{ "text": string, "kana": string, "arti": string }], "vocab": [{ "text": string, "meaning": string }] }`;
+
+  const { data } = await chatJson(
+    system,
     `Topic: "${topic}" (variasi ke-${variant + 1}, jangan berulang persis). Buat bacaan level ${level}.`,
     readingOutputSchema,
-    `reading:ja:v1`,
-    `${level}|${topic}|${variant}`,
+    `reading:${lang}:v1`,
+    `${lang}|${level}|${topic}|${variant}`,
   );
 
   const body: ReadingBody = {
@@ -54,7 +80,7 @@ JSON shape:
     vocab: data.vocab ?? [],
   };
   const wordCount = data.paragraphs.reduce(
-    (n, p) => n + (p.text.match(/[\u3040-\u30ff\u4e00-\u9faf]+|[a-zA-Z]+/g)?.length ?? 0),
+    (n, p) => n + (p.text.match(/[\u3040-\u30ff\u4e00-\u9faf]+|[a-zA-Z']+/g)?.length ?? 0),
     0,
   );
   const [row] = await db
@@ -64,7 +90,7 @@ JSON shape:
       titleEn: data.title_en || null,
       level,
       topic,
-      lang: "ja",
+      lang,
       body: JSON.stringify(body),
       wordCount,
       readCount: 0,
@@ -75,8 +101,8 @@ JSON shape:
   return { id: row!.id, title: data.title };
 }
 
-export async function listReadings(level?: ReadingLevel): Promise<ReadingRow[]> {
-  const conds = [eq(readings.lang, "ja")];
+export async function listReadings(lang: string, level?: ReadingLevel): Promise<ReadingRow[]> {
+  const conds = [eq(readings.lang, lang)];
   if (level) conds.push(eq(readings.level, level));
   const rows = await db
     .select({
@@ -96,9 +122,12 @@ export async function listReadings(level?: ReadingLevel): Promise<ReadingRow[]> 
   return rows;
 }
 
-export async function getReading(id: number): Promise<(ReadingRow & { body: ReadingBody }) | null> {
+export async function getReading(
+  lang: string,
+  id: number,
+): Promise<(ReadingRow & { body: ReadingBody }) | null> {
   const [row] = await db.select().from(readings).where(eq(readings.id, id)).limit(1);
-  if (!row) return null;
+  if (!row || row.lang !== lang) return null;
   let body: ReadingBody = { paragraphs: [], vocab: [] };
   try {
     body = JSON.parse(row.body) as ReadingBody;
@@ -113,4 +142,9 @@ export async function bumpReadCount(id: number): Promise<void> {
     .update(readings)
     .set({ readCount: sql`${readings.readCount} + 1` })
     .where(eq(readings.id, id));
+}
+
+/** Hapus bacaan permanen (tombol delete di list). */
+export async function deleteReading(id: number): Promise<void> {
+  await db.delete(readings).where(eq(readings.id, id));
 }

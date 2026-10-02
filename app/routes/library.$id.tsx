@@ -4,6 +4,7 @@ import { ArrowLeft, CheckCircle2, Lightbulb, Loader2, Sparkles, TriangleAlert, V
 import { useState } from "react";
 import { ConfirmModal } from "~/components/ConfirmModal";
 import { SpeakButton } from "~/components/SpeakButton";
+import { JaText, hasJa, splitReading } from "~/components/JaText";
 import { requireUser } from "~/lib/auth.server";
 import { deleteItem, getItemDetail, markLearning, updateItem } from "~/lib/items.server";
 import { redirect } from "react-router";
@@ -63,14 +64,12 @@ export default function ItemDetail() {
     if (genEx.busy) return;
     setGenEx({ busy: true, error: null });
     try {
-      const isEn = /^[\x00-\x7F\s'’-]+$/.test(item.text);
+      // TANPA direction — server tentukan arah dari bahasa target aktif + isi teks
+      // (dulu regex ASCII: kanji wo/kore dianggap EN → contoh jadi bahasa Inggris).
       const res = await fetch("/api/usage-examples", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          text: item.text.slice(0, 300),
-          direction: isEn ? "en2id" : "id2en",
-        }),
+        body: JSON.stringify({ text: item.text.slice(0, 300) }),
       });
       const data = await res.json();
       if (!res.ok || !data.result) throw new Error(data.error || "Gagal generate");
@@ -213,9 +212,28 @@ export default function ItemDetail() {
                   title="Dengarkan contoh"
                 />
               </div>
-              <p className="mt-1.5 text-sm">
-                <Highlighted text={ex.en} highlight={item.text} />
-              </p>
+              {(() => {
+                const jpLine = ex.en.split("\n")[0] ?? ex.en;
+                const romajiLine = ex.en.includes("\n") ? ex.en.split("\n").slice(1).join(" ") : null;
+                // JA: furigana per kanji + romaji baris ke-2. EN: polos + highlight.
+                if (hasJa(jpLine)) {
+                  return (
+                    <>
+                      <p className="mt-1.5 text-sm">
+                        <JaText text={jpLine} className="text-sm" />
+                      </p>
+                      {romajiLine ? (
+                        <p className="text-xs text-zinc-400 dark:text-zinc-500">{romajiLine}</p>
+                      ) : null}
+                    </>
+                  );
+                }
+                return (
+                  <p className="mt-1.5 text-sm">
+                    <Highlighted text={ex.en} highlight={item.text} />
+                  </p>
+                );
+              })()}
               <p className="text-xs text-zinc-500 dark:text-zinc-400">{ex.idText}</p>
             </div>
           ))

@@ -33,50 +33,82 @@ export function splitReading(reading: string | null | undefined): { kana: string
 export type JaSegment = { base: string; ruby?: string };
 
 /**
- * Petakan furigana per-run: kanji run dapat potongan kana dari reading,
- * kana di teks dikonsumsi langsung dari reading (harus cocok berurutan).
- * Gak cocok → fallback: satu run dengan seluruh reading di atas.
+ * Petakan furigana PER-RUN: kanji run dapat potongan kana dari reading di atasnya;
+ * kana yang ada DI TEKS udah bisa dibaca sendiri → TANPA ruby (jangan dikasih
+ * hiragana di atas hiragana). Tanda baca/karakter aneh di-skip dua sisi.
+ * Alignment gagal → POLOS tanpa ruby (lebih baik kehilangan furigana daripada
+ * satu gumpalan hiragana ngumpul di atas).
  */
 export function buildRuby(text: string, reading: string | null | undefined): JaSegment[] {
   const { kana } = splitReading(reading);
   if (!hasJa(text) || !kana) return [{ base: text }];
-  // Harus hanya terdiri dari kanji/kana (tanpa latin/tanda aneh) biar alignment bisa dipercaya.
-  for (const ch of text) {
-    if (!KANJI_RE.test(ch) && !KANA_RE.test(ch)) return [{ base: text, ruby: kana }];
-  }
+  // Kalau teks = kana murni (tanpa kanji), gak perlu furigana sama sekali.
+  if (!KANJI_RE.test(text)) return [{ base: text }];
 
-  // Parse jadi run kanji & run kana.
-  const runs: { kind: "kanji" | "kana"; text: string }[] = [];
+  // Teks dipecah per run kanji / run non-kanji (kana, tanda baca, latin, dsb).
+  const runs: { kind: "kanji" | "other"; text: string }[] = [];
   for (const ch of text) {
-    const kind = KANJI_RE.test(ch) ? "kanji" : "kana";
+    const kind = KANJI_RE.test(ch) ? "kanji" : "other";
     const last = runs[runs.length - 1];
     if (last && last.kind === kind) last.text += ch;
     else runs.push({ kind, text: ch });
   }
 
+  // Karakter kana yang BISA dipakai alignment (bukan tanda baca/pemisah).
+  const isAlignable = (ch: string) => KANA_RE.test(ch) && !/[\u3000-\u303f\u30fb\u30fc\uff01-\uff65]/.test(ch);
+
   const segments: JaSegment[] = [];
   let rp = 0; // pointer di reading
-  for (let i = 0; i < runs.length; i++) {
+  let ok = true;
+  for (let i = 0; i < runs.length && ok; i++) {
     const run = runs[i]!;
     if (run.kind === "kanji") {
-      // Run terakhir → sisanya; kalau ada run kana berikutnya → potong di kana pertama run itu.
-      const nextKanaRun = runs.slice(i + 1).find((r) => r.kind === "kana");
+      // Batas run kanji: kana alignable pertama di reading setelah posisi sekarang.
       let end = kana.length;
-      if (nextKanaRun) {
-        const idx = kana.indexOf(nextKanaRun.text[0]!, rp);
-        if (idx === -1) return [{ base: text, ruby: kana }];
-        end = idx;
+      for (let j = i + 1; j < runs.length; j++) {
+        const nx = runs[j]!;
+        if (nx.kind === "kanji") continue;
+        const probe = [...nx.text].find(isAlignable);
+        if (probe) {
+          const idx = kana.indexOf(probe, rp);
+          if (idx === -1) {
+            ok = false;
+            break;
+          }
+          end = idx;
+        }
+        break;
       }
-      segments.push({ base: run.text, ruby: kana.slice(rp, end) });
+      if (!ok) break;
+      let ruby = kana.slice(rp, end);
+      // Tanda baca di tepi ruby bukan bagian bacaan kanji (itu punya run sendiri di teks) — buang.
+      let sIdx = 0;
+      let eIdx = ruby.length - 1;
+      while (sIdx <= eIdx && !isAlignable(ruby[sIdx]!)) sIdx++;
+      while (eIdx >= sIdx && !isAlignable(ruby[eIdx]!)) eIdx--;
+      ruby = sIdx <= eIdx ? ruby.slice(sIdx, eIdx + 1) : "";
+      segments.push({ base: run.text, ruby: ruby || undefined });
       rp = end;
     } else {
+      // Run non-kanji: konsumsi kana yang cocok dari reading, skip tanda baca.
       for (const ch of run.text) {
-        if (kana[rp] !== ch) return [{ base: text, ruby: kana }];
+        if (!isAlignable(ch)) {
+          segments.push({ base: ch });
+          continue;
+        }
+        // Kana di teks bisa skip beberapa karakter non-alignable di reading.
+        while (rp < kana.length && !isAlignable(kana[rp]!)) rp++;
+        if (kana[rp] !== ch) {
+          // Sisa run kana setelah gagal → polos aja (gak usah nebak-nebakan).
+          ok = false;
+          break;
+        }
         segments.push({ base: ch });
         rp += 1;
       }
     }
   }
+  if (!ok) return [{ base: text }];
   return segments;
 }
 

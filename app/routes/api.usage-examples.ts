@@ -18,7 +18,14 @@ import { hashKey, normalizeText } from "~/lib/utils.shared";
 const schema = z.object({
   pronunciation: z.string().min(1),
   examples: z
-    .array(z.object({ en: z.string().min(1), id: z.string().min(1) }))
+    .array(
+      z.object({
+        en: z.string().min(1),
+        id: z.string().min(1),
+        kana: z.string().catch("").optional(), // JA: bacaan penuh kalimat — furigana
+        romaji: z.string().catch("").optional(),
+      }),
+    )
     .min(3)
     .max(5),
 });
@@ -28,10 +35,10 @@ type Out = z.infer<typeof schema>;
 const jaSystem = `You are a Japanese language teacher for Indonesian speakers. Return ONLY valid JSON, no prose.
 The user gives a Japanese word/phrase/sentence (or an Indonesian phrase to be expressed in Japanese). Provide:
 - "pronunciation": how to READ THE JAPANESE TEXT aloud — kana reading, then romaji in parentheses. Example: "じゅんび (junbi)". Always for the JAPANESE text, never Indonesian.
-- "examples": 3 to 5 SHORT, natural, real-life JAPANESE sentences showing how the expression is used in everyday situations, each with a casual Indonesian translation. Each "en" field = the Japanese sentence with its romaji on the SECOND line (two lines separated by \\n).
+- "examples": 3 to 5 SHORT, natural, real-life JAPANESE sentences showing how the expression is used in everyday situations, each with a casual Indonesian translation. Each example = { "en": the JAPANESE sentence, "kana": the FULL kana reading of that sentence (furigana source — REQUIRED), "romaji": hepburn lowercase, "id": Indonesian translation }.
 - The Japanese examples must NOT be literal translations of the input; they should be typical real-life usages.
 
-JSON shape: { "pronunciation": string, "examples": [{ "en": string, "id": string }] }`;
+JSON shape: { "pronunciation": string, "examples": [{ "en": string, "kana": string, "romaji": string, "id": string }] }`;
 
 const enSystem = `You are an English teacher for Indonesian speakers. Return ONLY valid JSON, no prose.
 The user gives a word/phrase/sentence and its English translation context. Provide:
@@ -54,13 +61,17 @@ export async function action({ request }: ActionFunctionArgs) {
   const lang = await getTargetLang();
   // Auto-arah dari isi teks kalau param gak dikenal: ada kana/kanji = sisi JP/EN.
   const looksJa = /[\u3040-\u30ff\u4e00-\u9faf]/.test(text);
-  const direction = ["en2id", "id2en", "ja2id", "id2ja"].includes(body.direction ?? "")
-    ? body.direction!
-    : looksJa
-      ? "ja2id"
-      : lang === "ja"
-        ? "id2ja"
-        : "id2en";
+  // Arah MENGIKUTI bahasa target aktif (bug lama: klien kirim direction dari regex
+  // ASCII — kanji seperti 私/食べる dianggap EN → contoh ter-generate bahasa Inggris
+  // di mode JA). Param direction dari klien diabaikan kecuali valid sesuai lang.
+  const direction =
+    lang === "ja"
+      ? looksJa
+        ? "ja2id"
+        : "id2ja"
+      : looksJa
+        ? "ja2id"
+        : "en2id";
   const isJaSide = direction === "ja2id" || direction === "id2ja";
 
   const cacheKey = hashKey("usage-ex:v2", normalizeText(text), direction);

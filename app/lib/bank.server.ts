@@ -193,7 +193,9 @@ export async function markKnown(bankId: number) {
   if (entry.itemId) {
     await db.update(items).set({ status: "known" }).where(eq(items.id, entry.itemId));
   }
-  await db.delete(wordbank).where(eq(wordbank.id, bankId));
+  // Row bank TETAP ada (status=known) — dulu di-DELETE, bikin entri yang udah
+  // ditandai hafal muncul lagi di list setelah refresh.
+  await db.update(wordbank).set({ status: "known" }).where(eq(wordbank.id, bankId));
 }
 
 /* ── Generate kata baru via LLM ─────────────────────────────── */

@@ -9,6 +9,7 @@ import { llmUsage } from "~/lib/db/schema";
 import { env } from "~/lib/env.server";
 import { getTargetLang, setTargetLang, isTargetLang, type TargetLang } from "~/lib/lang.server";
 import { laraStatus } from "~/lib/lara.server";
+import { getNewCardsPerDay, setNewCardsPerDay, NEW_CARDS_MIN, NEW_CARDS_MAX } from "~/lib/prefs.server";
 import { eq } from "drizzle-orm";
 import { todayStr } from "~/lib/utils.shared";
 import { llmConfigured } from "~/lib/llm.server";
@@ -41,14 +42,22 @@ export async function loader({ request }: LoaderFunctionArgs) {
     poolsideConfigured: Boolean(env.POOLSIDE_API_KEY && env.POOLSIDE_MODEL),
     poolsideModel: env.POOLSIDE_MODEL || "(belum diset)",
     baseUrl: env.GROQ_BASE_URL,
-    newCardsPerDay: env.NEW_CARDS_PER_DAY,
+    newCardsPerDay: await getNewCardsPerDay(),
+    newCardsMin: NEW_CARDS_MIN,
+    newCardsMax: NEW_CARDS_MAX,
   };
 }
 
-/** POST action — ganti bahasa target aktif (en/ja). */
+/** POST action — ganti bahasa target aktif (en/ja) / simpan preferensi review. */
 export async function action({ request }: ActionFunctionArgs) {
   await requireUser(request);
-  const body = (await request.json().catch(() => ({}))) as { lang?: string };
+  const body = (await request.json().catch(() => ({}))) as { lang?: string; newCardsPerDay?: number };
+
+  if (typeof body.newCardsPerDay === "number") {
+    const saved = await setNewCardsPerDay(body.newCardsPerDay);
+    return Response.json({ ok: true, newCardsPerDay: saved });
+  }
+
   if (!isTargetLang(body.lang)) {
     return Response.json({ ok: false, error: "Bahasa tidak dikenal" }, { status: 400 });
   }
@@ -73,11 +82,14 @@ export default function Settings() {
   const [importing, setImporting] = useState(false);
   const fileRef = useRef<HTMLInputElement | null>(null);
 
+  // Statistik dimuat via API (query berat) — tampilkan skeleton biar gak kerasa kosong.
+  const [statsLoading, setStatsLoading] = useState(true);
   useEffect(() => {
     fetch("/api/stats")
       .then((r) => r.json())
       .then(setStats)
-      .catch(() => {});
+      .catch(() => {})
+      .finally(() => setStatsLoading(false));
   }, []);
 
   const doImport = async (file: File) => {
@@ -113,7 +125,20 @@ export default function Settings() {
 
   return (
     <div className="space-y-4">
-      {stats ? <StatsSection stats={stats} /> : null}
+      {/* Skeleton statistik — bloknya di paling atas, jadi harus ada feedback sejak awal */}
+      {statsLoading ? (
+        <div className="card animate-pulse space-y-3" aria-hidden>
+          <div className="h-4 w-24 rounded bg-zinc-200 dark:bg-zinc-800" />
+          <div className="grid grid-cols-3 gap-2">
+            {[0, 1, 2].map((i) => (
+              <div key={i} className="h-16 rounded-xl bg-zinc-100 dark:bg-zinc-800/60" />
+            ))}
+          </div>
+          <div className="h-20 rounded-xl bg-zinc-100 dark:bg-zinc-800/60" />
+        </div>
+      ) : stats ? (
+        <StatsSection stats={stats} />
+      ) : null}
       <LangPicker current={data.targetLang} />
 
       <section className="card space-y-1.5">
@@ -153,14 +178,7 @@ export default function Settings() {
         </p>
       </section>
 
-      <section className="card space-y-1.5">
-        <h2 className="label">Review</h2>
-        <Row k="Kartu baru / hari" v={`${data.newCardsPerDay} kata`} />
-        <p className="text-[11px] text-zinc-400">
-          Jumlah kata baru yang masuk antrian flashcard &amp; kuis tiap hari. Naikin kalau mau
-          nambah kosakata lebih cepat, turunin kalau mulai kewalahan.
-        </p>
-      </section>
+      <NewCardsSection initial={data.newCardsPerDay} min={data.newCardsMin} max={data.newCardsMax} />
 
       <section className="card space-y-2">
         <h2 className="label">Backup & restore</h2>
@@ -355,5 +373,68 @@ function Row({ k, v, ok }: { k: string; v: string; ok?: boolean }) {
         <span className="truncate">{v}</span>
       </span>
     </div>
+  );
+}
+
+/** Kartu baru per hari — slider yang beneran bisa disimpen (dulu cuma teks statis). */
+function NewCardsSection({ initial, min, max }: { initial: number; min: number; max: number }) {
+  const toast = useToast();
+  const [val, setVal] = useState(initial);
+  const [saving, setSaving] = useState(false);
+  const savedRef = useRef(initial);
+
+  const save = async (n: number) => {
+    if (n === savedRef.current || saving) return;
+    setSaving(true);
+    try {
+      const res = await fetch("/settings", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ newCardsPerDay: n }),
+      });
+      const d = (await res.json().catch(() => ({}))) as { ok?: boolean; newCardsPerDay?: number };
+      if (!res.ok || !d.ok) throw new Error("Gagal menyimpan");
+      savedRef.current = d.newCardsPerDay ?? n;
+      toast(`Kartu baru/hari: ${savedRef.current}`);
+    } catch (e) {
+      toast(e instanceof Error ? e.message : "Gagal menyimpan");
+      setVal(savedRef.current);
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  return (
+    <section className="card space-y-2">
+      <h2 className="label">Review</h2>
+      <div className="flex items-center justify-between gap-2 text-sm">
+        <span className="text-zinc-500 dark:text-zinc-400">Kartu baru / hari</span>
+        <span className="inline-flex items-center gap-1 font-medium">
+          {saving ? <CircleCheck className="h-4 w-4 shrink-0 text-teal-600 dark:text-teal-400" /> : null}
+          {val} kata
+        </span>
+      </div>
+      <input
+        type="range"
+        min={min}
+        max={max}
+        step={1}
+        value={val}
+        className="w-full accent-teal-600"
+        aria-label="Kartu baru per hari"
+        onChange={(e) => setVal(Number(e.target.value))}
+        onPointerUp={() => void save(val)}
+        onKeyUp={() => void save(val)}
+        onBlur={() => void save(val)}
+      />
+      <div className="flex justify-between text-[10px] text-zinc-400">
+        <span>{min}</span>
+        <span>{max}</span>
+      </div>
+      <p className="text-[11px] text-zinc-400">
+        Jumlah kata baru yang masuk antrian flashcard &amp; kuis tiap hari. Geser buat ngubah —
+        naikin kalau mau nambah kosakata lebih cepat, turunin kalau mulai kewalahan.
+      </p>
+    </section>
   );
 }

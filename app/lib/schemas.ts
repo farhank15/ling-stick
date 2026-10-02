@@ -121,6 +121,7 @@ export const readingOutputSchema = z.object({
         text: z.string().min(1),
         kana: z.string().min(1), // bacaan penuh — sumber furigana per kanji
         romaji: z.string().catch("").optional(),
+        arti: z.string().catch("").optional(), // terjemahan Indonesia kalimat
       }),
     )
     .min(1)

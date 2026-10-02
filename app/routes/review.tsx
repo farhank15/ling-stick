@@ -9,6 +9,7 @@ import {
   Ear,
   History,
   Keyboard,
+  Loader2,
   Layers,
   Lightbulb,
   PartyPopper,
@@ -197,6 +198,7 @@ function ModePicker({
   onGenerate,
   genBusy,
   genMsg,
+  genIsError,
   ja,
 }: {
   periodic: Periodic | null;
@@ -204,12 +206,20 @@ function ModePicker({
   onGenerate: (mode: "typing" | "intens") => void;
   genBusy: string | null;
   genMsg: string | null;
+  genIsError: boolean;
   ja: boolean;
 }) {
   return (
     <div className="space-y-4">
       {genMsg ? (
-        <div className="rounded-xl bg-teal-50 px-4 py-3 text-sm text-teal-800 dark:bg-teal-950 dark:text-teal-300">
+        <div
+          className={`rounded-xl px-4 py-3 text-sm ${
+            genIsError
+              ? "bg-red-50 text-red-700 dark:bg-red-950 dark:text-red-400"
+              : "bg-teal-50 text-teal-800 dark:bg-teal-950 dark:text-teal-300"
+          }`}
+          role={genIsError ? "alert" : "status"}
+        >
           {genMsg}
         </div>
       ) : null}
@@ -284,11 +294,16 @@ function ModePicker({
                 onClick={() => onGenerate(m.id as "typing" | "intens")}
               >
                 {genBusy === m.id ? (
-                  <RotateCcw className="h-4 w-4 animate-spin" />
+                  <>
+                    <Loader2 className="h-4 w-4 animate-spin" />
+                    Menyusun…
+                  </>
                 ) : (
-                  <Plus className="h-4 w-4" />
+                  <>
+                    <Plus className="h-4 w-4" />
+                    Generate
+                  </>
                 )}
-                Generate
               </button>
             )}
           </div>
@@ -318,24 +333,27 @@ function ModePicker({
         </Link>
       ) : null}
 
-      {/* Latihan Reading (berita/cerpen) — khusus mode Jepang */}
+      {/* Latihan Reading — JA (JLPT) & EN (CEFR) */}
       <Link
         to="/reading"
         className="card flex items-center gap-3 p-4 transition-colors hover:border-teal-300 dark:hover:border-teal-800"
       >
-        <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-teal-50 text-lg font-bold text-teal-700 dark:bg-teal-950 dark:text-teal-300">
-          読
+        <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-teal-50 text-teal-700 dark:bg-teal-950 dark:text-teal-300">
+          <BookOpenCheck className="h-5 w-5" strokeWidth={1.75} />
         </span>
         <div className="min-w-0 flex-1">
           <p className="font-semibold">Reading</p>
           <p className="truncate text-xs text-zinc-500">
-            Baca berita &amp; cerpen per level N5–N1 — kanji hijau + furigana, bisa diulang
+            {ja
+              ? "Baca berita & cerpen per level N5–N1 — kanji hijau + furigana, bisa diulang"
+              : "Baca teks pendek per level CEFR A1–C2 dengan arti Indonesia"}
           </p>
         </div>
         <ArrowRight className="h-4 w-4 shrink-0 text-zinc-400" />
       </Link>
 
       {/* Latihan nulis kanji/kana — khusus mode Jepang */}
+      {ja ? (
       <Link
         to="/write"
         className="card flex items-center gap-3 p-4 transition-colors hover:border-teal-300 dark:hover:border-teal-800"
@@ -351,6 +369,7 @@ function ModePicker({
         </div>
         <ArrowRight className="h-4 w-4 shrink-0 text-zinc-400" />
       </Link>
+      ) : null}
     </div>
   );
 }
@@ -435,6 +454,8 @@ export default function ReviewPage() {
   >([]);
   const [genBusy, setGenBusy] = useState<string | null>(null);
   const [genMsg, setGenMsg] = useState<string | null>(null);
+  // Pesan generate terakhir itu error? (band merah vs hijau di picker)
+  const genIsError = genBusy === null && genMsg !== null && !/selesai/i.test(genMsg);
   // Timer TOEFL: 25 menit — habis = tes otomatis berakhir (jawaban terkini dihitung).
   const [timeLeft, setTimeLeft] = useState<number | null>(null);
   const [timeUp, setTimeUp] = useState(false);
@@ -950,6 +971,7 @@ export default function ReviewPage() {
         onGenerate={generateSet}
         genBusy={genBusy}
         genMsg={genMsg}
+        genIsError={genIsError}
       />
     );
   }

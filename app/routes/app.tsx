@@ -107,16 +107,10 @@ export default function AppLayout() {
               onClick={() => setNotifOpen((o) => !o)}
             >
               <Bell className="h-5 w-5" strokeWidth={1.75} />
-              {/* Dot notif: latihan harian (hijau). Mode JA: CUMA ini — tes periodik
-                  (JLPT) cukup diakses dari Review, gak perlu dot dobel yang bikin rame. */}
+              {/* Dot notif: SATU dot merah — nyala kalau ada latihan harian yang belum
+                  selesai. Tes periodik cukup dari Review, gak perlu dot dobel/tripel. */}
               {quizPending && !quizPending.completed ? (
-                <span className="absolute top-1.5 right-1.5 h-2 w-2 rounded-full bg-emerald-500" />
-              ) : null}
-              {!isJa && periodic?.toefl && !periodic.toefl.completed ? (
-                <span className="absolute top-1.5 right-4 h-2 w-2 rounded-full bg-indigo-500" />
-              ) : null}
-              {!isJa && periodic?.bulanan?.available && !periodic.bulanan.completed ? (
-                <span className="absolute top-1.5 right-7 h-2 w-2 rounded-full bg-amber-500" />
+                <span className="absolute top-1.5 right-1.5 h-2 w-2 rounded-full bg-red-500" />
               ) : null}
             </button>
             {notifOpen ? (
