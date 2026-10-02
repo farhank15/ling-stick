@@ -15,6 +15,7 @@ import { getTargetLang } from "~/lib/lang.server";
 import { JaText, hasJa } from "~/components/JaText";
 import { useToast } from "~/components/Toast";
 import { ttsLang } from "~/lib/utils.shared";
+import { SpeakButton } from "~/components/SpeakButton";
 
 export const meta: MetaFunction = () => [{ title: "Terjemah — LingStick" }];
 export const handle = { title: "Terjemah" };
@@ -320,14 +321,10 @@ export default function Translate() {
               )}
               <div className="mt-1.5 flex items-center gap-1.5">
                 {hasJa(result.translation ?? "") ? (
-                  <button
-                    className="rounded-lg p-1 text-teal-600 hover:bg-teal-50 dark:text-teal-400 dark:hover:bg-teal-950"
-                    onClick={() => speak(result.translation)}
-                    title="Dengarkan"
-                    aria-label="Dengarkan"
-                  >
-                    <Volume2 className="h-4 w-4" />
-                  </button>
+                  <SpeakButton
+                    text={result.translation}
+                    buttonClassName="rounded-lg p-1 text-teal-600 hover:bg-teal-50 dark:text-teal-400 dark:hover:bg-teal-950"
+                  />
                 ) : null}
                 {/* Mesin penerjemah: Lara (hemat kuota AI) atau fallback AI */}
                 <span
@@ -353,14 +350,11 @@ export default function Translate() {
                       <span className="text-sm text-zinc-600 dark:text-zinc-400">
                         {usage.pronunciation}
                       </span>
-                      <button
-                        className="rounded-full p-0.5"
-                        onClick={() => speak(foreignSide)}
-                        title="Dengarkan"
-                        aria-label="Dengarkan"
-                      >
-                        <Volume2 className="h-4 w-4 text-teal-600 dark:text-teal-400" />
-                      </button>
+                      <SpeakButton
+                        text={foreignSide}
+                        buttonClassName="rounded-full p-0.5"
+                        className="h-4 w-4 text-teal-600 dark:text-teal-400"
+                      />
                     </>
                   ) : (
                     <span className="inline-flex items-center gap-1.5 text-xs text-zinc-400">

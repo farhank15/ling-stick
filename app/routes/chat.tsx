@@ -17,6 +17,7 @@ import {
 import { requireUser } from "~/lib/auth.server";
 import { getTargetLang } from "~/lib/lang.server";
 import { JaText, hasJa } from "~/components/JaText";
+import { SpeakButton } from "~/components/SpeakButton";
 import { ConfirmModal } from "~/components/ConfirmModal";
 import { MarkdownLite } from "~/components/MarkdownLite";
 import { useToast } from "~/components/Toast";
@@ -367,14 +368,13 @@ export default function Chat() {
                         <Copy className="h-3.5 w-3.5" />
                       )}
                     </button>
-                    <button
-                      className="rounded-full p-1 hover:bg-zinc-100 dark:hover:bg-zinc-800"
-                      onClick={() => speak(m.content, "id-ID")}
-                      title="Dengarkan"
-                      aria-label="Dengarkan jawaban"
-                    >
-                      <Volume2 className="h-3.5 w-3.5" />
-                    </button>
+                    <SpeakButton
+                      text={m.content}
+                      lang="id-ID"
+                      className="h-3.5 w-3.5"
+                      buttonClassName="rounded-full p-1 hover:bg-zinc-100 dark:hover:bg-zinc-800"
+                      title="Dengarkan jawaban"
+                    />
                   </div>
                   {m.suggestions && m.suggestions.length > 0 ? (
                     <div className="mt-2 space-y-2 border-t border-zinc-100 pt-2.5 dark:border-zinc-800">
@@ -412,14 +412,12 @@ export default function Chat() {
                           {s.examples[0] ? (
                             <p className="mt-1 flex items-start gap-1 text-xs italic text-zinc-500 dark:text-zinc-500">
                               <span>“{s.examples[0].en}” — {s.examples[0].id}</span>
-                              <button
-                                className="shrink-0 not-italic"
-                                onClick={() => speak(s.examples[0].en)}
+                              <SpeakButton
+                                text={s.examples[0].en}
+                                className="h-3 w-3"
+                                buttonClassName="shrink-0 not-italic"
                                 title="Dengarkan contoh"
-                                aria-label="Dengarkan contoh"
-                              >
-                                <Volume2 className="h-3 w-3" />
-                              </button>
+                              />
                             </p>
                           ) : null}
                         </div>

@@ -6,6 +6,7 @@ import { requireUser } from "~/lib/auth.server";
 import { db } from "~/lib/db/client.server";
 import { cards, items, wordbank } from "~/lib/db/schema";
 import { getTargetLang } from "~/lib/lang.server";
+import { JaText } from "~/components/JaText";
 import { and, eq, ne, sql } from "drizzle-orm";
 
 export const meta: MetaFunction = () => [{ title: "Latihan Nulis — LingStick" }];
@@ -133,7 +134,10 @@ export default function WritePage() {
     );
   }
 
-  const stripRomaji = (s: string) => s.replace(/\s*\([^)]*\)\s*$/, "").trim();
+  // Panduan samar per karakter — kata multi-kanji (学校) dapat 2 kotak, bukan cuma kanji pertama.
+  const chars = [...target.text];
+  const guideSize =
+    chars.length <= 2 ? "text-[8rem]" : chars.length <= 4 ? "text-[4rem]" : "text-[2.5rem]";
 
   return (
     <div className="space-y-4">
@@ -175,13 +179,17 @@ export default function WritePage() {
 
       <div className="flex justify-center">
         <div className="relative">
-          {/* Panduan samar di belakang canvas */}
+          {/* Panduan samar di belakang canvas — tiap karakter kotaknya sendiri (genkō yōshi) */}
           {showGuide ? (
             <span
               aria-hidden
-              className="pointer-events-none absolute inset-0 flex items-center justify-center text-[11rem] leading-none font-bold text-zinc-200 select-none dark:text-zinc-800"
+              className="pointer-events-none absolute inset-0 flex items-center justify-center text-zinc-200 select-none dark:text-zinc-800"
             >
-              {target.text.slice(0, 1)}
+              {chars.map((ch, i) => (
+                <span key={i} className={`${guideSize} flex-1 text-center leading-none font-bold`}>
+                  {ch}
+                </span>
+              ))}
             </span>
           ) : null}
           <canvas
@@ -198,13 +206,18 @@ export default function WritePage() {
       </div>
 
       <div className="text-center">
-        <p className="text-2xl font-bold">{target.text}</p>
-        {target.reading ? (
-          <p className="mt-0.5 text-sm text-zinc-400 dark:text-zinc-500">
-            {showRomaji && target.reading.includes("(")
-              ? target.reading
-              : stripRomaji(target.reading)}
-          </p>
+        {/* Format sama dgn Bank/Aksara: kanji + furigana hiragana kecil redup di atasnya */}
+        <p className="text-2xl font-bold">
+          <JaText
+            text={target.text}
+            reading={target.reading}
+            romajiToggle={false}
+            className="text-2xl font-bold"
+          />
+        </p>
+        {/* Romaji lewat toggle icon di header (showRomaji) — full "かな (romaji)" */}
+        {showRomaji && target.reading ? (
+          <p className="mt-0.5 text-sm text-zinc-400 dark:text-zinc-500">{target.reading}</p>
         ) : null}
         <p className="mt-1 text-sm text-zinc-600 dark:text-zinc-400">{target.meaningId}</p>
       </div>

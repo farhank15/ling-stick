@@ -8,6 +8,7 @@ import { exploreItems, items, settings } from "~/lib/db/schema";
 import { EXPLORE_CATEGORIES, EXPLORE_CATEGORIES_JA } from "~/lib/explore.categories";
 import { getTargetLang } from "~/lib/lang.server";
 import { JaText, hasJa } from "~/components/JaText";
+import { SpeakButton } from "~/components/SpeakButton";
 import { and, asc, eq, inArray } from "drizzle-orm";
 import { saveExploreRow } from "~/lib/items.server";
 import { useToast } from "~/components/Toast";
@@ -268,7 +269,7 @@ export default function ExploreCategory() {
   const isSaved = (r: Row) => r.saved || savedTexts.has(r.text);
 
   // Contoh kalimat 3–5 (dari examples_json); fallback 1 contoh lama bila kosong.
-  const examplesOf = (r: Row): { en: string; id: string }[] => {
+  const examplesOf = (r: Row): { en: string; id: string; kana?: string | null }[] => {
     const list = parsedExamples(r.examplesJson);
     if (list.length > 0) return list;
     return r.exampleEn ? [{ en: r.exampleEn, id: r.exampleId ?? "" }] : [];
@@ -340,14 +341,10 @@ export default function ExploreCategory() {
                 ) : (
                   <p className="truncate font-semibold">{r.text}</p>
                 )}
-                <button
-                  className="shrink-0 rounded-lg p-1 text-zinc-400 hover:bg-zinc-100 hover:text-teal-600 dark:hover:bg-zinc-800"
-                  title="Cara baca"
-                  aria-label={`Dengarkan ${r.text}`}
-                  onClick={() => speak(r.text)}
-                >
-                  <Volume2 className="h-4 w-4" />
-                </button>
+                <SpeakButton
+                  text={r.text}
+                  buttonClassName="shrink-0 rounded-lg p-1 text-zinc-400 hover:bg-zinc-100 hover:text-teal-600 dark:hover:bg-zinc-800"
+                />
               </div>
               {isSaved(r) ? (
                 <span className="badge inline-flex shrink-0 items-center gap-1 bg-teal-50 text-teal-700 dark:bg-teal-950 dark:text-teal-400">
@@ -372,19 +369,18 @@ export default function ExploreCategory() {
                     <div className="flex items-start gap-1.5">
                       {hasJa(jpLine) ? (
                         <div className="min-w-0 flex-1">
-                          <JaText text={jpLine} romaji={romajiLine} className="text-sm" />
+                          {/* kana penuh = sumber furigana per kanji */}
+                          <JaText text={jpLine} romaji={romajiLine} reading={ex.kana ?? undefined} className="text-sm" />
                         </div>
                       ) : (
                         <p className="flex-1 text-sm">{ex.en}</p>
                       )}
-                      <button
-                        className="shrink-0 rounded-lg p-0.5 text-zinc-400 hover:text-teal-600 dark:hover:text-teal-300"
+                      <SpeakButton
+                        text={jpLine}
+                        className="h-3.5 w-3.5"
+                        buttonClassName="shrink-0 rounded-lg p-0.5 text-zinc-400 hover:text-teal-600 dark:hover:text-teal-300"
                         title="Dengarkan contoh"
-                        aria-label="Dengarkan contoh"
-                        onClick={() => speak(jpLine)}
-                      >
-                        <Volume2 className="h-3.5 w-3.5" />
-                      </button>
+                      />
                     </div>
                     <p className="text-xs text-zinc-500 dark:text-zinc-400">{ex.id}</p>
                   </div>
@@ -449,14 +445,14 @@ export default function ExploreCategory() {
 }
 
 /** Parse aman kolom examples_json → {en,id}[]. */
-function parsedExamples(json: string | null): { en: string; id: string }[] {
+function parsedExamples(json: string | null): { en: string; id: string; kana?: string | null }[] {
   if (!json) return [];
   try {
     const arr = JSON.parse(json) as unknown;
     if (!Array.isArray(arr)) return [];
     return arr
       .filter(
-        (x): x is { en: string; id: string } =>
+        (x): x is { en: string; id: string; kana?: string | null } =>
           typeof (x as { en?: unknown })?.en === "string" &&
           typeof (x as { id?: unknown })?.id === "string",
       )

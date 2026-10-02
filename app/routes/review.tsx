@@ -27,6 +27,7 @@ import { requireUser } from "~/lib/auth.server";
 import { env } from "~/lib/env.server";
 import { getTargetLang } from "~/lib/lang.server";
 import { JaText, hasJa } from "~/components/JaText";
+import { SpeakButton } from "~/components/SpeakButton";
 import { useToast } from "~/components/Toast";
 
 export const meta: MetaFunction = () => [{ title: "Review — LingStick" }];
@@ -317,6 +318,23 @@ function ModePicker({
         </Link>
       ) : null}
 
+      {/* Latihan Reading (berita/cerpen) — khusus mode Jepang */}
+      <Link
+        to="/reading"
+        className="card flex items-center gap-3 p-4 transition-colors hover:border-teal-300 dark:hover:border-teal-800"
+      >
+        <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-teal-50 text-lg font-bold text-teal-700 dark:bg-teal-950 dark:text-teal-300">
+          読
+        </span>
+        <div className="min-w-0 flex-1">
+          <p className="font-semibold">Reading</p>
+          <p className="truncate text-xs text-zinc-500">
+            Baca berita &amp; cerpen per level N5–N1 — kanji hijau + furigana, bisa diulang
+          </p>
+        </div>
+        <ArrowRight className="h-4 w-4 shrink-0 text-zinc-400" />
+      </Link>
+
       {/* Latihan nulis kanji/kana — khusus mode Jepang */}
       <Link
         to="/write"
@@ -401,7 +419,9 @@ export default function ReviewPage() {
 
   const [data, setData] = useState<QuizResponse | null>(null);
   const [loadError, setLoadError] = useState<string | null>(null);
-  const [loading, setLoading] = useState(false);
+  // Mulai true kalau URL bawa ?mode=… — restore antrean/soal dulu, jangan sampai
+  // layar singgah di "tidak ada kartu" (kesannya keluar dari sesi).
+  const [loading, setLoading] = useState(Boolean(urlMode));
   const [pos, setPos] = useState(0);
   const [picked, setPicked] = useState<number | null>(null);
   const [typed, setTyped] = useState("");
@@ -956,9 +976,14 @@ export default function ReviewPage() {
           <Layers className="mx-auto h-10 w-10 text-teal-600 dark:text-teal-400" strokeWidth={1.5} />
           <p className="mt-3 font-medium">Tidak ada kartu yang jatuh tempo</p>
           <p className="mt-1 text-sm text-zinc-500">Balik lagi nanti, atau kerjakan kuis harian dulu.</p>
-          <button className="btn-secondary mt-6" onClick={() => backToPick()}>
-            Kembali
-          </button>
+          <div className="mt-6 flex justify-center gap-2">
+            <button className="btn-secondary" onClick={() => backToPick()}>
+              Kembali
+            </button>
+            <button className="btn-primary" onClick={() => startFlash()}>
+              <RotateCcw className="h-4 w-4" /> Muat ulang
+            </button>
+          </div>
         </div>
       );
     }
@@ -1523,19 +1548,19 @@ export default function ReviewPage() {
         ) : q.type === "listen" ? (
           <>
             <div className="mt-4 flex flex-col items-center gap-2">
-              <button
-                className="flex h-16 w-16 items-center justify-center rounded-full bg-teal-600 text-white shadow-lg shadow-teal-600/30 active:scale-95"
-                title="Dengarkan lagi"
-                onClick={() => speak(spokenEn)}
-              >
-                <Volume2 className="h-7 w-7" />
-              </button>
-              <button
-                className="text-xs text-zinc-400 underline-offset-2 hover:underline"
-                onClick={() => speak(spokenEn)}
+              <SpeakButton
+                text={spokenEn}
+                className="h-7 w-7"
+                buttonClassName="flex h-16 w-16 items-center justify-center rounded-full bg-teal-600 text-white shadow-lg shadow-teal-600/30 active:scale-95 disabled:opacity-90"
+              />
+              <SpeakButton
+                text={spokenEn}
+                className="h-3.5 w-3.5"
+                hideIcon
+                buttonClassName="inline-flex items-center gap-1 text-xs text-zinc-400 underline-offset-2 hover:underline"
               >
                 Dengarkan lagi
-              </button>
+              </SpeakButton>
             </div>
             <p className="mt-2 text-center text-xs text-zinc-400">pilih frasa EN yang cocok</p>
           </>

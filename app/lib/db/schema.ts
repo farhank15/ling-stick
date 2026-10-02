@@ -221,6 +221,25 @@ export const quizAnswers = sqliteTable(
 );
 
 /** Bank Kata: katalog kosakata per level CEFR + status belajar. */
+/** Bacaan (berita/cerpen) Jepang per level JLPT — dibikin via LLM, dibaca berulang. */
+export const readings = sqliteTable(
+  "readings",
+  {
+    id: integer("id").primaryKey({ autoIncrement: true }),
+    title: text("title").notNull(), // judul Jepang
+    titleEn: text("title_en"), // terjemahan judul (Indonesia)
+    level: text("level").notNull(), // N5..N1
+    topic: text("topic").notNull(),
+    lang: text("lang").notNull().default("ja"),
+    body: text("body").notNull(), // JSON: paragraph: { text, reading (kana penuh), sentences?: [...] }
+    wordCount: integer("word_count").notNull().default(0),
+    readCount: integer("read_count").notNull().default(0),
+    source: text("source").notNull().default("llm"),
+    createdAt: integer("created_at").notNull(),
+  },
+  (t) => [index("readings_level_idx").on(t.level), index("readings_lang_idx").on(t.lang)],
+);
+
 export const wordbank = sqliteTable(
   "wordbank",
   {

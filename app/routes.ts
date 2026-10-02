@@ -16,6 +16,7 @@ export default [
     route("translate", "routes/translate.tsx"),
     route("write", "routes/write.tsx"),
     route("aksara", "routes/aksara.tsx"),
+    route("reading", "routes/reading.tsx"),
     route("chat", "routes/chat.tsx"),
     route("settings", "routes/settings.tsx"),
   ]),

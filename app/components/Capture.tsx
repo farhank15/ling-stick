@@ -2,6 +2,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { Link } from "react-router";
 import { Bookmark, CheckCircle2, ClipboardPaste, Lightbulb, Loader2, Volume2 } from "lucide-react";
 import { JaText, hasJa } from "~/components/JaText";
+import { SpeakButton } from "~/components/SpeakButton";
 import { useToast } from "~/components/Toast";
 
 /** TTS lokal (konvensi komponen client): kana/kanji → ja-JP, selain itu en-US. */
@@ -471,15 +472,11 @@ export function Capture() {
                                   <span className="block text-sm">
                                     <span className="flex items-start gap-1">
                                       <JaText text={jpLine} romaji={romaji} className="min-w-0 flex-1 text-sm" />
-                                      <button
-                                        type="button"
-                                        className="shrink-0 rounded-lg p-1 text-zinc-400 hover:bg-zinc-100 hover:text-teal-600 dark:hover:bg-zinc-800"
-                                        title="Dengarkan"
-                                        aria-label="Dengarkan contoh"
-                                        onClick={() => speak(jpLine)}
-                                      >
-                                        <Volume2 className="h-4 w-4" />
-                                      </button>
+                                      <SpeakButton
+                                        text={jpLine}
+                                        buttonClassName="shrink-0 rounded-lg p-1 text-zinc-400 hover:bg-zinc-100 hover:text-teal-600 dark:hover:bg-zinc-800"
+                                        title="Dengarkan contoh"
+                                      />
                                     </span>
                                   </span>
                                 ) : (

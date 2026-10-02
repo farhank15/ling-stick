@@ -14,7 +14,7 @@ export const JLPT_LEVELS = ["N5", "N4", "N3", "N2", "N1"] as const;
  */
 export type Cefr = (typeof CEFR_LEVELS)[number] | (typeof JLPT_LEVELS)[number];
 
-export type BankExample = { en: string; id: string };
+export type BankExample = { en: string; id: string; kana?: string | null }; // kana: bacaan penuh kalimat JA (furigana)
 
 export type BankEntry = {
   id: number;
@@ -278,7 +278,7 @@ async function insertGenerated(
 /** Simpan hasil generate JA: reading/romaji dilipat ke meaning & examples. Skip duplikat per lang. */
 async function insertGeneratedJa(
   level: Cefr,
-  words: { text: string; reading?: string; romaji?: string; type?: string; register?: string; meaning_id: string; use_when_id?: string; examples?: { en: string; id: string; romaji?: string }[] }[],
+  words: { text: string; reading?: string; romaji?: string; type?: string; register?: string; meaning_id: string; use_when_id?: string; examples?: { en: string; id: string; romaji?: string; kana?: string }[] }[],
   source: string,
 ): Promise<{ added: number; skipped: number }> {
   let added = 0;
@@ -298,9 +298,12 @@ async function insertGeneratedJa(
     }
     // meaningId DIJAGA MURNI Indonesia — reading/romaji tersimpan terpisah di kolom
     // `reading` ("かな (romaji)") biar UI bisa render furigana + toggle romaji.
-    const examplesJa = (w.examples ?? []).slice(0, 4).map((e) => ({
-      en: e.romaji ? `${e.en}\n${e.romaji}` : e.en,
+    // Contoh JA: en = kalimat Jepang murni, kana = bacaan penuh (sumber furigana per
+    // kanji), romaji = baris ke-2 (hidden behind toggle romaji).
+    const examplesJa: BankExample[] = (w.examples ?? []).slice(0, 4).map((e) => ({
+      en: [e.en, e.romaji].filter(Boolean).join("\n"),
       id: e.id,
+      kana: e.kana || null,
     }));
     await db.insert(wordbank).values({
       text,

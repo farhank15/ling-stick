@@ -88,6 +88,8 @@ type JaTextProps = {
   romaji?: string | null;
   /** Class untuk teks utama (ukuran/weight). */
   className?: string;
+  /** Class khusus run yang mengandung kanji (mis. hijau di halaman Reading). */
+  kanjiClassName?: string;
   /** Class baris romaji yang muncul saat toggle dinyalain. */
   romajiClassName?: string;
   /** Romaji langsung kelihatan? Default hidden (belajar baca dulu). */
@@ -102,6 +104,7 @@ export function JaText({
   reading,
   romaji: romajiProp,
   className = "",
+  kanjiClassName,
   romajiClassName = "text-xs font-normal text-zinc-400 dark:text-zinc-500",
   defaultShowRomaji = false,
   romajiToggle = true,
@@ -127,7 +130,9 @@ export function JaText({
                 {s.ruby}
               </span>
             ) : null}
-            <span>{s.base}</span>
+            <span className={kanjiClassName && /[\u4e00-\u9faf\u3005\u3007]/.test(s.base) ? kanjiClassName : undefined}>
+              {s.base}
+            </span>
           </span>
         ))}
       </span>

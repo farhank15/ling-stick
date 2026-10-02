@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from "react";
 import { Link, useRouteLoaderData } from "react-router";
 import { ArrowLeftRight, Languages, Loader2, Volume2, X } from "lucide-react";
 import { JaText, hasJa } from "~/components/JaText";
+import { SpeakButton } from "~/components/SpeakButton";
 import { ttsLang } from "~/lib/utils.shared";
 
 type UsageResult = { pronunciation: string; examples: { en: string; id: string }[] };
@@ -219,14 +220,11 @@ export function QuickTranslate() {
               {pron ? (
                 <>
                   <span className="text-xs text-zinc-600 dark:text-zinc-400">{pron}</span>
-                  <button
-                    className="rounded-full p-0.5"
-                    onClick={() => speak(foreignSide)}
-                    title="Dengarkan"
-                    aria-label="Dengarkan"
-                  >
-                    <Volume2 className="h-3.5 w-3.5 text-teal-600 dark:text-teal-400" />
-                  </button>
+                  <SpeakButton
+                    text={foreignSide}
+                    className="h-3.5 w-3.5 text-teal-600 dark:text-teal-400"
+                    buttonClassName="rounded-full p-0.5"
+                  />
                 </>
               ) : (
                 <span className="text-[11px] text-zinc-400">memuat cara baca…</span>
@@ -234,12 +232,13 @@ export function QuickTranslate() {
             </div>
           ) : null}
           {hasJa(shown) ? (
-            <button
-              className="mt-1 inline-flex items-center gap-1 text-[11px] text-zinc-500 hover:text-teal-600 dark:text-zinc-400"
-              onClick={() => speak(shown)}
+            <SpeakButton
+              text={shown}
+              className="h-3.5 w-3.5"
+              buttonClassName="mt-1 inline-flex items-center gap-1 text-[11px] text-zinc-500 hover:text-teal-600 dark:text-zinc-400"
             >
-              <Volume2 className="h-3.5 w-3.5" /> Dengarkan
-            </button>
+              Dengarkan
+            </SpeakButton>
           ) : null}
         </div>
       ) : null}

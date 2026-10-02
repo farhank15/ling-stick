@@ -215,6 +215,20 @@ export const MIGRATIONS: string[] = [
  * Dijalankan best-effort — error "duplicate column" diabaikan.
  */
 const TOLERANT_MIGRATIONS: string[] = [
+  // Latihan Reading (berita/cerpen Jepang per level JLPT).
+  `CREATE TABLE IF NOT EXISTS readings (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    title TEXT NOT NULL,
+    title_en TEXT,
+    level TEXT NOT NULL,
+    topic TEXT NOT NULL,
+    lang TEXT NOT NULL DEFAULT 'ja',
+    body TEXT NOT NULL,
+    word_count INTEGER NOT NULL DEFAULT 0,
+    read_count INTEGER NOT NULL DEFAULT 0,
+    source TEXT NOT NULL DEFAULT 'llm',
+    created_at INTEGER NOT NULL
+  )`,
   `ALTER TABLE explore_items ADD COLUMN examples_json TEXT`,
   // Multi-bahasa target (EN/JP): kolom lang, existing data = 'en'.
   `ALTER TABLE items ADD COLUMN lang TEXT NOT NULL DEFAULT 'en'`,

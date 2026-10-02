@@ -5,6 +5,7 @@ import { BadgeCheck, CheckCircle2, Circle, Loader2, Search, Trash2, Volume2 } fr
 import { requireUser } from "~/lib/auth.server";
 import { getFacetCounts, listItems } from "~/lib/items.server";
 import { ConfirmModal } from "~/components/ConfirmModal";
+import { SpeakButton } from "~/components/SpeakButton";
 import { useToast } from "~/components/Toast";
 
 export const meta: MetaFunction = () => [{ title: "Library — LingStick" }];
@@ -357,14 +358,11 @@ export default function Library() {
                 </span>
               </div>
               {/* Speaker kata — di luar Link biar gak nested interactive */}
-              <button
-                className="absolute top-1/2 right-2 -translate-y-1/2 rounded-lg p-1.5 text-zinc-300 hover:bg-zinc-100 hover:text-teal-600 dark:text-zinc-600 dark:hover:bg-zinc-800"
-                aria-label={`Dengarkan ${r.text}`}
+              <SpeakButton
+                text={r.text}
+                buttonClassName="absolute top-1/2 right-2 -translate-y-1/2 rounded-lg p-1.5 text-zinc-300 hover:bg-zinc-100 hover:text-teal-600 dark:text-zinc-600 dark:hover:bg-zinc-800"
                 title="Cara baca"
-                onClick={() => speak(r.text)}
-              >
-                <Volume2 className="h-4 w-4" />
-              </button>
+              />
               <Link
                 to={`/library/${r.id}`}
                 onClick={(e) => {

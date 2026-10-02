@@ -1,6 +1,6 @@
 import type { ActionFunctionArgs, LoaderFunctionArgs, MetaFunction } from "react-router";
 import { Link, redirect, useLoaderData, useSearchParams } from "react-router";
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import {
   ArrowRight,
   BadgeCheck,
@@ -8,6 +8,7 @@ import {
   CheckCircle2,
   Eye,
   Layers,
+  Loader2,
   PencilLine,
   RotateCcw,
   Volume2,
@@ -20,6 +21,7 @@ import { getTargetLang } from "~/lib/lang.server";
 import { and, eq, ne } from "drizzle-orm";
 import { ttsLang } from "~/lib/utils.shared";
 import { JaText, hasJa, splitReading } from "~/components/JaText";
+import { SpeakButton } from "~/components/SpeakButton";
 
 export const meta: MetaFunction = () => [{ title: "Aksara Jepang — LingStick" }];
 export const handle = { title: "Aksara Jepang" };
@@ -281,13 +283,11 @@ function KanjiPractice({
                     <BookOpenCheck className="h-4.5 w-4.5" />
                   </button>
                 )}
-                <button
-                  className="shrink-0 rounded-lg p-1.5 text-zinc-400 hover:bg-zinc-100 hover:text-teal-600 dark:hover:bg-zinc-800"
-                  title="Dengarkan"
-                  onClick={() => speak(w.text)}
-                >
-                  <Volume2 className="h-4.5 w-4.5" />
-                </button>
+                <SpeakButton
+                  text={w.text}
+                  className="h-4.5 w-4.5"
+                  buttonClassName="shrink-0 rounded-lg p-1.5 text-zinc-400 hover:bg-zinc-100 hover:text-teal-600 dark:hover:bg-zinc-800"
+                />
                 <Link
                   to={`/write?level=${level}`}
                   className="shrink-0 rounded-lg p-1.5 text-zinc-400 hover:bg-zinc-100 hover:text-teal-600 dark:hover:bg-zinc-800"
@@ -444,6 +444,48 @@ function KanjiPractice({
   );
 }
 
+/** Sel grid kana: klik = bunyi. Saat bunyi, romaji keganti spinner (anti-spam + feedback). */
+function KanaCell({ kana, romaji }: { kana: string; romaji: string }) {
+  const [busy, setBusy] = useState(false);
+  const timer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  useEffect(() => () => { if (timer.current) clearTimeout(timer.current); }, []);
+
+  const click = () => {
+    if (busy) return;
+    if (typeof window === "undefined" || !window.speechSynthesis) return;
+    const u = new SpeechSynthesisUtterance(kana);
+    u.lang = "ja-JP";
+    let done = false;
+    const finish = () => {
+      if (done) return;
+      done = true;
+      if (timer.current) clearTimeout(timer.current);
+      setBusy(false);
+    };
+    u.onend = finish;
+    u.onerror = finish;
+    timer.current = setTimeout(finish, 10_000); // kana pendek — safety 10s
+    window.speechSynthesis.cancel();
+    window.speechSynthesis.speak(u);
+    setBusy(true);
+  };
+
+  return (
+    <button
+      onClick={click}
+      aria-busy={busy}
+      className="flex flex-col items-center gap-0.5 rounded-xl border border-zinc-200 bg-white py-2.5 transition-colors hover:border-teal-300 active:bg-teal-50 dark:border-zinc-800 dark:bg-zinc-900 dark:hover:border-teal-800 dark:active:bg-teal-950/60"
+    >
+      <span className="text-xl font-semibold">{kana}</span>
+      {busy ? (
+        <Loader2 className="h-3 w-3 animate-spin text-teal-600 dark:text-teal-400" />
+      ) : (
+        <span className="text-[10px] text-zinc-400">{romaji}</span>
+      )}
+    </button>
+  );
+}
+
 export default function AksaraPage() {
   const { script, level, levelWords, poolWords } = useLoaderData<typeof loader>();
   const [params, setParams] = useSearchParams();
@@ -509,14 +551,7 @@ export default function AksaraPage() {
                 <p className="mb-2.5 text-xs text-zinc-400">{sec.desc}</p>
                 <div className="grid grid-cols-5 gap-1.5">
                   {cells.map(([kana, romaji]) => (
-                    <button
-                      key={kana}
-                      onClick={() => speak(kana, "ja-JP")}
-                      className="flex flex-col items-center gap-0.5 rounded-xl border border-zinc-200 bg-white py-2.5 transition-colors hover:border-teal-300 active:bg-teal-50 dark:border-zinc-800 dark:bg-zinc-900 dark:hover:border-teal-800 dark:active:bg-teal-950/60"
-                    >
-                      <span className="text-xl font-semibold">{kana}</span>
-                      <span className="text-[10px] text-zinc-400">{romaji}</span>
-                    </button>
+                    <KanaCell key={kana} kana={kana} romaji={romaji} />
                   ))}
                 </div>
               </div>

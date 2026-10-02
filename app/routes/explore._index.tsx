@@ -55,6 +55,8 @@ export async function loader({ request }: LoaderFunctionArgs) {
   const eotd = eotdRaw.map((r) => ({
     ...r,
     saved: savedNorms.has(r.text.trim().toLowerCase()),
+    // Kana penuh contoh pertama — sumber furigana di kartu EOTD.
+    exampleKana: parseFirstKana(r.examplesJson),
   }));
 
   const countMap = Object.fromEntries(counts.map((c) => [c.category, Number(c.total)]));
@@ -77,6 +79,7 @@ type EotdRow = {
   useWhenId: string | null;
   exampleEn: string | null;
   exampleId: string | null;
+  exampleKana?: string | null;
   saved: boolean;
 };
 
@@ -191,7 +194,14 @@ export default function ExploreIndex() {
                 </div>
                 <p className="text-sm text-zinc-600 dark:text-zinc-400">{e.meaningId}</p>
                 {e.exampleEn ? (
-                  <p className="mt-1.5 text-sm italic">“{e.exampleEn}”</p>
+                  <p className="mt-1.5 text-sm italic">
+                    {ja && hasJa(e.exampleEn) ? (
+                      /* kana penuh = furigana per kanji */
+                      <JaText text={e.exampleEn} reading={e.exampleKana ?? undefined} className="text-sm italic" />
+                    ) : (
+                      <>“{e.exampleEn}”</>
+                    )}
+                  </p>
                 ) : null}
                 {e.exampleId ? (
                   <p className="text-xs text-zinc-500 dark:text-zinc-400">{e.exampleId}</p>
@@ -242,4 +252,16 @@ export default function ExploreIndex() {
       </section>
     </div>
   );
+}
+
+/** Ambil kana penuh dari contoh pertama examplesJson (sumber furigana kartu EOTD). */
+function parseFirstKana(json: string | null): string | null {
+  if (!json) return null;
+  try {
+    const arr = JSON.parse(json) as { kana?: unknown }[];
+    const first = Array.isArray(arr) ? arr[0] : undefined;
+    return typeof first?.kana === "string" && first.kana.trim() ? first.kana.trim() : null;
+  } catch {
+    return null;
+  }
 }

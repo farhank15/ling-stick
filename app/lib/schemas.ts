@@ -98,6 +98,7 @@ export const bankWordSchema = z.object({
         en: z.string().min(1),
         id: z.string().min(1),
         romaji: z.string().catch("").optional(),
+        kana: z.string().catch("").optional(), // JA: bacaan penuh kalimat — sumber furigana per kanji
       }),
     )
     .max(4)
@@ -109,6 +110,34 @@ export const bankOutputSchema = z.object({
 });
 
 export type BankOutput = z.infer<typeof bankOutputSchema>;
+
+/** Bacaan Jepang (Latihan Reading): paragraf + kana penuh (furigana) + romaji + vocab. */
+export const readingOutputSchema = z.object({
+  title: z.string().min(1),
+  title_en: z.string().catch("").optional(),
+  paragraphs: z
+    .array(
+      z.object({
+        text: z.string().min(1),
+        kana: z.string().min(1), // bacaan penuh — sumber furigana per kanji
+        romaji: z.string().catch("").optional(),
+      }),
+    )
+    .min(1)
+    .max(8),
+  vocab: z
+    .array(
+      z.object({
+        text: z.string().min(1),
+        kana: z.string().catch("").optional(),
+        meaning: z.string().min(1),
+      }),
+    )
+    .max(10)
+    .catch([]),
+});
+
+export type ReadingOutput = z.infer<typeof readingOutputSchema>;
 
 export const exploreOutputSchema = z.object({
   expressions: z
@@ -122,8 +151,15 @@ export const exploreOutputSchema = z.object({
         meaning_id: z.string().min(1),
         use_when_id: z.string().default(""),
         examples: z
-          .array(z.object({ en: z.string().min(1), id: z.string().min(1) }))
-          .min(3)
+          .array(
+            z.object({
+              en: z.string().min(1),
+              id: z.string().min(1),
+              kana: z.string().catch("").optional(), // JA: bacaan penuh kalimat — sumber furigana
+              romaji: z.string().catch("").optional(),
+            }),
+          )
+          .min(1)
           .max(5),
       }),
     )

@@ -3,6 +3,7 @@ import { Form, Link, useFetcher, useLoaderData, useNavigation } from "react-rout
 import { ArrowLeft, CheckCircle2, Lightbulb, Loader2, Sparkles, TriangleAlert, Volume2 } from "lucide-react";
 import { useState } from "react";
 import { ConfirmModal } from "~/components/ConfirmModal";
+import { SpeakButton } from "~/components/SpeakButton";
 import { requireUser } from "~/lib/auth.server";
 import { deleteItem, getItemDetail, markLearning, updateItem } from "~/lib/items.server";
 import { redirect } from "react-router";
@@ -206,14 +207,11 @@ export default function ItemDetail() {
                   </span>
                 ) : null}
                 <span className="flex-1" />
-                <button
-                  className="shrink-0 rounded-lg p-1 text-zinc-400 hover:bg-zinc-100 hover:text-teal-600 dark:hover:bg-zinc-800"
+                <SpeakButton
+                  text={ex.en}
+                  buttonClassName="shrink-0 rounded-lg p-1 text-zinc-400 hover:bg-zinc-100 hover:text-teal-600 dark:hover:bg-zinc-800"
                   title="Dengarkan contoh"
-                  aria-label="Dengarkan contoh"
-                  onClick={() => speak(ex.en)}
-                >
-                  <Volume2 className="h-4 w-4" />
-                </button>
+                />
               </div>
               <p className="mt-1.5 text-sm">
                 <Highlighted text={ex.en} highlight={item.text} />

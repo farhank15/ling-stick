@@ -127,10 +127,10 @@ Rules:
 - Every word needs 2-3 short, natural examples, each with an Indonesian translation.
 - Vary word types (word, phrasal verb, idiom, collocation, slang / word, particle, expression) when it fits the level.
 - English mode: only lowercase words/phrases; no single letters, no sentences longer than 6 words.
-- Japanese mode: "text" MUST include kanji where natural, "reading" = kana, "romaji" = hepburn lowercase; examples "en" = Japanese sentence plus romaji line; explanations in Indonesian.
+- Japanese mode: "text" MUST include kanji where natural, "reading" = kana, "romaji" = hepburn lowercase; examples "en" = Japanese sentence, "kana" = FULL kana reading of that sentence (furigana source — REQUIRED for Japanese mode, every kanji must be readable from it), "romaji" = hepburn lowercase; explanations in Indonesian.
 
 JSON shape:
-{ "words": [{ "text": string, "type": "word"|"phrasal_verb"|"idiom"|"collocation"|"slang", "register": "formal"|"neutral"|"informal"|"slang", "meaning_id": string, "use_when_id": string, "examples": [{ "en": string, "id": string }] }] }`;
+{ "words": [{ "text": string, "type": "word"|"phrasal_verb"|"idiom"|"collocation"|"slang", "register": "formal"|"neutral"|"informal"|"slang", "meaning_id": string, "use_when_id": string, "examples": [{ "en": string, "kana": string, "id": string }] }] }`;
 
 export function exploreSystem(categoryLabel: string, lang: "en" | "ja" = "en"): string {
   if (lang === "ja") {
@@ -140,11 +140,11 @@ Rules:
 - 6 to 8 expressions Japanese speakers actually use today — NOT English, NOT translations of English idioms unless they are genuinely common in Japanese.
 - "text" = the Japanese expression written naturally (kanji and/or kana). "reading" = the kana reading. "romaji" = hepburn romaji of the reading (lowercase).
 - Every expression MUST have register (formal/neutral/informal), a casual Indonesian meaning, and when to use it.
-- EVERY expression MUST include 2 to 3 natural, varied Japanese example sentences showing real-life usage (chat, conversation, work/social — mix them). Each example: "en" = the JAPANESE sentence with its romaji on the SECOND line (two lines separated by \\n), "id" = Indonesian translation.
+- EVERY expression MUST include 2 to 3 natural, varied Japanese example sentences showing real-life usage (chat, conversation, work/social — mix them). Each example: "en" = the JAPANESE sentence, "kana" = FULL kana reading of that sentence (furigana source — REQUIRED), "romaji" = hepburn lowercase, "id" = Indonesian translation.
 - ALL explanations — "meaning_id", "use_when_id", every "id" translation — MUST be in casual, clear INDONESIAN.
 
 JSON shape:
-{ "expressions": [{ "text": string, "reading": string, "romaji": string, "type": string, "register": string, "meaning_id": string, "use_when_id": string, "examples": [{ "en": string (Japanese + \\n + romaji), "id": string }] }] }`;
+{ "expressions": [{ "text": string, "reading": string, "romaji": string, "type": string, "register": string, "meaning_id": string, "use_when_id": string, "examples": [{ "en": string, "kana": string, "romaji": string, "id": string }] }] }`;
   }
   return `You generate real, current English expressions for the category "${categoryLabel}" for an Indonesian adult learner.
 Return ONLY valid JSON. No prose, no markdown fences.

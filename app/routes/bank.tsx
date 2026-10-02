@@ -17,6 +17,7 @@ import { requireUser } from "~/lib/auth.server";
 import { getTargetLang } from "~/lib/lang.server";
 import { ttsLang } from "~/lib/utils.shared";
 import { JaText, hasJa, splitReading } from "~/components/JaText";
+import { SpeakButton } from "~/components/SpeakButton";
 import { useToast } from "~/components/Toast";
 
 function speak(s: string, lang?: string) {
@@ -31,7 +32,7 @@ export const meta: MetaFunction = () => [{ title: "Bank Kata — LingStick" }];
 // ownHeader: halaman punya header sendiri (judul + stat) — jangan dirender dobel oleh layout.
 export const handle = { title: "Bank Kata", ownHeader: true };
 
-type BankExample = { en: string; id: string };
+type BankExample = { en: string; id: string; kana?: string | null }; // kana: bacaan penuh kalimat JA (furigana)
 type Entry = {
   id: number;
   text: string;
@@ -467,23 +468,21 @@ export default function BankPage() {
                                 <div className="flex items-start gap-2">
                                   <div className="min-w-0 flex-1">
                                     {hasJa(jpLine) ? (
-                                      /* JA: kalimat + furigana; romaji (baris ke-2) di-balik toggle */
+                                      /* JA: kalimat + furigana (dari kana penuh); romaji baris ke-2 di-balik toggle */
                                       <JaText
                                         text={jpLine}
                                         romaji={romajiLine}
+                                        reading={ex.kana ?? undefined}
                                         className="text-sm font-medium"
                                       />
                                     ) : (
                                       <p className="whitespace-pre-line text-sm font-medium">{ex.en}</p>
                                     )}
                                   </div>
-                                  <button
-                                    className="shrink-0 rounded-lg p-1 text-zinc-400 hover:bg-zinc-200 hover:text-zinc-600 dark:hover:bg-zinc-700"
-                                    title="Dengarkan"
-                                    onClick={() => speak(jpLine)}
-                                  >
-                                    <Volume2 className="h-4 w-4" />
-                                  </button>
+                                  <SpeakButton
+                                    text={jpLine}
+                                    buttonClassName="shrink-0 rounded-lg p-1 text-zinc-400 hover:bg-zinc-200 hover:text-zinc-600 dark:hover:bg-zinc-700"
+                                  />
                                 </div>
                                 <p className="mt-0.5 text-xs text-zinc-500">{ex.id}</p>
                               </li>
