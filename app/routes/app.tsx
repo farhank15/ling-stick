@@ -22,6 +22,7 @@ import {
 } from "lucide-react";
 import { requireUser } from "~/lib/auth.server";
 import { getTargetLang } from "~/lib/lang.server";
+import { warmUpTts } from "~/lib/tts.client";
 
 export async function loader({ request }: LoaderFunctionArgs) {
   await requireUser(request);
@@ -84,6 +85,11 @@ export default function AppLayout() {
   useEffect(() => {
     loadNotifs();
   }, [location.pathname]);
+
+  // Panaskan TTS engine sekali — klik speaker pertama jadi langsung bunyi.
+  useEffect(() => {
+    warmUpTts();
+  }, []);
 
   useEffect(() => {
     if (!notifOpen) return;

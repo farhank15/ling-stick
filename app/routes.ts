@@ -47,4 +47,5 @@ export default [
   route("api/chat", "routes/api.chat.ts"),
   route("api/chat/sessions", "routes/api.chat.sessions.ts"),
   route("api/import", "routes/api.import.ts"),
+  route("api/reading", "routes/api.reading.ts"),
 ] satisfies RouteConfig;

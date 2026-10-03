@@ -4,6 +4,7 @@ import { ArrowLeft, CheckCircle2, Lightbulb, Loader2, Sparkles, TriangleAlert, V
 import { useState } from "react";
 import { ConfirmModal } from "~/components/ConfirmModal";
 import { SpeakButton } from "~/components/SpeakButton";
+import { useToast } from "~/components/Toast";
 import { JaText, hasJa, splitReading } from "~/components/JaText";
 import { requireUser } from "~/lib/auth.server";
 import { deleteItem, getItemDetail, markLearning, updateItem } from "~/lib/items.server";
@@ -53,12 +54,17 @@ export async function action({ request, params }: ActionFunctionArgs) {
 
 export default function ItemDetail() {
   const { item, examples, alternatives, card } = useLoaderData<typeof loader>();
+  const toast = useToast();
   const nav = useNavigation();
   const fetcher = useFetcher();
   const [confirming, setConfirming] = useState(false);
   // Generate contoh kalimat via AI — hasil disimpan permanen ke item.
   const [genEx, setGenEx] = useState<{ busy: boolean; error: string | null }>({ busy: false, error: null });
-  const [exampleCount, setExampleCount] = useState(examples.length);
+  // List contoh yang tampil — contoh baru langsung ditambahkan di sini biar
+  // sukses kelihatan instan (dulu cuma masuk DB, list dari loader tidak
+  // berubah → kelihatan "tidak terjadi apa-apa" sampai refresh manual).
+  // matcha: sukses tanpa toast + tanpa update list = false-failed.
+  const [liveExamples, setLiveExamples] = useState(examples);
 
   const generateExamples = async () => {
     if (genEx.busy) return;
@@ -73,23 +79,36 @@ export default function ItemDetail() {
       });
       const data = await res.json();
       if (!res.ok || !data.result) throw new Error(data.error || "Gagal generate");
+      const fresh = (data.result.examples as { en: string; id: string; romaji?: string | null }[]).slice(0, 5);
       const save = await fetch("/api/items", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           addExamplesTo: String(item.id),
-          examples: (data.result.examples as { en: string; id: string }[])
-            .slice(0, 5)
-            .map((e) => ({
-              register: "neutral",
-              en: e.en,
-              idText: e.id,
-            })),
+          examples: fresh.map((e) => ({
+            register: "neutral",
+            // JA: romaji dilipat bank-style ("kalimat\nromaji") biar baris
+            // romaji tampil di detail (tabel examples gak punya kolom kana).
+            en: e.romaji ? `${e.en.trim()}\n${e.romaji.trim()}` : e.en,
+            idText: e.id,
+          })),
         }),
       });
       const saved = await save.json();
       if (!save.ok) throw new Error(saved.error || "Gagal menyimpan contoh");
-      setExampleCount((n) => n + data.result.examples.length);
+      setLiveExamples((list) => [
+        ...list,
+        ...fresh.map((e, i) => ({
+          id: -Date.now() - i,
+          itemId: item.id,
+          register: "neutral",
+          senseLabel: null as string | null,
+          isContext: 0 as number,
+          en: e.romaji ? `${e.en.trim()}\n${e.romaji.trim()}` : e.en,
+          idText: e.id,
+        })),
+      ]);
+      toast(`${fresh.length} contoh tersimpan`);
     } catch (e) {
       setGenEx({ busy: false, error: e instanceof Error ? e.message : "Gagal generate" });
       return;
@@ -188,10 +207,10 @@ export default function ItemDetail() {
             {genEx.error}
           </p>
         ) : null}
-        {examples.length === 0 && exampleCount === 0 ? (
+        {liveExamples.length === 0 ? (
           <p className="text-sm text-zinc-500">Belum ada contoh — tap “Generate contoh (AI)” di atas.</p>
         ) : (
-          examples.map((ex) => (
+          liveExamples.map((ex) => (
             <div key={ex.id} className="card">
               <div className="flex items-center gap-1.5">
                 <span className="badge bg-zinc-100 text-zinc-500 dark:bg-zinc-800 dark:text-zinc-400">

@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useRef, useState, type ReactNode } from "react";
 import { Loader2, Volume2 } from "lucide-react";
 import { ttsLang } from "~/lib/utils.shared";
+import { pickVoice, warmUpTts } from "~/lib/tts.client";
 
 /**
  * SpeakButton — tombol speaker dengan feedback visual:
@@ -38,8 +39,12 @@ export function SpeakButton({
   const click = useCallback(() => {
     if (busy) return; // anti-spam: satu suara dalam satu waktu
     if (typeof window === "undefined" || !window.speechSynthesis || !text) return;
+    warmUpTts(); // pastikan engine sudah dipanaskan (aman dipanggil berulang)
     const u = new SpeechSynthesisUtterance(text);
-    u.lang = lang ?? ttsLang(text);
+    const target = lang ?? ttsLang(text);
+    u.lang = target;
+    const v = pickVoice(target);
+    if (v) u.voice = v;
     let done = false;
     const finish = () => {
       if (done) return;
