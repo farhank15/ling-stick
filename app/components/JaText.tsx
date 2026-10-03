@@ -148,7 +148,21 @@ export function JaText({
   // Bukan teks Jepang → polos aja (komponen ini aman buat EN juga).
   if (!hasJa(text)) return <span className={className}>{text}</span>;
 
-  const segments = buildRuby(text, kana);
+  let segments = buildRuby(text, kana);
+  // Fallback TANPA ruby (tanpa bacaan / alignment gagal): pecah per run kanji
+  // vs non-kanji biar cuma run kanji yang hijau — JANGAN satu gumpalan hijau.
+  // matcha: contoh tanpa kana tampil "ijo semua" (satu segmen isi kanji).
+  if (segments.length === 1 && !segments[0]!.ruby) {
+    const runs: JaSegment[] = [];
+    for (const ch of segments[0]!.base) {
+      const isKanji = /[\u4e00-\u9faf\u3005\u3007]/.test(ch);
+      const last = runs[runs.length - 1];
+      const lastIsKanji = last ? /[\u4e00-\u9faf\u3005\u3007]/.test(last.base[0]!) : null;
+      if (last && lastIsKanji === isKanji) last.base += ch;
+      else runs.push({ base: ch });
+    }
+    if (runs.length > 1) segments = runs;
+  }
   return (
     <span className="inline-block align-middle">
       <span className="inline-flex flex-wrap items-end gap-x-0.5 leading-tight">

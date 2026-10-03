@@ -25,7 +25,7 @@ import { useToast } from "~/components/Toast";
 export const meta: MetaFunction = () => [{ title: "Chat dengan Ling — LingStick" }];
 export const handle = { title: "Chat dengan Ling" };
 
-type Suggestion = { text: string; reading?: string; meaning_id: string; examples: { en: string; id: string }[] };
+type Suggestion = { text: string; reading?: string; meaning_id: string; examples: { en: string; id: string; kana?: string | null; romaji?: string | null }[] };
 type Msg =
   | { role: "user"; content: string }
   | { role: "assistant"; content: string; suggestions?: Suggestion[] };
@@ -208,6 +208,9 @@ export default function Chat() {
     if (savedTexts.has(s.text) || saving) return;
     setSaving(s.text);
     try {
+      // Format simpan disamakan: reading headword (furigana) + romaji contoh
+      // dilipat bank-style. Tabel examples tak ada kolom kana (keterbatasan
+      // skema yang sama seperti translate).
       const res = await fetch("/api/explore-save", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -217,7 +220,11 @@ export default function Chat() {
           register: "neutral",
           meaningId: s.meaning_id,
           source: "Chat — Ling",
-          examples: s.examples.map((e) => ({ en: e.en, id: e.id })),
+          reading: s.reading ?? undefined,
+          examples: s.examples.map((e) => ({
+            en: e.romaji ? `${e.en.trim()}\n${e.romaji.trim()}` : e.en,
+            id: e.id,
+          })),
         }),
       });
       const data = await res.json();
@@ -411,7 +418,24 @@ export default function Chat() {
                           <p className="mt-0.5 text-xs text-zinc-600 dark:text-zinc-400">{s.meaning_id}</p>
                           {s.examples[0] ? (
                             <p className="mt-1 flex items-start gap-1 text-xs italic text-zinc-500 dark:text-zinc-500">
-                              <span>“{s.examples[0].en}” — {s.examples[0].id}</span>
+                              <span className="min-w-0 flex-1">
+                                {hasJa(s.examples[0].en) ? (
+                                  <>
+                                    <JaText
+                                      text={s.examples[0].en}
+                                      reading={s.examples[0].kana ?? undefined}
+                                      romaji={s.examples[0].romaji ?? undefined}
+                                      kanjiClassName="text-teal-700 dark:text-teal-400"
+                                      romajiToggle={false}
+                                    />{" "}
+                                    — {s.examples[0].id}
+                                  </>
+                                ) : (
+                                  <>
+                                    “{s.examples[0].en}” — {s.examples[0].id}
+                                  </>
+                                )}
+                              </span>
                               <SpeakButton
                                 text={s.examples[0].en}
                                 className="h-3 w-3"

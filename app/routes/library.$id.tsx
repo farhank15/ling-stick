@@ -125,7 +125,19 @@ export default function ItemDetail() {
         <Link to="/library" className="btn-ghost px-2" aria-label="Kembali">
           <ArrowLeft className="h-5 w-5" strokeWidth={1.75} />
         </Link>
-        <h1 className="flex-1 text-xl font-bold tracking-tight">{item.text}</h1>
+        <h1 className="flex-1 text-xl font-bold tracking-tight">
+          {hasJa(item.text) ? (
+            /* JA: kanji hijau + furigana dari reading item (wajib — headword
+               polos bikin format detail beda dari halaman lain). */
+            <JaText
+              text={item.text}
+              reading={item.reading ?? undefined}
+              kanjiClassName="text-teal-700 dark:text-teal-400"
+            />
+          ) : (
+            item.text
+          )}
+        </h1>
       </div>
 
       <div className="flex gap-1.5">
@@ -374,15 +386,30 @@ function FetcherButton({ to, body, label }: { to: string; body: unknown; label: 
   );
 }
 
+/** Stopword EN+ID — jangan disorot (polusi hijau di mana-mana). */
+const HIGHLIGHT_STOP = new Set(
+  "yang,dari,untuk,dengan,adalah,pada,atau,ini,itu,dan,yaitu,the,and,for,with,from,that,this,have,will,what,when,your,you,are,was,were,has,had,not,but,all,can,their,there,them,then,than".split(","),
+);
+
 function Highlighted({ text, highlight }: { text: string; highlight: string }) {
   const t = highlight.trim();
   if (!t) return <>{text}</>;
-  const re = new RegExp(`(${t.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")})`, "ig");
+  const esc = (s: string) => s.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+  // Frasa utuh dulu; kalau tidak cocok (mis. item kalimat, contoh beda
+  // kalimat), sorot kata penting (≥4 huruf, bukan stopword) satu per satu.
+  // matcha: contoh tanpa frasa persis tampil polos total ("gk hijau").
+  const words = t
+    .split(/\s+/)
+    .filter((w) => w.replace(/[^\p{L}\p{N}]/gu, "").length >= 4)
+    .filter((w) => !HIGHLIGHT_STOP.has(w.toLowerCase()));
+  const terms = [t, ...words];
+  const re = new RegExp(`(${terms.map(esc).join("|")})`, "ig");
   const parts = text.split(re);
+  const low = terms.map((x) => x.toLowerCase());
   return (
     <>
       {parts.map((p, i) =>
-        p.toLowerCase() === t.toLowerCase() ? (
+        low.includes(p.toLowerCase()) ? (
           <strong key={i} className="text-teal-700 dark:text-teal-400">
             {p}
           </strong>

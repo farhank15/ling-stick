@@ -185,7 +185,16 @@ export const chatOutputSchema = z.object({
         reading: z.string().catch("").optional(), // JA: kana
         meaning_id: z.string().min(1),
         examples: z
-          .array(z.object({ en: z.string().min(1), id: z.string().min(1) }))
+          .array(
+            z.object({
+              en: z.string().min(1),
+              id: z.string().min(1),
+              // JA: kana contoh (furigana) + romaji — opsional biar respons
+              // lama (tanpa field ini) tetap valid.
+              kana: z.string().catch("").optional(),
+              romaji: z.string().catch("").optional(),
+            }),
+          )
           .max(3)
           .default([]),
       }),

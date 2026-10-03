@@ -28,11 +28,17 @@ export async function loader({ request }: { request: Request }) {
 type UsageExample = { en: string; id: string; kana?: string | null; romaji?: string | null };
 type UsageResult = { pronunciation: string; examples: UsageExample[] };
 
-/** Preset gaya bahasa — dialek/level formalitas diteruskan ke LLM. */
-const STYLE_PRESETS: { key: "gaul" | "umum" | "formal"; style: "fluid" | "faithful" | "creative"; tone: string; label: string }[] = [
-  { key: "gaul", style: "creative", tone: "casual, slangy, like texting a close friend", label: "Gaul" },
-  { key: "umum", style: "fluid", tone: "", label: "Umum" },
-  { key: "formal", style: "faithful", tone: "polite and professional", label: "Formal" },
+/** Gaya bahasa: seberapa idiomatis vs setia teks.
+ * - Santai/Natural (default): seperti penutur asli sehari-hari — idiom yang
+ *   umum dipakai (EN "don't drag me into this", JA bentuk natural casual).
+ * - Formal: sopan/profesional (EN business, JA keigo desu/masu + sonkeigo).
+ * - Literal: setia struktur kalimat sumber (buat belajar, lihat cara susunnya).
+ * matcha: kategori gaul/umum tidak petakan ke JA; anime terlalu spesifik —
+ * yang dipakai orang sehari-hari = natural vs formal vs literal. */
+const STYLE_PRESETS: { key: "santai" | "formal" | "literal"; style: "fluid" | "faithful" | "faithful"; tone: string; label: string }[] = [
+  { key: "santai", style: "fluid", tone: "natural everyday language as native speakers actually say it, including common idioms", label: "Santai" },
+  { key: "formal", style: "faithful", tone: "polite and professional; for Japanese use keigo (desu/masu form, sonkeigo/kenjougo where fitting)", label: "Formal" },
+  { key: "literal", style: "faithful", tone: "literal and faithful to the source sentence structure, minimal rephrasing, even if slightly stiff", label: "Literal" },
 ];
 
 export default function Translate() {
@@ -48,7 +54,7 @@ export default function Translate() {
     if (p === "ja" && ja) return "ja";
     return ja ? "ja" : "en";
   });
-  const [preset, setPreset] = useState<"gaul" | "umum" | "formal">("umum");
+  const [preset, setPreset] = useState<"santai" | "formal" | "literal">("santai");
   const [result, setResult] = useState<{ translation: string; via?: string; cached?: boolean; note?: string } | null>(null);
   const [usage, setUsage] = useState<UsageResult | null>(null);
   const [usageBusy, setUsageBusy] = useState(false);

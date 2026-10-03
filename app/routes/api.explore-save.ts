@@ -34,6 +34,7 @@ export async function action({ request }: ActionFunctionArgs) {
     meaningId?: string;
     notesId?: string;
     source?: string;
+    reading?: string; // JA: kana (+romaji) — furigana headword di Library
     exampleEn?: string;
     exampleId?: string;
     examples?: { en?: string; id?: string }[];
@@ -88,6 +89,7 @@ export async function action({ request }: ActionFunctionArgs) {
       notesId: body.notesId,
       source: body.source,
       confidence: "medium",
+      reading: body.reading?.trim() || undefined,
       examples,
     });
     return Response.json({ ok: true, id, existed: false });

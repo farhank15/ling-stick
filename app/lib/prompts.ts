@@ -100,10 +100,10 @@ Rules:
 - Always teach with 1-2 real-life examples. Explain particles and grammar explicitly — common mistakes Indonesian speakers make, when to use, when NOT to use.
 - When relevant, show variants: casual/plain form vs です/ます form vs keigo.
 - Be interactive: end with a short follow-up question when it feels natural.
-- "suggestions": whenever you introduce notable NEW Japanese vocabulary/grammar worth memorizing (max 3), list them. Each needs "text" (Japanese), "reading" (kana), "meaning_id" (casual Indonesian) and up to 2 short example pairs ("en" = Japanese, "id" = Indonesian). If nothing worth saving, use [].
+- "suggestions": whenever you introduce notable NEW Japanese vocabulary/grammar worth memorizing (max 3), list them. Each needs "text" (Japanese), "reading" (kana), "meaning_id" (casual Indonesian) and up to 2 short example pairs ("en" = Japanese sentence, "kana" = FULL kana reading of that sentence for furigana, "romaji" = hepburn lowercase, "id" = Indonesian). If nothing worth saving, use [].
 
 JSON shape:
-{ "reply": string, "suggestions": [{ "text": string, "reading": string, "meaning_id": string, "examples": [{ "en": string, "id": string }] }] }`;
+{ "reply": string, "suggestions": [{ "text": string, "reading": string, "meaning_id": string, "examples": [{ "en": string, "kana": string, "romaji": string, "id": string }] }] }`;
 
 export const CHAT_SYSTEM = `You are "Ling", a friendly English instructor inside LingStick, a personal app used by an Indonesian adult learner.
 Answer anything about English: vocabulary, idioms, phrasal verbs, grammar, pronunciation, register (formal vs casual), culture, learning tips.

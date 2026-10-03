@@ -606,9 +606,13 @@ export default function AksaraPage() {
   const [overrides, setOverrides] = useState<Record<number, string>>({});
 
   const statusOf = (w: AksaraWord) => overrides[w.id] ?? w.status;
+  // "Sedang belajar" mencakup status new (kata fresh generate/bank yang belum
+  // ditandai apa-apa) — kalau tidak, hasil generate tidak kelihatan di filter
+  // default. matcha: generate sukses tapi list kosong = false-gagal.
   const filteredWords = levelWords.filter((w) => {
     if (statusFilter === "all") return true;
-    return statusOf(w) === statusFilter;
+    if (statusFilter === "known") return statusOf(w) === "known";
+    return statusOf(w) === "learning" || statusOf(w) === "new";
   });
 
   /** Tandai dari daftar kanji: optimistic update + POST ke action route ini. */
