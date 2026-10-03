@@ -122,6 +122,42 @@ export async function listReadings(lang: string, level?: ReadingLevel): Promise<
   return rows;
 }
 
+/**
+ * Graded reader path: bacaan berikutnya yang belum dibaca (readCount=0),
+ * urut level termudah dulu (N5→N1 / A1→C2), lalu paling lama. Kalau semua
+ * sudah dibaca, kembalikan bacaan terbaru biar tombol tetap berguna.
+ */
+export async function nextReading(lang: string): Promise<ReadingRow | null> {
+  const order =
+    lang === "ja"
+      ? sql`CASE ${readings.level} WHEN 'N5' THEN 1 WHEN 'N4' THEN 2 WHEN 'N3' THEN 3 WHEN 'N2' THEN 4 ELSE 5 END`
+      : sql`CASE ${readings.level} WHEN 'A1' THEN 1 WHEN 'A2' THEN 2 WHEN 'B1' THEN 3 WHEN 'B2' THEN 4 WHEN 'C1' THEN 5 ELSE 6 END`;
+  const base = {
+    id: readings.id,
+    title: readings.title,
+    titleEn: readings.titleEn,
+    level: readings.level,
+    topic: readings.topic,
+    wordCount: readings.wordCount,
+    readCount: readings.readCount,
+    createdAt: readings.createdAt,
+  };
+  const [fresh] = await db
+    .select(base)
+    .from(readings)
+    .where(and(eq(readings.lang, lang), eq(readings.readCount, 0)))
+    .orderBy(order, readings.createdAt)
+    .limit(1);
+  if (fresh) return fresh;
+  const [latest] = await db
+    .select(base)
+    .from(readings)
+    .where(eq(readings.lang, lang))
+    .orderBy(desc(readings.createdAt))
+    .limit(1);
+  return latest ?? null;
+}
+
 export async function getReading(
   lang: string,
   id: number,

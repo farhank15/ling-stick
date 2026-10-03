@@ -19,6 +19,10 @@ export type QuizMode =
   | "intens"
   | "audio"
   | "scramble"
+  | "mix"
+  | "dikte"
+  | "shadow"
+  | "pola"
   | "toefl"
   | "bulanan";
 export const QUIZ_MODES: QuizMode[] = [
@@ -28,6 +32,10 @@ export const QUIZ_MODES: QuizMode[] = [
   "intens",
   "audio",
   "scramble",
+  "mix",
+  "dikte",
+  "shadow",
+  "pola",
   "toefl",
   "bulanan",
 ];
@@ -54,8 +62,10 @@ export function dayOfMonth(): number {
 
 /** Mode khusus memaksa tipe soal tertentu biar isinya beda dari kuis harian. */
 function forceTypeFor(mode: QuizMode): QuizQuestion["type"] | undefined {
-  if (mode === "typing" || mode === "scramble") return "typing";
+  if (mode === "typing" || mode === "scramble" || mode === "dikte" || mode === "shadow") return "typing";
   if (mode === "audio") return "listen";
+  if (mode === "pola") return "cloze";
+  // mix: campur semua tipe.
   return undefined;
 }
 
@@ -68,6 +78,7 @@ export type QuizQuestion = {
   answer: string;
   meaningId: string | null;
   exampleEn: string | null;
+  reading?: string | null; // JA: kana (+romaji) — furigana di UI shadow
   tokens?: string[]; // JA Susun Kata: token per-kata dari segmentasi AI
 };
 
@@ -78,7 +89,14 @@ type ItemRow = {
   register: string;
   meaningId: string | null;
   firstEn: string | null;
+  reading: string | null;
 };
+
+/** Kata fungsi buat cloze gramatika (mode Pola): partikel/preposisi/auxiliary
+ * yang paling sering salah pakai. Dipilih dari kalimat contoh apa pun — tidak
+ * tergantung isi library. */
+const FUNCTION_WORDS_JA = ["は", "が", "を", "に", "で", "へ", "と", "も", "か", "から", "まで", "より", "の", "ね", "よ"];
+const FUNCTION_WORDS_EN = ["in", "on", "at", "to", "for", "of", "with", "by", "from", "about", "that", "who", "which", "is", "are", "was", "were", "have", "has", "will", "would", "can"];
 
 function shuffle<T>(arr: T[]): T[] {
   const a = [...arr];
@@ -135,6 +153,7 @@ async function collectRows(opts: BuildOpts) {
           type: items.type,
           register: items.register,
           meaningId: items.meaningId,
+          reading: items.reading,
           firstEn: sql<string | null>`(SELECT en FROM examples WHERE item_id = ${items.id} ORDER BY id LIMIT 1)`,
         })
         .from(items)
@@ -152,8 +171,9 @@ async function collectRows(opts: BuildOpts) {
         text: wordbank.text,
         type: wordbank.type,
         register: wordbank.register,
-        meaningId: wordbank.meaningId,
-        firstEn: sql<string | null>`(SELECT json_extract(value, '$.en') FROM json_each(wordbank.examples_json) LIMIT 1)`,
+          meaningId: wordbank.meaningId,
+          reading: wordbank.reading,
+          firstEn: sql<string | null>`(SELECT json_extract(value, '$.en') FROM json_each(wordbank.examples_json) LIMIT 1)`,
       })
       .from(wordbank)
       .where(and(...conds))
@@ -246,6 +266,7 @@ async function buildQuestions(
         answer: lang === "ja" ? item.text.trim() : item.text.toLowerCase().trim(),
         meaningId: item.meaningId,
         exampleEn: item.firstEn,
+        reading: item.reading,
       });
     } else if (type === "mcq_en_id") {
       const opts2 = shuffle([item.meaningId!, ...distractors.map((d) => d.meaningId!)]);
@@ -270,9 +291,49 @@ async function buildQuestions(
         exampleEn: item.firstEn,
       });
     } else if (type === "cloze") {
+      // Mode Pola (forceType cloze): rumpang FUNCTION WORD dari kalimat contoh
+      // (partikel JA / preposisi+auxiliary EN) — latihan gramatika eksplisit
+      // yang jalan dengan isi library apa pun.
+      // matcha: grammar butuh konten pola; function-word cloze = versi tanpa
+      // pipeline konten baru (daily mix tidak memaksa cloze → cabang ini aman).
+      if (opts.forceType === "cloze") {
+        const raw = (item.firstEn ?? "").split("\n")[0].trim();
+        const candidates =
+          lang === "ja" ? FUNCTION_WORDS_JA : FUNCTION_WORDS_EN;
+        // JA: partikel panjang diprioritaskan (stabil sort → acak dalam
+        // panjang sama) biar tidak motong kata (日本のの). EN: full acak.
+        const ordered =
+          lang === "ja"
+            ? shuffle(candidates).sort((a, b) => b.length - a.length)
+            : shuffle(candidates);
+        const hit = ordered.find((w) =>
+          lang === "ja" ? raw.includes(w) : new RegExp(`\\b${w}\\b`, "i").test(raw),
+        );
+        if (hit && raw) {
+          const blanked = lang === "ja" ? raw.replace(hit, "＿＿＿") : raw.replace(new RegExp(`\\b${hit}\\b`), "_____");
+          const others = shuffle(candidates.filter((w) => w !== hit)).slice(0, 3);
+          if (blanked !== raw && others.length === 3) {
+            const opts2 = shuffle([hit, ...others]);
+            questions.push({
+              itemId: item.id,
+              type,
+              prompt: blanked,
+              options: opts2,
+              answer: String(opts2.indexOf(hit)),
+              meaningId: item.meaningId,
+              exampleEn: item.firstEn,
+            });
+            if (i > limit * 10) break; // pengaman
+            continue;
+          }
+        }
+      }
+      // Cloze dari KALIMAT CONTOH (sentence mining): rumpang satu kata kunci.
+      // Kalimat >25 kata diskip (melelahkan, bukan melatih) → fallback MCQ.
       const sentence = item.firstEn ?? "";
+      const sentWords = (sentence.match(/[A-Za-z'\u3040-\u30ff\u4e00-\u9faf]+/g) || []).length;
       const re = new RegExp(item.text.replace(/[.*+?^${}()|[\]\\]/g, "\\$&"), "i");
-      const blanked = sentence ? sentence.replace(re, "_____") : "";
+      const blanked = sentence && sentWords <= 25 ? sentence.replace(re, "_____") : "";
       if (!blanked.includes("_____")) {
         const opts2 = shuffle([item.meaningId!, ...distractors.map((d) => d.meaningId!)]);
         questions.push({
@@ -326,6 +387,10 @@ function modeTitle(mode: QuizMode, day: string, lang: TargetLang = "en"): string
           intens: "Latihan Intens",
           audio: "Latihan Dengar",
           scramble: "Susun Kata",
+          mix: "Campur",
+          dikte: "Dikte",
+          shadow: "Shadowing",
+          pola: "Pola Kalimat",
           toefl: "Tes JLPT",
           bulanan: "JLPT Bulanan",
         }
@@ -336,6 +401,10 @@ function modeTitle(mode: QuizMode, day: string, lang: TargetLang = "en"): string
           intens: "Latihan Intens",
           audio: "Latihan Dengar",
           scramble: "Susun Kata",
+          mix: "Campur",
+          dikte: "Dikte",
+          shadow: "Shadowing",
+          pola: "Pola Kalimat",
           toefl: "TOEFL Test",
           bulanan: "Uji Bulanan",
         };
@@ -577,6 +646,34 @@ export async function pendingToday(): Promise<{ total: number; done: number; com
   if (!set) return null;
   const order = JSON.parse(set.order) as number[];
   return { total: order.length, done: set.done, completed: Boolean(set.completed) };
+}
+
+/**
+ * Streak latihan: hari beruntun dengan ≥1 set selesai (mode latihan apa pun,
+ * periodic ikut dihitung). Tanpa migrasi — dihitung dari quiz_sets.
+ */
+export async function getStreak(): Promise<{ days: number; todayDone: boolean }> {
+  const lang = await getTargetLang();
+  const rows = await db
+    .select({ day: quizSets.day, completed: quizSets.completed })
+    .from(quizSets)
+    .where(and(eq(quizSets.lang, lang), eq(quizSets.completed, 1)))
+    .orderBy(desc(quizSets.day))
+    .limit(400);
+  const doneDays = new Set(rows.map((r) => r.day));
+  const today = localDayStr();
+  let days = 0;
+  const d = new Date(today + "T00:00:00");
+  // Mulai dari kemarin kalau hari ini belum ada yang selesai (streak tetap hidup).
+  if (!doneDays.has(today)) d.setDate(d.getDate() - 1);
+  for (;;) {
+    const key = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
+    if (!doneDays.has(key)) break;
+    days++;
+    d.setDate(d.getDate() - 1);
+    if (days > 365) break;
+  }
+  return { days, todayDone: doneDays.has(today) };
 }
 
 /** Antrian flashcard: kartu due + kartu baru hari ini (dengan contoh & catatan). */

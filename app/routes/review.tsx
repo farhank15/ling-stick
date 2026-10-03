@@ -6,12 +6,14 @@ import {
   BadgeCheck,
   BookOpenCheck,
   CheckCircle2,
+  Dices,
   Ear,
   History,
   Keyboard,
   Loader2,
   Layers,
   Lightbulb,
+  Mic,
   PartyPopper,
   PencilLine,
   Plus,
@@ -36,7 +38,8 @@ export const handle = { title: "Review" };
 
 export async function loader({ request }: { request: Request }) {
   await requireUser(request);
-  return { dailyTarget: env.DAILY_QUIZ_SIZE, lang: await getTargetLang() };
+  const { getStreak } = await import("~/lib/quiz.server");
+  return { dailyTarget: env.DAILY_QUIZ_SIZE, lang: await getTargetLang(), streak: await getStreak() };
 }
 
 import { ttsLang } from "~/lib/utils.shared";
@@ -70,6 +73,7 @@ type QuizQuestion = {
   answer: string;
   meaningId: string | null;
   exampleEn: string | null;
+  reading?: string | null; // JA: kana (+romaji) — furigana di UI shadow
   tokens?: string[]; // JA Susun Kata: token per-kata dari segmentasi AI
 };
 
@@ -108,7 +112,7 @@ type Periodic = {
   bulanan: { month: string; available: boolean; exists: boolean; setId: number | null; done: number; completed: boolean };
 };
 
-type Mode = "daily" | "typing" | "intens" | "audio" | "scramble";
+type Mode = "daily" | "typing" | "intens" | "audio" | "scramble" | "mix" | "dikte" | "shadow" | "pola";
 
 const MODES: {
   id: Mode | "flash" | "match";
@@ -122,6 +126,10 @@ const MODES: {
   { id: "typing", label: "Latihan Ketik", icon: Keyboard, desc: "Ketik bahasa Inggrisnya dari arti Indonesia", action: "generate" },
   { id: "audio", label: "Dengar", icon: Volume2, desc: "Dengarin cara bacanya, pilih arti yang tepat", action: "start" },
   { id: "scramble", label: "Susun Kata", icon: Shuffle, desc: "Susun kata jadi frasa Inggris yang benar", action: "start" },
+  { id: "mix", label: "Campur", icon: Dices, desc: "Acak semua tipe soal — arti, ketik, dengar, susun", action: "start" },
+  { id: "dikte", label: "Dikte", icon: Ear, desc: "Dengarkan lalu ketik tepat seperti yang dibunyikan", action: "start" },
+  { id: "shadow", label: "Shadowing", icon: Mic, desc: "Dengarkan + ikuti ucapkan — latihan kelancaran", action: "start" },
+  { id: "pola", label: "Pola Kalimat", icon: PencilLine, desc: "Rumpang partikel & kata fungsi dari contoh nyata", action: "start" },
   { id: "intens", label: "Intens Mingguan", icon: Zap, desc: "25 soal campuran buat mempertajam ingatan", action: "generate" },
   { id: "match", label: "Match", icon: Puzzle, desc: "Minigame: pasangkan kata dengan artinya — per ronde", action: "start" },
 ];
@@ -130,6 +138,10 @@ const MODES: {
 const JA_MODE_TEXT: Partial<Record<string, { label?: string; desc?: string }>> = {
   typing: { desc: "Ketik bahasa Jepangnya dari arti Indonesia" },
   scramble: { desc: "Susun token jadi kalimat Jepang yang benar" },
+  mix: { desc: "Acak semua tipe soal — arti, ketik, dengar, susun" },
+  dikte: { desc: "Dengarkan lalu ketik bahasa Jepangnya" },
+  shadow: { desc: "Dengarkan + ikuti ucapkan — latihan kelancaran" },
+  pola: { desc: "Rumpang partikel dari contoh nyata" },
 };
 
 const TYPE_META: Record<QuestionType, { label: string; icon: typeof Ear }> = {
@@ -429,7 +441,7 @@ function OptionList({
 }
 
 export default function ReviewPage() {
-  const { dailyTarget, lang } = useLoaderData<typeof loader>();
+  const { dailyTarget, lang, streak } = useLoaderData<typeof loader>();
   const ja = lang === "ja";
   const toast = useToast();
   const [params, setParams] = useSearchParams();
@@ -439,7 +451,7 @@ export default function ReviewPage() {
     urlMode === "flash" ? "flash" : urlMode === "match" ? "match" : urlMode ? "quiz" : "pick",
   );
   const [mode, setMode] = useState<Mode>(
-    urlMode && ["daily", "typing", "intens", "audio", "scramble"].includes(urlMode)
+    urlMode && ["daily", "typing", "intens", "audio", "scramble", "mix", "dikte", "shadow", "pola"].includes(urlMode)
       ? (urlMode as Mode)
       : "daily",
   );
@@ -472,6 +484,63 @@ export default function ReviewPage() {
   // Susun Kata
   const [scrambleOrder, setScrambleOrder] = useState<number[]>([]);
   const [pickedWords, setPickedWords] = useState<number[]>([]);
+
+  // Shadowing + mic: nilai ucapan via SpeechRecognition (transkrip vs target).
+  // Waveform tidak dipakai — transkrip kata jauh lebih relevan buat skor bahasa.
+  const [micBusy, setMicBusy] = useState(false);
+  const [micResult, setMicResult] = useState<{ score: number; heard: string } | null>(null);
+
+  const scoreMic = (target: string, isJa: boolean) => {
+    const SR =
+      (window as unknown as { SpeechRecognition?: new () => any }).SpeechRecognition ??
+      (window as unknown as { webkitSpeechRecognition?: new () => any }).webkitSpeechRecognition;
+    if (!SR) {
+      toast("Browser tidak mendukung nilai suara — pakai Chrome");
+      return;
+    }
+    if (micBusy) return;
+    setMicBusy(true);
+    setMicResult(null);
+    try {
+      const rec = new SR();
+      rec.lang = isJa ? "ja-JP" : "en-US";
+      rec.interimResults = false;
+      rec.maxAlternatives = 1;
+      const stop = () => setMicBusy(false);
+      rec.onend = stop;
+      rec.onerror = () => {
+        stop();
+        toast("Mic gagal — cek izin mikrofon");
+      };
+      rec.onresult = (e: any) => {
+        const heard = String(e.results?.[0]?.[0]?.transcript ?? "");
+        // Skor = irisan kata (EN) / karakter (JA, tanpa spasi) vs target.
+        const norm = (s: string) =>
+          isJa ? s.replace(/[\s　、。！？「」]/g, "") : s.toLowerCase().replace(/[^a-z' ]/g, "");
+        const t = norm(target);
+        const h = norm(heard);
+        let score: number;
+        if (!t || !h) {
+          score = 0;
+        } else if (isJa) {
+          const set = new Set([...h]);
+          const hit = [...t].filter((c) => set.has(c)).length;
+          score = Math.round((hit / Math.max(t.length, h.length)) * 100);
+        } else {
+          const tw = t.split(/\s+/).filter(Boolean);
+          const hw = new Set(h.split(/\s+/).filter(Boolean));
+          const hit = tw.filter((w) => hw.has(w)).length;
+          score = Math.round((hit / Math.max(tw.length, 1)) * 100);
+        }
+        setMicResult({ score, heard });
+        stop();
+      };
+      rec.start();
+    } catch {
+      setMicBusy(false);
+      toast("Mic gagal dimulai");
+    }
+  };
 
   // Flashcard
   const [cards, setCards] = useState<FlashCard[]>([]);
@@ -535,7 +604,7 @@ export default function ReviewPage() {
   // Restore mode quiz biasa dari URL (?mode=typing dst) — refresh gak balikin ke picker.
   useEffect(() => {
     if (screen !== "quiz" || data || !urlMode) return;
-    if (["daily", "typing", "intens", "audio", "scramble"].includes(urlMode)) {
+    if (["daily", "typing", "intens", "audio", "scramble", "mix", "dikte", "shadow", "pola"].includes(urlMode)) {
       load(urlMode as Mode);
       return;
     }
@@ -799,6 +868,16 @@ export default function ReviewPage() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [screen, mode, currentIndex]);
 
+  // Dikte + shadowing: bunyikan jawaban (kalimat/frasa) tiap ganti soal.
+  useEffect(() => {
+    if (screen !== "quiz" || (mode !== "dikte" && mode !== "shadow") || !q) return;
+    setMicResult(null);
+    if (mode === "dikte" && typedResult !== null) return;
+    const t = setTimeout(() => speak(q.answer), 500);
+    return () => clearTimeout(t);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [screen, mode, currentIndex]);
+
   const submitAnswerText = (text: string) => {
     if (typedResult !== null || !q) return;
     const ok = normalizeAnswer(text) === normalizeAnswer(q.answer);
@@ -965,7 +1044,26 @@ export default function ReviewPage() {
 
   if (screen === "pick") {
     return (
-      <ModePicker
+      <div className="space-y-3">
+        {/* Streak latihan harian — retensi naik kalau ada target beruntun. */}
+        <div className="card flex items-center gap-3 p-4">
+          <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-amber-50 text-lg dark:bg-amber-950">
+            🔥
+          </span>
+          <div className="min-w-0 flex-1">
+            <p className="font-semibold">
+              {streak.days > 0 ? `${streak.days} hari beruntun` : "Mulai streak hari ini"}
+            </p>
+            <p className="truncate text-xs text-zinc-500">
+              {streak.todayDone
+                ? "Hari ini sudah latihan — besok lanjutkan"
+                : streak.days > 0
+                  ? "Selesaikan 1 set biar streak tidak putus"
+                  : "Selesaikan 1 set latihan apa pun"}
+            </p>
+          </div>
+        </div>
+        <ModePicker
         periodic={periodic}
         ja={ja}
         onStart={(m) =>
@@ -982,6 +1080,7 @@ export default function ReviewPage() {
         genMsg={genMsg}
         genIsError={genIsError}
       />
+      </div>
     );
   }
 
@@ -1404,11 +1503,24 @@ export default function ReviewPage() {
 
   if (!q || !set) return null;
 
-  const isTypingUI = mode === "typing" || (q.type === "typing" && mode !== "scramble");
+  const isTypingUI =
+    mode === "typing" || (q.type === "typing" && mode !== "scramble" && mode !== "dikte" && mode !== "shadow");
   const isScrambleUI = mode === "scramble";
-  const meta = TYPE_META[isScrambleUI ? "typing" : q.type];
+  const isDikteUI = mode === "dikte";
+  const isShadowUI = mode === "shadow";
+  const meta = TYPE_META[isScrambleUI || isDikteUI || isShadowUI ? "typing" : q.type];
   const metaLabel =
-    ja && (isScrambleUI || q.type === "typing") ? "Ketik bahasa Jepangnya" : meta.label;
+    ja && (isScrambleUI || isDikteUI || isShadowUI || q.type === "typing")
+      ? mode === "dikte"
+        ? "Dengarkan lalu ketik bahasa Jepangnya"
+        : mode === "shadow"
+          ? "Dengarkan lalu ikuti ucapkan"
+          : "Ketik bahasa Jepangnya"
+      : isDikteUI
+        ? "Dengarkan lalu ketik"
+        : isShadowUI
+          ? "Dengarkan lalu ikuti"
+          : meta.label;
   const spokenEn = q.options[Number(q.answer)]; // teks EN untuk TTS (listen/audio)
   // JP: token per-kata dari segmentasi AI (partikel sendiri); EN: split spasi.
   const scrambleWords = q.tokens && q.tokens.length >= 2 ? q.tokens : (q.answer ?? "").split(/\s+/).filter(Boolean);
@@ -1485,11 +1597,26 @@ export default function ReviewPage() {
           <meta.icon className="h-3.5 w-3.5" /> {metaLabel}
         </span>
 
-        {isTypingUI ? (
+        {isTypingUI || isDikteUI ? (
           <>
             <p className="mt-3 text-center text-xl font-semibold">{q.prompt}</p>
+            {isDikteUI ? (
+              <div className="mt-2 flex justify-center">
+                <SpeakButton
+                  text={q.answer}
+                  className="h-5 w-5"
+                  buttonClassName="inline-flex items-center gap-1.5 rounded-full bg-teal-600 px-4 py-2 text-sm font-semibold text-white shadow active:scale-95"
+                >
+                  Putar ulang
+                </SpeakButton>
+              </div>
+            ) : null}
             <p className="mt-1 text-center text-[11px] text-zinc-400">
-              {ja ? "Ketik bahasa Jepangnya dari arti di atas" : "Ketik bahasa Inggrisnya dari arti di atas"}
+              {isDikteUI
+                ? "Dengarkan baik-baik lalu ketik tepat seperti yang dibunyikan"
+                : ja
+                  ? "Ketik bahasa Jepangnya dari arti di atas"
+                  : "Ketik bahasa Inggrisnya dari arti di atas"}
             </p>
             <input
               className="input-area mt-4 text-center text-lg"
@@ -1575,6 +1702,76 @@ export default function ReviewPage() {
                 Periksa
               </button>
             )}
+          </>
+        ) : isShadowUI ? (
+          <>
+            {/* Shadowing: dengarkan + ikuti ucapkan — tanpa dinilai benar/salah,
+                yang dihitung partisipasi (1 rep = 1 selesai). */}
+            {hasJa(q.answer) ? (
+              <div className="mt-3 text-center">
+                <JaText
+                  text={q.answer}
+                  reading={q.reading ?? undefined}
+                  kanjiClassName="text-teal-700 dark:text-teal-400"
+                  className="text-2xl font-bold"
+                />
+              </div>
+            ) : (
+              <p className="mt-3 text-center text-2xl font-bold">{q.answer}</p>
+            )}
+            {q.meaningId ? (
+              <p className="mt-1 text-center text-sm text-zinc-500">{q.meaningId}</p>
+            ) : null}
+            <div className="mt-4 flex justify-center">
+              <SpeakButton
+                text={q.answer}
+                className="h-7 w-7"
+                buttonClassName="flex h-16 w-16 items-center justify-center rounded-full bg-teal-600 text-white shadow-lg shadow-teal-600/30 active:scale-95"
+              />
+            </div>
+            <p className="mt-2 text-center text-xs text-zinc-400">
+              Ucapkan mengikuti audio (0,5 detik di belakangnya) — 3x per kalimat biar nempel
+            </p>
+            <div className="mt-3 flex gap-2">
+              <button
+                className="btn-secondary flex-1 justify-center gap-1.5"
+                disabled={micBusy}
+                onClick={() => scoreMic(q.answer, ja)}
+              >
+                {micBusy ? (
+                  <>
+                    <Loader2 className="h-4 w-4 animate-spin" /> Mendengarkan…
+                  </>
+                ) : (
+                  <>
+                    <Mic className="h-4 w-4" /> Nilai ucapanku
+                  </>
+                )}
+              </button>
+              <button
+                className="btn-primary flex-1"
+                onClick={() => {
+                  setMicResult(null);
+                  answer(true);
+                  next();
+                }}
+              >
+                Sudah latih — lanjut
+              </button>
+            </div>
+            {micResult ? (
+              <p
+                className={`mt-2 text-center text-sm font-medium ${
+                  micResult.score >= 70
+                    ? "text-teal-700 dark:text-teal-300"
+                    : "text-amber-700 dark:text-amber-300"
+                }`}
+              >
+                {micResult.score >= 70
+                  ? `Bagus! ${micResult.score}% mirip target`
+                  : `Terdengar: “${micResult.heard || "—"}” (${micResult.score}%) — coba lagi`}
+              </p>
+            ) : null}
           </>
         ) : q.type === "listen" ? (
           <>

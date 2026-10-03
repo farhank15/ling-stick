@@ -44,7 +44,7 @@ export async function loader({ request }: LoaderFunctionArgs) {
   await requireUser(request);
   const lang = await getTargetLang(); // JA (JLPT) & EN (CEFR) — dua-duanya ada Reading
 
-  const { getReading, listReadings } = await import("~/lib/reading.server");
+  const { getReading, listReadings, nextReading } = await import("~/lib/reading.server");
   const url = new URL(request.url);
   const openId = Number(url.searchParams.get("open")) || null;
   if (openId) {
@@ -62,6 +62,8 @@ export async function loader({ request }: LoaderFunctionArgs) {
     levels: readingLevels(lang),
     reading: null,
     list: await listReadings(lang, level ?? undefined),
+    // Graded path: bacaan berikutnya yang belum dibaca (termudah dulu).
+    nextUp: level ? null : await nextReading(lang),
   };
 }
 
@@ -81,11 +83,13 @@ function ReadingList({
   level,
   lang,
   levels,
+  nextUp,
 }: {
   list: ReadingListItem[];
   level: string | null;
   lang: string;
   levels: readonly string[];
+  nextUp: ReadingListItem | null;
 }) {
   const toast = useToast();
   const navigation = useNavigation();
@@ -201,6 +205,16 @@ function ReadingList({
         <div className="rounded-xl bg-red-50 px-4 py-3 text-sm text-red-700 dark:bg-red-950 dark:text-red-400">
           Gagal: {genError}
         </div>
+      ) : null}
+
+      {/* Graded path: lanjut ke bacaan berikutnya yang belum dibaca */}
+      {nextUp ? (
+        <Link
+          to={`/reading?open=${nextUp.id}`}
+          className="btn-primary w-full justify-center gap-1.5"
+        >
+          <BookOpenCheck className="h-4 w-4" /> Lanjut baca: {nextUp.title} ({nextUp.level})
+        </Link>
       ) : null}
 
       {/* Generate bacaan baru — debounce: disabled sampai selesai */}
@@ -477,6 +491,7 @@ export default function ReadingPage() {
           level={"level" in data ? data.level : null}
           lang={data.lang}
           levels={data.levels}
+          nextUp={"nextUp" in data ? data.nextUp : null}
         />
       )}
     </div>

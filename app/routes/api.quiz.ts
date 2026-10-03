@@ -56,7 +56,7 @@ export async function loader({ request }: LoaderFunctionArgs) {
   }
 
   const level = url.searchParams.get("level") ?? undefined;
-  const mode: QuizMode = ["daily", "extra", "typing", "intens", "audio", "scramble"].includes(modeParam ?? "")
+  const mode: QuizMode = ["daily", "extra", "typing", "intens", "audio", "scramble", "mix", "dikte", "shadow", "pola"].includes(modeParam ?? "")
     ? (modeParam as QuizMode)
     : "daily";
   const setIdParam = url.searchParams.get("setId");
@@ -79,7 +79,8 @@ export async function loader({ request }: LoaderFunctionArgs) {
 
 function envLimit(mode: QuizMode): number {
   if (mode === "intens") return 25;
-  if (mode === "typing" || mode === "audio" || mode === "scramble") return 15;
+  if (mode === "typing" || mode === "audio" || mode === "scramble" || mode === "dikte" || mode === "pola") return 15;
+  if (mode === "shadow") return 10;
   return 20;
 }
 
@@ -123,7 +124,7 @@ export async function action({ request }: ActionFunctionArgs) {
   }
 
   if (body.action === "create") {
-    const mode = ["extra", "typing", "intens", "audio", "scramble"].includes(body.mode ?? "")
+    const mode = ["extra", "typing", "intens", "audio", "scramble", "mix", "dikte", "shadow", "pola"].includes(body.mode ?? "")
       ? (body.mode as Exclude<QuizMode, "daily">)
       : "extra";
     const count = Math.min(30, Math.max(5, Number(body.count) || 10));
