@@ -97,18 +97,60 @@ const KANA_TABLES: Record<"hiragana" | "katakana", KanaRow[]> = {
   katakana: kanaRows(KATAKANA),
 };
 
-/** Section kana per BARIS: 0–11 gojūon (a s/d ん), 12–16 dakuten/handakuten. */
+/** Section kana per BARIS: 0–10 gojūon (a s/d ん), 11–15 dakuten/handakuten. */
 const KANA_SECTIONS: { label: string; desc: string; slice: [number, number] }[] = [
   {
     label: "Gojūon — dasar",
     desc: "46 kana asli: 5 kolom bunyi (a-i-u-e-o) × baris konsonan + ん",
-    slice: [0, 12],
+    slice: [0, 11],
   },
   {
     label: "Dakuten & handakuten",
-    desc: "Variasi bertitik (が) & bundar (ぱ) — bunyinya jadi bersuara",
-    slice: [12, 17],
+    desc: "Tanda ゛ bikin bersuara (か→が), ゜ bikin semi-bersuara (は→ぱ)",
+    slice: [11, 16],
   },
+];
+
+/* ── Yōon (拗音): i-kolom + ゃゅょ kecil = 1 ketuk (き+ゃ=きゃ kya).
+ * Sumber: tabel yōon standar (Wikipedia/Embassy chart): 11 baris × 3 = 33.
+ * Baris ぢゃ jarang dipakai modern → tidak dimasukkan. */
+const YOON_HIRA: [string, string][][] = [
+  [["きゃ", "kya"], ["きゅ", "kyu"], ["きょ", "kyo"]],
+  [["しゃ", "sha"], ["しゅ", "shu"], ["しょ", "sho"]],
+  [["ちゃ", "cha"], ["ちゅ", "chu"], ["ちょ", "cho"]],
+  [["にゃ", "nya"], ["にゅ", "nyu"], ["にょ", "nyo"]],
+  [["ひゃ", "hya"], ["ひゅ", "hyu"], ["ひょ", "hyo"]],
+  [["みゃ", "mya"], ["みゅ", "myu"], ["みょ", "myo"]],
+  [["りゃ", "rya"], ["りゅ", "ryu"], ["りょ", "ryo"]],
+  [["ぎゃ", "gya"], ["ぎゅ", "gyu"], ["ぎょ", "gyo"]],
+  [["じゃ", "ja"], ["じゅ", "ju"], ["じょ", "jo"]],
+  [["びゃ", "bya"], ["びゅ", "byu"], ["びょ", "byo"]],
+  [["ぴゃ", "pya"], ["ぴゅ", "pyu"], ["ぴょ", "pyo"]],
+];
+const YOON_KATA: [string, string][][] = [
+  [["キャ", "kya"], ["キュ", "kyu"], ["キョ", "kyo"]],
+  [["シャ", "sha"], ["シュ", "shu"], ["ショ", "sho"]],
+  [["チャ", "cha"], ["チュ", "chu"], ["チョ", "cho"]],
+  [["ニャ", "nya"], ["ニュ", "nyu"], ["ニョ", "nyo"]],
+  [["ヒャ", "hya"], ["ヒュ", "hyu"], ["ヒョ", "hyo"]],
+  [["ミャ", "mya"], ["ミュ", "myu"], ["ミョ", "myo"]],
+  [["リャ", "rya"], ["リュ", "ryu"], ["リョ", "ryo"]],
+  [["ギャ", "gya"], ["ギュ", "gyu"], ["ギョ", "gyo"]],
+  [["ジャ", "ja"], ["ジュ", "ju"], ["ジョ", "jo"]],
+  [["ビャ", "bya"], ["ビュ", "byu"], ["ビョ", "byo"]],
+  [["ピャ", "pya"], ["ピュ", "pyu"], ["ピョ", "pyo"]],
+];
+
+/* ── Gairaigo (katakana saja): bunyi serapan buat kata asing — kana besar +
+ * vokal kecil (ファ fa, ティ ti, ウィ wi…). Kurasi umum (ToKini/Keiko chart);
+ * ヴ baris untuk bunyi V. Hiragana hampir tidak memakai ini. */
+const GAIRAIGO: [string, string][] = [
+  ["ヴァ", "va"], ["ヴィ", "vi"], ["ヴ", "vu"], ["ヴェ", "ve"], ["ヴォ", "vo"],
+  ["ウィ", "wi"], ["ウェ", "we"], ["ウォ", "wo"],
+  ["シェ", "she"], ["ジェ", "je"], ["チェ", "che"],
+  ["ティ", "ti"], ["トゥ", "tu"], ["ディ", "di"],
+  ["ファ", "fa"], ["フィ", "fi"], ["フェ", "fe"], ["フォ", "fo"],
+  ["ツァ", "tsa"],
 ];
 
 const SCRIPTS = ["hiragana", "katakana", "kanji"] as const;
@@ -631,6 +673,62 @@ export default function AksaraPage() {
               </div>
             );
           })}
+          {/* Yōon — bunyi gabungan i-kolom + ゃゅょ kecil (1 ketuk) */}
+          <div className="pt-3">
+            <p className="mb-1.5 text-sm font-semibold">Yōon — bunyi gabungan</p>
+            <p className="mb-2.5 text-xs text-zinc-400">
+              {script === "hiragana"
+                ? "き + ゃ kecil = きゃ (kya) — satu ketuk, bukan dua (きや beda!)"
+                : "キ + ャ kecil = キャ (kya) — mis. シャワー (shawaa, shower)"}
+            </p>
+            <div className="space-y-1.5">
+              {(script === "hiragana" ? YOON_HIRA : YOON_KATA).map((row, ri) => (
+                <div key={ri} className="grid grid-cols-3 gap-1.5">
+                  {row.map(([kana, romaji]) => (
+                    <KanaCell key={kana} kana={kana} romaji={romaji} />
+                  ))}
+                </div>
+              ))}
+            </div>
+          </div>
+
+          {/* Gairaigo — khusus katakana: bunyi serapan kata asing */}
+          {script === "katakana" ? (
+            <div className="pt-3">
+              <p className="mb-1.5 text-sm font-semibold">Gairaigo — bunyi serapan</p>
+              <p className="mb-2.5 text-xs text-zinc-400">
+                Vokal kecil bikin bunyi asing: ファ (fa), ティ (ti), ウィ (wi) — mis. フィットネス (fitnesu, fitness)
+              </p>
+              <div className="grid grid-cols-3 gap-1.5">
+                {GAIRAIGO.map(([kana, romaji]) => (
+                  <KanaCell key={kana} kana={kana} romaji={romaji} />
+                ))}
+              </div>
+            </div>
+          ) : null}
+
+          {/* Sokuon — っ/ッ kecil: gandakan konsonan sesudahnya */}
+          <div className="rounded-2xl border border-zinc-200 bg-zinc-50 p-4 dark:border-zinc-800 dark:bg-zinc-900/60">
+            <p className="text-sm font-semibold">
+              Sokuon — {script === "hiragana" ? "っ" : "ッ"} kecil pengganda
+            </p>
+            <p className="mt-0.5 text-xs text-zinc-500 dark:text-zinc-400">
+              {script === "hiragana"
+                ? "っ menahan napas seketuk: かた (kata) vs かった (katta). Tap buat dengar bedanya."
+                : "ッ menahan napas seketuk: オト (oto, bunyi) vs オット (otto, suami). Tap buat dengar bedanya."}
+            </p>
+            <div className="mt-2.5 flex gap-1.5">
+              {(script === "hiragana" ? ["おと", "おっと"] : ["オト", "オット"]).map((w) => (
+                <button
+                  key={w}
+                  onClick={() => speak(w, "ja-JP")}
+                  className="btn-secondary flex-1 justify-center gap-1.5 text-sm"
+                >
+                  <Volume2 className="h-4 w-4" /> {w}
+                </button>
+              ))}
+            </div>
+          </div>
           <p className="pt-1 text-center text-xs text-zinc-400">
             {script === "hiragana"
               ? "Hiragana = bunyi asli bahasa Jepang: partikel & infleksi selalu pakai ini."
