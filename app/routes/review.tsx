@@ -1404,7 +1404,7 @@ export default function ReviewPage() {
 
   if (!q || !set) return null;
 
-  const isTypingUI = mode === "typing" || q.type === "typing";
+  const isTypingUI = mode === "typing" || (q.type === "typing" && mode !== "scramble");
   const isScrambleUI = mode === "scramble";
   const meta = TYPE_META[isScrambleUI ? "typing" : q.type];
   const metaLabel =

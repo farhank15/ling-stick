@@ -198,19 +198,30 @@ async function buildQuestions(
     ? [opts.forceType]
     : opts.typeMix ?? ["mcq_en_id", "mcq_id_en", "cloze", "listen"];
   const lang = await getTargetLang();
+
+  // Ketik/Susun Kata: jawaban berupa kalimat panjang (mis. kalimat hasil
+  // translate yang tersimpan sebagai item) tidak layak jadi soal — chip/input
+  // membludak. Pakai item pendek saja; kalau tidak ada, fallback ke semua.
+  // matcha: EN "The company's ledger shows..." 10 kata tidak bisa disusun.
+  const shortEnough = (text: string) =>
+    lang === "ja" ? text.trim().length <= 30 : (text.match(/[A-Za-z']+/g) || []).length <= 8;
+  const askPool =
+    opts.forceType === "typing" ? (pool.filter((r) => shortEnough(r.text)) || []) : pool;
+  const usePool = askPool.length > 0 ? askPool : pool;
   const questions: QuizQuestion[] = [];
 
   for (let i = 0; questions.length < limit; i++) {
-    const item = pool[i % pool.length];
+    const item = usePool[i % usePool.length];
     const type = types[questions.length % types.length];
     const others = allRows.filter((o) => o.id !== item.id && o.meaningId);
     const distractors = shuffle(others).slice(0, 3);
 
     if (type === "typing") {
       // Susun Kata JP: pakai kalimat contoh, dipecah jadi token per-kata oleh AI.
+      // Kalimat >150 char diskip (chip membludak) → jatuh ke typing biasa.
       if (lang === "ja" && opts.scrambleTokens && item.firstEn) {
         const sentence = item.firstEn.split("\n")[0].trim(); // buang baris romaji
-        const tokens = sentence ? await segmentJa(sentence) : [];
+        const tokens = sentence && sentence.length <= 150 ? await segmentJa(sentence) : [];
         if (tokens.length >= 2) {
           questions.push({
             itemId: item.id,
