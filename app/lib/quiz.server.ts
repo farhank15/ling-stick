@@ -145,7 +145,7 @@ export function localDayStr(): string {
     .slice(0, 10);
 }
 
-type BuildOpts = { sources?: ("library" | "bank")[]; bankLevel?: string; scrambleTokens?: boolean };
+type BuildOpts = { sources?: ("library" | "bank")[]; bankLevel?: string; scrambleTokens?: boolean; grammarCloze?: boolean };
 
 /**
  * Segmentasi kalimat Jepang jadi token per-kata via AI (partikel selalu token
@@ -340,7 +340,7 @@ async function buildQuestions(
       // yang jalan dengan isi library apa pun.
       // matcha: grammar butuh konten pola; function-word cloze = versi tanpa
       // pipeline konten baru (daily mix tidak memaksa cloze → cabang ini aman).
-      if (opts.forceType === "cloze") {
+      if (opts.forceType === "cloze" && opts.grammarCloze) {
         const raw = (item.firstEn ?? "").split("\n")[0].trim();
         const candidates =
           lang === "ja" ? FUNCTION_WORDS_JA : FUNCTION_WORDS_EN;
@@ -498,7 +498,7 @@ export async function getSetForDay(mode: QuizMode, day: string, limit: number, o
     .limit(1);
   if (existing) return existing;
 
-  const questions = await buildQuestions(limit, { ...opts, forceType: forceTypeFor(mode), scrambleTokens: mode === "scramble" });
+  const questions = await buildQuestions(limit, { ...opts, forceType: forceTypeFor(mode), scrambleTokens: mode === "scramble", grammarCloze: mode === "pola" });
   if (questions.length === 0) return null;
 
   const [created] = await db
@@ -533,7 +533,7 @@ export async function createExtraSet(
   limit: number,
   opts: BuildOpts = {},
 ) {
-  const questions = await buildQuestions(limit, { ...opts, forceType: forceTypeFor(mode), scrambleTokens: mode === "scramble" });
+  const questions = await buildQuestions(limit, { ...opts, forceType: forceTypeFor(mode), scrambleTokens: mode === "scramble", grammarCloze: mode === "pola" });
   if (questions.length === 0) return null;
   const today = localDayStr();
   const lang = await getTargetLang();
@@ -587,8 +587,13 @@ export async function answerQuestionById(
 
   // Mode typing dinilai dari teks yang diketik. Normalisasi beda per bahasa:
   // EN buang semua kecuali huruf/angka; JA hanya rapikan spasi & full-width.
+  // Scoring ulang HANYA kalau ada teks kiriman non-kosong: mode susun kata /
+  // shadow tidak pakai state `typed` (chip / tombol selesai) → client kirim ""
+  // dan nilai client dipercaya. Tanpa guard ini SEMUA jawaban scramble/shadow
+  // dinilai salah → benar stuck 0 + soal diulang-ulang via requeue.
+  // matcha: typed "" bukan jawaban kosong, melainkan "tidak applicable".
   let isCorrect = correct;
-  if (questions[index]?.type === "typing" && typeof typedText === "string") {
+  if (questions[index]?.type === "typing" && typeof typedText === "string" && typedText.trim().length > 0) {
     const normJa = (s: string) =>
       s
         .replace(/\u3000/g, " ")
