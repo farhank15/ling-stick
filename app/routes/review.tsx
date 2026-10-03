@@ -427,7 +427,15 @@ function OptionList({
         }
         return (
           <button key={origIdx} className={cls} disabled={picked !== null} onClick={() => onPick(origIdx)}>
-            {opt}
+            {hasJa(opt) ? (
+              <JaText
+                text={opt}
+                kanjiClassName="text-teal-700 dark:text-teal-400"
+                romajiToggle={false}
+              />
+            ) : (
+              opt
+            )}
             {picked !== null && isAnswer ? (
               <CheckCircle2 className="ml-auto h-4 w-4 shrink-0" />
             ) : picked !== null && isPicked ? (
@@ -1520,7 +1528,11 @@ export default function ReviewPage() {
         ? "Dengarkan lalu ketik"
         : isShadowUI
           ? "Dengarkan lalu ikuti"
-          : meta.label;
+          : mode === "pola"
+            ? ja
+              ? "Isi partikel yang tepat"
+              : "Isi kata yang tepat"
+            : meta.label;
   const spokenEn = q.options[Number(q.answer)]; // teks EN untuk TTS (listen/audio)
   // JP: token per-kata dari segmentasi AI (partikel sendiri); EN: split spasi.
   const scrambleWords = q.tokens && q.tokens.length >= 2 ? q.tokens : (q.answer ?? "").split(/\s+/).filter(Boolean);
@@ -1665,7 +1677,15 @@ export default function ReviewPage() {
                       setPickedWords((w) => w.filter((_, p) => p !== pos2))
                     }
                   >
-                    {scrambleWords[wi]}
+                    {hasJa(scrambleWords[wi] ?? "") ? (
+                      <JaText
+                        text={scrambleWords[wi]!}
+                        kanjiClassName="text-teal-700 dark:text-teal-400"
+                        romajiToggle={false}
+                      />
+                    ) : (
+                      scrambleWords[wi]
+                    )}
                   </button>
                 ))
               )}
@@ -1680,7 +1700,15 @@ export default function ReviewPage() {
                     disabled={typedResult !== null}
                     onClick={() => setPickedWords((w) => [...w, wi])}
                   >
-                    {scrambleWords[wi]}
+                    {hasJa(scrambleWords[wi] ?? "") ? (
+                      <JaText
+                        text={scrambleWords[wi]!}
+                        kanjiClassName="text-teal-700 dark:text-teal-400"
+                        romajiToggle={false}
+                      />
+                    ) : (
+                      scrambleWords[wi]
+                    )}
                   </button>
                 ),
               )}
@@ -1793,11 +1821,37 @@ export default function ReviewPage() {
             <p className="mt-2 text-center text-xs text-zinc-400">pilih frasa EN yang cocok</p>
           </>
         ) : q.type === "mcq_en_id" ? (
-          <p className="mt-3 text-center text-2xl font-bold">{q.prompt}</p>
+          hasJa(q.prompt) ? (
+            <p className="mt-3 text-center text-2xl font-bold">
+              <JaText
+                text={q.prompt}
+                kanjiClassName="text-teal-700 dark:text-teal-400"
+                romajiToggle={false}
+              />
+            </p>
+          ) : (
+            <p className="mt-3 text-center text-2xl font-bold">{q.prompt}</p>
+          )
         ) : q.type === "mcq_id_en" ? (
           <p className="mt-3 text-center text-xl font-semibold">{q.prompt}</p>
         ) : q.type === "cloze" ? (
-          <p className="mt-3 text-center text-lg leading-relaxed">{q.prompt}</p>
+          <>
+            <div className="mt-3 text-center text-lg leading-relaxed">
+              {hasJa(q.prompt) ? (
+                <JaText
+                  text={q.prompt}
+                  kanjiClassName="text-teal-700 dark:text-teal-400"
+                  romajiToggle={false}
+                />
+              ) : (
+                q.prompt
+              )}
+            </div>
+            {/* Pola: kasih arti sebagai petunjuk biar jelas partikel mana yang pas. */}
+            {mode === "pola" && q.meaningId ? (
+              <p className="mt-1 text-center text-xs text-zinc-400">Artinya: {q.meaningId}</p>
+            ) : null}
+          </>
         ) : null}
       </div>
 

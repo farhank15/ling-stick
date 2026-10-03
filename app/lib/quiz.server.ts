@@ -154,7 +154,7 @@ async function collectRows(opts: BuildOpts) {
           register: items.register,
           meaningId: items.meaningId,
           reading: items.reading,
-          firstEn: sql<string | null>`(SELECT en FROM examples WHERE item_id = ${items.id} ORDER BY id LIMIT 1)`,
+          firstEn: sql<string | null>`(SELECT en FROM examples WHERE item_id = ${items.id} ORDER BY length(en), id LIMIT 1)`,
         })
         .from(items)
         .where(and(eq(items.status, "learning"), eq(items.lang, lang)))
@@ -173,7 +173,7 @@ async function collectRows(opts: BuildOpts) {
         register: wordbank.register,
           meaningId: wordbank.meaningId,
           reading: wordbank.reading,
-          firstEn: sql<string | null>`(SELECT json_extract(value, '$.en') FROM json_each(wordbank.examples_json) LIMIT 1)`,
+          firstEn: sql<string | null>`(SELECT json_extract(value, '$.en') FROM json_each(wordbank.examples_json) ORDER BY length(json_extract(value, '$.en')) LIMIT 1)`,
       })
       .from(wordbank)
       .where(and(...conds))
@@ -229,6 +229,14 @@ async function buildQuestions(
     opts.forceType === "typing" ? (pool.filter((r) => shortEnough(r.text)) || []) : pool;
   const usePool = askPool.length > 0 ? askPool : pool;
   const questions: QuizQuestion[] = [];
+  // Anti-bosan: kalimat/jawaban yang sudah dipakai di set ini dilewati dulu
+  // (pool kecil bikin 1 kalimat dominan, mis. ledger 10 contoh). Guard
+  // i > limit*10 di bawah mencegah loop habis saat pool benar-benar sempit.
+  // matcha: user protes kalimat itu-itu saja di susun kata/campur.
+  const usedText = new Set<string>();
+  // Pool lebih kecil dari limit → pengulangan tak terhindarkan, dedupe dimatikan
+  // biar jumlah soal tetap penuh (kloter kecil memang segitu adanya).
+  const dedupe = usePool.length >= limit;
 
   for (let i = 0; questions.length < limit; i++) {
     const item = usePool[i % usePool.length];
@@ -242,7 +250,8 @@ async function buildQuestions(
       if (lang === "ja" && opts.scrambleTokens && item.firstEn) {
         const sentence = item.firstEn.split("\n")[0].trim(); // buang baris romaji
         const tokens = sentence && sentence.length <= 150 ? await segmentJa(sentence) : [];
-        if (tokens.length >= 2) {
+        if (tokens.length >= 2 && (!dedupe || !usedText.has(sentence))) {
+          usedText.add(sentence);
           questions.push({
             itemId: item.id,
             type: "typing",
@@ -257,13 +266,21 @@ async function buildQuestions(
           continue;
         }
       }
+      // Ketik frasa dari arti Indonesia — dinilai di server. Jawaban yang
+      // sudah keluar di set ini dilewati (pool kecil = item berulang).
+      const typeAnswer = lang === "ja" ? item.text.trim() : item.text.toLowerCase().trim();
+      if (dedupe && usedText.has(typeAnswer)) {
+        if (i > limit * 10) break; // pengaman
+        continue;
+      }
+      usedText.add(typeAnswer);
       // Ketik frasa dari arti Indonesia — dinilai di server.
       questions.push({
         itemId: item.id,
         type: "typing",
         prompt: item.meaningId!,
         options: [],
-        answer: lang === "ja" ? item.text.trim() : item.text.toLowerCase().trim(),
+        answer: typeAnswer,
         meaningId: item.meaningId,
         exampleEn: item.firstEn,
         reading: item.reading,
@@ -312,7 +329,8 @@ async function buildQuestions(
         if (hit && raw) {
           const blanked = lang === "ja" ? raw.replace(hit, "＿＿＿") : raw.replace(new RegExp(`\\b${hit}\\b`), "_____");
           const others = shuffle(candidates.filter((w) => w !== hit)).slice(0, 3);
-          if (blanked !== raw && others.length === 3) {
+          if (blanked !== raw && others.length === 3 && (!dedupe || !usedText.has(raw))) {
+            usedText.add(raw);
             const opts2 = shuffle([hit, ...others]);
             questions.push({
               itemId: item.id,
@@ -330,10 +348,11 @@ async function buildQuestions(
       }
       // Cloze dari KALIMAT CONTOH (sentence mining): rumpang satu kata kunci.
       // Kalimat >25 kata diskip (melelahkan, bukan melatih) → fallback MCQ.
+      // Kalimat yang sudah dipakai di set ini diskip (anti-bosan).
       const sentence = item.firstEn ?? "";
       const sentWords = (sentence.match(/[A-Za-z'\u3040-\u30ff\u4e00-\u9faf]+/g) || []).length;
       const re = new RegExp(item.text.replace(/[.*+?^${}()|[\]\\]/g, "\\$&"), "i");
-      const blanked = sentence && sentWords <= 25 ? sentence.replace(re, "_____") : "";
+      const blanked = sentence && sentWords <= 25 && (!dedupe || !usedText.has(sentence)) ? sentence.replace(re, "_____") : "";
       if (!blanked.includes("_____")) {
         const opts2 = shuffle([item.meaningId!, ...distractors.map((d) => d.meaningId!)]);
         questions.push({
@@ -348,6 +367,7 @@ async function buildQuestions(
         continue;
       }
       const opts2 = shuffle([item.text, ...distractors.map((d) => d.text)]);
+      usedText.add(sentence);
       questions.push({
         itemId: item.id,
         type: "cloze",
@@ -682,8 +702,10 @@ export async function getFlashQueue(limit = 30) {
   const dayStart = new Date(today + "T00:00:00+07:00").getTime();
   const dayEnd = dayStart + 86_400_000;
   const lang = await getTargetLang();
-  const firstEn = sql<string | null>`(SELECT en FROM examples WHERE item_id = ${items.id} ORDER BY id LIMIT 1)`;
-  const firstId = sql<string | null>`(SELECT id_text FROM examples WHERE item_id = ${items.id} ORDER BY id LIMIT 1)`;
+  // Contoh TERPENDEK + terjemahannya (pasangan) — contoh panjang melelahkan
+  // tampil di kartu/soal. matcha: contoh ledger 10 kata selalu tampil pertama.
+  const firstEn = sql<string | null>`(SELECT en FROM examples WHERE item_id = ${items.id} ORDER BY length(en), id LIMIT 1)`;
+  const firstId = sql<string | null>`(SELECT id_text FROM examples WHERE item_id = ${items.id} ORDER BY length(en), id LIMIT 1)`;
   const dueRows = await db
     .select({
       itemId: items.id,
