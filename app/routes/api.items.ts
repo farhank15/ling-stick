@@ -31,6 +31,7 @@ export async function action({ request }: ActionFunctionArgs) {
       en?: string;
       idText?: string;
       isContext?: boolean;
+      kana?: string | null;
     }[];
     alternatives?: { text?: string; register?: string; nuanceId?: string; useWhenId?: string }[];
     tagNames?: string[];
@@ -54,6 +55,7 @@ export async function action({ request }: ActionFunctionArgs) {
       en: e.en!,
       idText: e.idText!,
       isContext: e.isContext,
+      kana: e.kana ?? null,
     }));
 
   // Tambah contoh ke item yang sudah ada — TIDAK butuh teks baru (validasi teks dilewati).

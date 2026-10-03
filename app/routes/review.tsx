@@ -102,6 +102,7 @@ type FlashCard = {
   notesId: string | null;
   firstEn: string | null;
   firstId: string | null;
+  firstKana?: string | null; // JA: kana contoh — furigana kartu
   reps: number;
 };
 
@@ -1347,7 +1348,13 @@ export default function ReviewPage() {
                           <div className="flex items-start gap-2">
                             {hasJa(jpLine) ? (
                               <div className="flex-1">
-                                <JaText text={jpLine} romaji={romajiLine} kanjiClassName="text-teal-700 dark:text-teal-400" className="text-sm font-medium" />
+                                <JaText
+                                  text={jpLine}
+                                  reading={c.firstKana ?? undefined}
+                                  romaji={romajiLine}
+                                  kanjiClassName="text-teal-700 dark:text-teal-400"
+                                  className="text-sm font-medium"
+                                />
                               </div>
                             ) : (
                               <p className="flex-1 whitespace-pre-line text-sm font-medium">{c.firstEn}</p>

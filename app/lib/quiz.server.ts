@@ -882,6 +882,7 @@ export async function getFlashQueue(limit = 30) {
   // tampil di kartu/soal. matcha: contoh ledger 10 kata selalu tampil pertama.
   const firstEn = sql<string | null>`(SELECT en FROM examples WHERE item_id = items.id ORDER BY length(en), id LIMIT 1)`;
   const firstId = sql<string | null>`(SELECT id_text FROM examples WHERE item_id = items.id ORDER BY length(en), id LIMIT 1)`;
+  const firstKana = sql<string | null>`(SELECT kana FROM examples WHERE item_id = items.id ORDER BY length(en), id LIMIT 1)`;
   const dueRows = await db
     .select({
       itemId: items.id,
@@ -891,6 +892,7 @@ export async function getFlashQueue(limit = 30) {
       notesId: items.notesId,
       firstEn,
       firstId,
+      firstKana,
       due: cards.due,
       reps: cards.reps,
     })
@@ -908,6 +910,7 @@ export async function getFlashQueue(limit = 30) {
       notesId: items.notesId,
       firstEn,
       firstId,
+      firstKana,
       due: cards.due,
       reps: cards.reps,
     })

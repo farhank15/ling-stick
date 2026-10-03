@@ -4,6 +4,7 @@ import { ArrowLeft, CheckCircle2, Lightbulb, Loader2, Sparkles, TriangleAlert, V
 import { useState } from "react";
 import { ConfirmModal } from "~/components/ConfirmModal";
 import { SpeakButton } from "~/components/SpeakButton";
+import { Highlight } from "~/components/Highlight";
 import { useToast } from "~/components/Toast";
 import { JaText, hasJa, splitReading } from "~/components/JaText";
 import { requireUser } from "~/lib/auth.server";
@@ -79,7 +80,7 @@ export default function ItemDetail() {
       });
       const data = await res.json();
       if (!res.ok || !data.result) throw new Error(data.error || "Gagal generate");
-      const fresh = (data.result.examples as { en: string; id: string; romaji?: string | null }[]).slice(0, 5);
+      const fresh = (data.result.examples as { en: string; id: string; kana?: string | null; romaji?: string | null }[]).slice(0, 5);
       const save = await fetch("/api/items", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -88,9 +89,10 @@ export default function ItemDetail() {
           examples: fresh.map((e) => ({
             register: "neutral",
             // JA: romaji dilipat bank-style ("kalimat\nromaji") biar baris
-            // romaji tampil di detail (tabel examples gak punya kolom kana).
+            // romaji tampil di detail; kana masuk kolom kana (furigana).
             en: e.romaji ? `${e.en.trim()}\n${e.romaji.trim()}` : e.en,
             idText: e.id,
+            kana: e.kana ?? null,
           })),
         }),
       });
@@ -106,6 +108,7 @@ export default function ItemDetail() {
           isContext: 0 as number,
           en: e.romaji ? `${e.en.trim()}\n${e.romaji.trim()}` : e.en,
           idText: e.id,
+          kana: e.kana ?? null,
         })),
       ]);
       toast(`${fresh.length} contoh tersimpan`);
@@ -251,7 +254,14 @@ export default function ItemDetail() {
                   return (
                     <>
                       <p className="mt-1.5 text-sm">
-                        <JaText text={jpLine} kanjiClassName="text-teal-700 dark:text-teal-400" className="text-sm" />
+                        {/* Furigana dari kolom kana (tersimpan saat generate);
+                            tanpa kana pun kanji tetap hijau (fallback JaText). */}
+                        <JaText
+                          text={jpLine}
+                          reading={ex.kana ?? undefined}
+                          kanjiClassName="text-teal-700 dark:text-teal-400"
+                          className="text-sm"
+                        />
                       </p>
                       {romajiLine ? (
                         <p className="text-xs text-zinc-400 dark:text-zinc-500">{romajiLine}</p>
@@ -261,7 +271,7 @@ export default function ItemDetail() {
                 }
                 return (
                   <p className="mt-1.5 text-sm">
-                    <Highlighted text={ex.en} highlight={item.text} />
+                    <Highlight text={ex.en} highlight={item.text} />
                   </p>
                 );
               })()}
@@ -383,41 +393,6 @@ function FetcherButton({ to, body, label }: { to: string; body: unknown; label: 
     >
       {label}
     </button>
-  );
-}
-
-/** Stopword EN+ID — jangan disorot (polusi hijau di mana-mana). */
-const HIGHLIGHT_STOP = new Set(
-  "yang,dari,untuk,dengan,adalah,pada,atau,ini,itu,dan,yaitu,the,and,for,with,from,that,this,have,will,what,when,your,you,are,was,were,has,had,not,but,all,can,their,there,them,then,than".split(","),
-);
-
-function Highlighted({ text, highlight }: { text: string; highlight: string }) {
-  const t = highlight.trim();
-  if (!t) return <>{text}</>;
-  const esc = (s: string) => s.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
-  // Frasa utuh dulu; kalau tidak cocok (mis. item kalimat, contoh beda
-  // kalimat), sorot kata penting (≥4 huruf, bukan stopword) satu per satu.
-  // matcha: contoh tanpa frasa persis tampil polos total ("gk hijau").
-  const words = t
-    .split(/\s+/)
-    .filter((w) => w.replace(/[^\p{L}\p{N}]/gu, "").length >= 4)
-    .filter((w) => !HIGHLIGHT_STOP.has(w.toLowerCase()));
-  const terms = [t, ...words];
-  const re = new RegExp(`(${terms.map(esc).join("|")})`, "ig");
-  const parts = text.split(re);
-  const low = terms.map((x) => x.toLowerCase());
-  return (
-    <>
-      {parts.map((p, i) =>
-        low.includes(p.toLowerCase()) ? (
-          <strong key={i} className="text-teal-700 dark:text-teal-400">
-            {p}
-          </strong>
-        ) : (
-          <span key={i}>{p}</span>
-        ),
-      )}
-    </>
   );
 }
 

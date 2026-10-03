@@ -79,7 +79,13 @@ export async function action({ request }: ActionFunctionArgs) {
   if (hit) {
     try {
       const parsed = schema.safeParse(JSON.parse(hit.response));
-      if (parsed.success && parsed.data) return Response.json({ result: parsed.data, cached: true });
+      if (parsed.success && parsed.data) {
+        // Backfill: cache lama JA belum punya kana → furigana contoh hilang.
+        // Dianggap miss biar regenerate sekalian (ditulis ulang di bawah).
+        // matcha: contoh hijau tanpa hiragana = kana kosong dari cache lama.
+        const needKana = parsed.data.examples.some((e) => /[\u4e00-\u9faf]/.test(e.en) && !e.kana);
+        if (!needKana) return Response.json({ result: parsed.data, cached: true });
+      }
     } catch {
       /* regenerasi */
     }

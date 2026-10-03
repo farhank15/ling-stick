@@ -50,6 +50,8 @@ export const examples = sqliteTable(
     en: text("en").notNull(),
     idText: text("id_text").notNull(),
     isContext: integer("is_context").notNull().default(0),
+    // JA: bacaan kana penuh kalimat — sumber furigana contoh simpanan.
+    kana: text("kana"),
   },
   (t) => [index("examples_item_idx").on(t.itemId)],
 );

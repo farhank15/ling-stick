@@ -240,6 +240,8 @@ const TOLERANT_MIGRATIONS: string[] = [
   `ALTER TABLE items ADD COLUMN reading TEXT`,
   // Mode Jepang: reading kana (romaji) buat kartu explore — furigana & romaji di UI.
   `ALTER TABLE explore_items ADD COLUMN reading TEXT`,
+  // Furigana contoh simpanan (JA): kana penuh per kalimat contoh.
+  `ALTER TABLE examples ADD COLUMN kana TEXT`,
 ];
 
 /** Seed awal Bank Kata — jalan sekali (skip kalau bank sudah berisi). */

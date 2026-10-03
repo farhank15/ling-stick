@@ -37,7 +37,7 @@ export async function action({ request }: ActionFunctionArgs) {
     reading?: string; // JA: kana (+romaji) — furigana headword di Library
     exampleEn?: string;
     exampleId?: string;
-    examples?: { en?: string; id?: string }[];
+    examples?: { en?: string; id?: string; kana?: string | null }[];
   }>(request);
 
   // Submit form biasa (non-JS) → redirect balik, jangan balikin JSON mentah.
@@ -57,10 +57,10 @@ export async function action({ request }: ActionFunctionArgs) {
 
   // Contoh: array 3–5 dari Explore; fallback ke 1 contoh lama (exampleEn/exampleId).
   const fromList = (body.examples ?? [])
-    .map((e) => ({ en: (e?.en ?? "").trim(), id: (e?.id ?? "").trim() }))
+    .map((e) => ({ en: (e?.en ?? "").trim(), id: (e?.id ?? "").trim(), kana: (e?.kana ?? "").trim() || null }))
     .filter((e) => e.en)
     .slice(0, 5)
-    .map((e) => ({ register: "neutral", en: e.en, idText: e.id || "(belum ada terjemahan)" }));
+    .map((e) => ({ register: "neutral", en: e.en, idText: e.id || "(belum ada terjemahan)", kana: e.kana }));
   const examples = fromList.length
     ? fromList
     : (body.exampleEn ?? "").trim()

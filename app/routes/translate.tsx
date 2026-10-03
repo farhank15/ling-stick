@@ -13,6 +13,7 @@ import {
 import { requireUser } from "~/lib/auth.server";
 import { getTargetLang } from "~/lib/lang.server";
 import { JaText, hasJa } from "~/components/JaText";
+import { Highlight } from "~/components/Highlight";
 import { useToast } from "~/components/Toast";
 import { ttsLang } from "~/lib/utils.shared";
 import { SpeakButton } from "~/components/SpeakButton";
@@ -182,22 +183,23 @@ export default function Translate() {
       // matcha: tabel examples gak punya kolom kana → furigana contoh JA hasil
       // simpan belum bisa dipertahankan (perlu migrasi skema); romaji aman.
       const seen = new Set<string>();
-      const pushEx = (enText: string, idLine: string) => {
+      const pushEx = (enText: string, idLine: string, kana: string | null) => {
         const e = enText.trim().slice(0, 300);
         const key = e.toLowerCase();
         if (!e || !idLine.trim() || seen.has(key)) return null;
         seen.add(key);
-        return { register: "neutral", en: e, idText: idLine.trim().slice(0, 300) };
+        return { register: "neutral", en: e, idText: idLine.trim().slice(0, 300), kana };
       };
       const examples = [
-        en ? pushEx(en, idText) : null,
+        en ? pushEx(en, idText, null) : null,
         ...(usage?.examples ?? []).map((u) =>
           pushEx(
             u.romaji ? `${u.en.trim()}\n${u.romaji.trim()}` : u.en,
             u.id,
+            u.kana ?? null,
           ),
         ),
-      ].filter((e): e is { register: string; en: string; idText: string } => e !== null);
+      ].filter((e): e is { register: string; en: string; idText: string; kana: string | null } => e !== null);
       // Headword JA (input JP / hasil JP) dapat reading dari pronunciation
       // "かな (romaji)" biar di Library ada furigana + toggle romaji.
       const jaSide = hasJa(src) ? src : hasJa(result.translation ?? "") ? (result.translation ?? "") : "";
@@ -245,6 +247,9 @@ export default function Translate() {
 
   // Teks di sisi bahasa target (EN/JP): input atau hasil terjemahan.
   const foreignSide = from === "id" ? result?.translation?.trim() ?? "" : text.trim();
+  // Kata yang disorot di contoh EN: kata yang diterjemahkan (sisi asing).
+  // matcha: contoh EN polos total — kata yang dicari tidak hijau.
+  const highlightWord = from === "en" ? text.trim() : ja ? "" : (result?.translation ?? "").trim();
 
   return (
     <div className="space-y-3">
@@ -457,7 +462,9 @@ export default function Translate() {
                             />
                           </span>
                         ) : (
-                          <span className="block text-zinc-800 dark:text-zinc-200">{ex.en}</span>
+                          <span className="block text-zinc-800 dark:text-zinc-200">
+                            <Highlight text={ex.en} highlight={highlightWord} />
+                          </span>
                         )}
                         <span className="block text-xs text-zinc-500 dark:text-zinc-400">{ex.id}</span>
                       </li>

@@ -46,6 +46,7 @@ export type SaveItemInput = {
     en: string;
     idText: string;
     isContext?: boolean;
+    kana?: string | null; // JA: bacaan kana kalimat — furigana contoh simpanan
   }[];
   alternatives?: {
     text: string;
@@ -113,7 +114,8 @@ export async function saveItem(input: SaveItemInput): Promise<number> {
           register: ex.register,
           en: ex.en.trim(),
           idText: ex.idText.trim(),
-        isContext: ex.isContext ? 1 : 0,
+          isContext: ex.isContext ? 1 : 0,
+          kana: ex.kana?.trim() || null,
         })),
       );
     }
@@ -177,6 +179,7 @@ export async function addExamplesToItem(
         en: ex.en.trim(),
         idText: ex.idText.trim(),
         isContext: ex.isContext ? 1 : 0,
+        kana: ex.kana?.trim() || null,
       })),
     );
 }

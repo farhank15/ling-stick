@@ -224,6 +224,7 @@ export default function Chat() {
           examples: s.examples.map((e) => ({
             en: e.romaji ? `${e.en.trim()}\n${e.romaji.trim()}` : e.en,
             id: e.id,
+            kana: e.kana ?? undefined,
           })),
         }),
       });
