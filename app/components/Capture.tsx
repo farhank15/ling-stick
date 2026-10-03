@@ -502,8 +502,8 @@ export function Capture() {
             <div className="card">
               <p className="label mb-2">Cara lain ngomong</p>
               <ul className="space-y-1.5">
-                {result.alternatives.map((a) => (
-                  <li key={a.text} className="text-sm">
+                {result.alternatives.map((a, ai) => (
+                  <li key={`${ai}-${a.text}`} className="text-sm">
                     <span className="font-medium">{a.text}</span>
                     {a.register ? (
                       <span className="badge ml-1.5 bg-zinc-100 text-zinc-500 dark:bg-zinc-800">

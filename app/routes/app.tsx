@@ -219,8 +219,8 @@ export default function AppLayout() {
                   <div className="border-t border-zinc-100 dark:border-zinc-800">
                     <p className="label px-4 pt-2.5">Riwayat</p>
                     <ul className="pb-1">
-                      {history.slice(0, 4).map((h) => (
-                        <li key={h.day} className="flex items-center justify-between px-4 py-1.5 text-xs">
+                      {history.slice(0, 4).map((h, hi) => (
+                        <li key={`${h.day}-${h.title}-${hi}`} className="flex items-center justify-between px-4 py-1.5 text-xs">
                           <span className="text-zinc-600 dark:text-zinc-400">{h.title}</span>
                           <span className={h.completed ? "text-teal-700 dark:text-teal-400" : "text-zinc-400"}>
                             {h.completed ? `${h.correct}/${h.total}` : `${h.done}/${h.total}`}

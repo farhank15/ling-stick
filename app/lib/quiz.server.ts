@@ -98,6 +98,33 @@ type ItemRow = {
 const FUNCTION_WORDS_JA = ["は", "が", "を", "に", "で", "へ", "と", "も", "か", "から", "まで", "より", "の", "ね", "よ"];
 const FUNCTION_WORDS_EN = ["in", "on", "at", "to", "for", "of", "with", "by", "from", "about", "that", "who", "which", "is", "are", "was", "were", "have", "has", "will", "would", "can"];
 
+const KANA_RE = /[\u3040-\u30ff]/;
+
+/**
+ * Cari partikel JA yang aman dirumpang: tolak yang nempel di konjugasi
+ * (です→で, ます→ま, でしょう→で) dan の di dalam kata kana murni (もの/こと).
+ * Balikkan { hit, index } kemunculan valid pertama.
+ * matcha: blank で di です jadi "優しい＿＿す" — soal rusak.
+ */
+function findJaParticle(raw: string, candidates: string[]): { hit: string; index: number } | null {
+  const KONJUGASI_NEXT = new Set(["す", "せ", "し", "ょ"]);
+  for (const w of candidates) {
+    let from = 0;
+    for (;;) {
+      const idx = raw.indexOf(w, from);
+      if (idx === -1) break;
+      const prev = raw[idx - 1];
+      const next = raw[idx + w.length];
+      const inKonjugasi = next !== undefined && KONJUGASI_NEXT.has(next);
+      const noTengahKata =
+        w === "の" && prev !== undefined && next !== undefined && KANA_RE.test(prev) && KANA_RE.test(next);
+      if (!inKonjugasi && !noTengahKata) return { hit: w, index: idx };
+      from = idx + 1;
+    }
+  }
+  return null;
+}
+
 function shuffle<T>(arr: T[]): T[] {
   const a = [...arr];
   for (let i = a.length - 1; i > 0; i--) {
@@ -154,7 +181,7 @@ async function collectRows(opts: BuildOpts) {
           register: items.register,
           meaningId: items.meaningId,
           reading: items.reading,
-          firstEn: sql<string | null>`(SELECT en FROM examples WHERE item_id = ${items.id} ORDER BY length(en), id LIMIT 1)`,
+          firstEn: sql<string | null>`(SELECT en FROM examples WHERE item_id = items.id ORDER BY length(en), id LIMIT 1)`,
         })
         .from(items)
         .where(and(eq(items.status, "learning"), eq(items.lang, lang)))
@@ -318,16 +345,28 @@ async function buildQuestions(
         const candidates =
           lang === "ja" ? FUNCTION_WORDS_JA : FUNCTION_WORDS_EN;
         // JA: partikel panjang diprioritaskan (stabil sort → acak dalam
-        // panjang sama) biar tidak motong kata (日本のの). EN: full acak.
+        // panjang sama) + tolak yang nempel konjugasi/kata. EN: full acak,
+        // batas kata (\b) biar tidak motong kata.
         const ordered =
           lang === "ja"
             ? shuffle(candidates).sort((a, b) => b.length - a.length)
             : shuffle(candidates);
-        const hit = ordered.find((w) =>
-          lang === "ja" ? raw.includes(w) : new RegExp(`\\b${w}\\b`, "i").test(raw),
-        );
+        let hit: string | null = null;
+        let blanked = raw;
+        if (lang === "ja") {
+          const found = findJaParticle(raw, ordered);
+          if (found) {
+            hit = found.hit;
+            blanked = raw.slice(0, found.index) + "＿＿＿" + raw.slice(found.index + found.hit.length);
+          }
+        } else {
+          const found = ordered.find((w) => new RegExp(`\\b${w}\\b`, "i").test(raw));
+          if (found) {
+            hit = found;
+            blanked = raw.replace(new RegExp(`\\b${found}\\b`), "_____");
+          }
+        }
         if (hit && raw) {
-          const blanked = lang === "ja" ? raw.replace(hit, "＿＿＿") : raw.replace(new RegExp(`\\b${hit}\\b`), "_____");
           const others = shuffle(candidates.filter((w) => w !== hit)).slice(0, 3);
           if (blanked !== raw && others.length === 3 && (!dedupe || !usedText.has(raw))) {
             usedText.add(raw);
@@ -704,8 +743,8 @@ export async function getFlashQueue(limit = 30) {
   const lang = await getTargetLang();
   // Contoh TERPENDEK + terjemahannya (pasangan) — contoh panjang melelahkan
   // tampil di kartu/soal. matcha: contoh ledger 10 kata selalu tampil pertama.
-  const firstEn = sql<string | null>`(SELECT en FROM examples WHERE item_id = ${items.id} ORDER BY length(en), id LIMIT 1)`;
-  const firstId = sql<string | null>`(SELECT id_text FROM examples WHERE item_id = ${items.id} ORDER BY length(en), id LIMIT 1)`;
+  const firstEn = sql<string | null>`(SELECT en FROM examples WHERE item_id = items.id ORDER BY length(en), id LIMIT 1)`;
+  const firstId = sql<string | null>`(SELECT id_text FROM examples WHERE item_id = items.id ORDER BY length(en), id LIMIT 1)`;
   const dueRows = await db
     .select({
       itemId: items.id,

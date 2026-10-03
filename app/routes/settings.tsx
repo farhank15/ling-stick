@@ -345,8 +345,8 @@ function StatsSection({ stats }: { stats: Stats }) {
         <div>
           <p className="label mb-1.5">Latihan terakhir</p>
           <ul className="space-y-1">
-            {stats.quiz.slice(0, 5).map((q) => (
-              <li key={q.day} className="flex items-center justify-between text-sm">
+            {stats.quiz.slice(0, 5).map((q, qi) => (
+              <li key={`${q.day}-${q.title}-${qi}`} className="flex items-center justify-between text-sm">
                 <span className="text-zinc-600 dark:text-zinc-400">{q.title}</span>
                 <span className={q.completed ? "font-medium text-teal-700 dark:text-teal-400" : "text-zinc-400"}>
                   {q.completed ? `${q.correct}/${q.total} benar` : `${q.done}/${q.total} dijawab`}
@@ -387,7 +387,7 @@ function NewCardsSection({ initial, min, max }: { initial: number; min: number; 
     if (n === savedRef.current || saving) return;
     setSaving(true);
     try {
-      const res = await fetch("/settings", {
+      const res = await fetch("/api/settings", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ newCardsPerDay: n }),

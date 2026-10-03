@@ -51,9 +51,13 @@ export function MarkdownLite({ text }: { text: string }) {
     if (!list) return;
     const { ordered, items } = list;
     const Tag = ordered ? "ol" : "ul";
+    // Suffix "-list": baris non-list sesudah list mem-flush + render bloknya
+    // sendiri dengan key baris yang sama → duplikat ("b5" ganda).
+    // matcha: key duplikat bikin anak React ke-skip.
+    const listKey = `${key}-list`;
     blocks.push(
       <Tag
-        key={key}
+        key={listKey}
         className={`my-1 space-y-1 pl-1 ${ordered ? "list-none" : "list-none"}`}
       >
         {items.map((it, idx) => (
@@ -65,7 +69,7 @@ export function MarkdownLite({ text }: { text: string }) {
             >
               {ordered ? `${idx + 1}.` : "•"}
             </span>
-            <span className="min-w-0">{inline(it, `${key}-${idx}`)}</span>
+            <span className="min-w-0">{inline(it, `${listKey}-${idx}`)}</span>
           </li>
         ))}
       </Tag>,

@@ -381,8 +381,8 @@ export default function Chat() {
                       <p className="label inline-flex items-center gap-1">
                         <Sparkles className="h-3 w-3" /> Kata baru — simpan?
                       </p>
-                      {m.suggestions.map((s) => (
-                        <div key={s.text} className="rounded-xl bg-zinc-50 p-2.5 dark:bg-zinc-800/60">
+                      {m.suggestions.map((s, si) => (
+                        <div key={`${si}-${s.text}`} className="rounded-xl bg-zinc-50 p-2.5 dark:bg-zinc-800/60">
                           <div className="flex items-start justify-between gap-2">
                             {hasJa(s.text) ? (
                               <p className="min-w-0 flex-1 font-semibold">
@@ -440,8 +440,8 @@ export default function Chat() {
       {/* Quick replies — kontekstual */}
       {!busy && !loadingSession ? (
         <div className="flex flex-wrap gap-1.5">
-          {quickReplies.map((s) => (
-            <button key={s} className="chip min-h-8 max-w-full text-[11px]" onClick={() => void send(s)}>
+          {quickReplies.map((s, qi) => (
+            <button key={`${qi}-${s}`} className="chip min-h-8 max-w-full text-[11px]" onClick={() => void send(s)}>
               <span className="truncate">{s}</span>
             </button>
           ))}

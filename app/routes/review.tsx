@@ -1573,9 +1573,9 @@ export default function ReviewPage() {
               {history.length === 0 ? (
                 <li className="px-3 py-2 text-sm text-zinc-500">Belum ada riwayat.</li>
               ) : (
-                history.map((h) => (
+                history.map((h, hi) => (
                   <li
-                    key={`${h.day}-${h.title}`}
+                    key={`${h.day}-${h.title}-${hi}`}
                     className="flex items-center justify-between border-b border-zinc-50 px-3 py-2 text-sm last:border-0 dark:border-zinc-800/50"
                   >
                     <span>
