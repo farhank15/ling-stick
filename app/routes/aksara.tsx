@@ -35,57 +35,79 @@ function speak(s: string, lang?: string) {
   window.speechSynthesis.speak(u);
 }
 
-/* ── Tabel kana — DIPECAH PER SECTION (gojūon / dakuten / yōon) biar gak jadi satu adonan ── */
-const HIRAGANA: [string, string][] = [
-  ["あ", "a"], ["い", "i"], ["う", "u"], ["え", "e"], ["お", "o"],
-  ["か", "ka"], ["き", "ki"], ["く", "ku"], ["け", "ke"], ["こ", "ko"],
-  ["さ", "sa"], ["し", "shi"], ["す", "su"], ["せ", "se"], ["そ", "so"],
-  ["た", "ta"], ["ち", "chi"], ["つ", "tsu"], ["て", "te"], ["と", "to"],
-  ["な", "na"], ["に", "ni"], ["ぬ", "nu"], ["ね", "ne"], ["の", "no"],
-  ["は", "ha"], ["ひ", "hi"], ["ふ", "fu"], ["へ", "he"], ["ほ", "ho"],
-  ["ま", "ma"], ["み", "mi"], ["む", "mu"], ["め", "me"], ["も", "mo"],
-  ["や", "ya"], ["ゆ", "yu"], ["よ", "yo"],
-  ["ら", "ra"], ["り", "ri"], ["る", "ru"], ["れ", "re"], ["ろ", "ro"],
-  ["わ", "wa"], ["を", "wo"], ["ん", "n"],
-  ["が", "ga"], ["ぎ", "gi"], ["ぐ", "gu"], ["げ", "ge"], ["ご", "go"],
-  ["ざ", "za"], ["じ", "ji"], ["ず", "zu"], ["ぜ", "ze"], ["ぞ", "zo"],
-  ["だ", "da"], ["ぢ", "ji"], ["づ", "zu"], ["で", "de"], ["ど", "do"],
-  ["ば", "ba"], ["び", "bi"], ["ぶ", "bu"], ["べ", "be"], ["ぼ", "bo"],
-  ["ぱ", "pa"], ["ぴ", "pi"], ["ぷ", "pu"], ["ぺ", "pe"], ["ぽ", "po"],
+/* ── Tabel kana BERBASIS BARIS gojūon (5 kolom bunyi a-i-u-e-o).
+ * Sel kosong (yi/ye/wi/wu/we, plus yi/ye di baris ya) dirender sebagai
+ * placeholder biar posisi ya-yu-yo & wa-wo-n tetap sesuai tabel standar —
+ * bukan dijejalkan ke kiri. matcha: flat list bikin baris ya/wa berantakan. */
+type KanaCellData = [string, string] | null;
+type KanaRow = [KanaCellData, KanaCellData, KanaCellData, KanaCellData, KanaCellData];
+
+function kanaRows(base: [string, string][][]): KanaRow[] {
+  // base: 10 baris gojūon penuh (5 kolom) + [ya-row 3 sel] + ra-row + [wa,wo,n] + 5 baris dakuten.
+  const [a, k, s, t, n, h, m, y, r, wwn, g, z, d, b, p] = base;
+  const full = (row: [string, string][]): KanaRow => [row[0]!, row[1]!, row[2]!, row[3]!, row[4]!];
+  const [ya, yu, yo] = y as [[string, string], [string, string], [string, string]];
+  const [wa, wo, nn] = wwn as [[string, string], [string, string], [string, string]];
+  return [
+    full(a), full(k), full(s), full(t), full(n), full(h), full(m),
+    [ya, null, yu, null, yo], // ya (kiri) — yu (tengah) — yo (kanan)
+    full(r),
+    [wa, null, null, null, wo], // wa (kiri) — wo (kanan pojok)
+    [nn, null, null, null, null], // ん sendiri di bawah wa
+    full(g), full(z), full(d), full(b), full(p),
+  ];
+}
+
+const HIRAGANA: [string, string][][] = [
+  [["あ", "a"], ["い", "i"], ["う", "u"], ["え", "e"], ["お", "o"]],
+  [["か", "ka"], ["き", "ki"], ["く", "ku"], ["け", "ke"], ["こ", "ko"]],
+  [["さ", "sa"], ["し", "shi"], ["す", "su"], ["せ", "se"], ["そ", "so"]],
+  [["た", "ta"], ["ち", "chi"], ["つ", "tsu"], ["て", "te"], ["と", "to"]],
+  [["な", "na"], ["に", "ni"], ["ぬ", "nu"], ["ね", "ne"], ["の", "no"]],
+  [["は", "ha"], ["ひ", "hi"], ["ふ", "fu"], ["へ", "he"], ["ほ", "ho"]],
+  [["ま", "ma"], ["み", "mi"], ["む", "mu"], ["め", "me"], ["も", "mo"]],
+  [["や", "ya"], ["ゆ", "yu"], ["よ", "yo"]],
+  [["ら", "ra"], ["り", "ri"], ["る", "ru"], ["れ", "re"], ["ろ", "ro"]],
+  [["わ", "wa"], ["を", "wo"], ["ん", "n"]],
+  [["が", "ga"], ["ぎ", "gi"], ["ぐ", "gu"], ["げ", "ge"], ["ご", "go"]],
+  [["ざ", "za"], ["じ", "ji"], ["ず", "zu"], ["ぜ", "ze"], ["ぞ", "zo"]],
+  [["だ", "da"], ["ぢ", "ji"], ["づ", "zu"], ["で", "de"], ["ど", "do"]],
+  [["ば", "ba"], ["び", "bi"], ["ぶ", "bu"], ["べ", "be"], ["ぼ", "bo"]],
+  [["ぱ", "pa"], ["ぴ", "pi"], ["ぷ", "pu"], ["ぺ", "pe"], ["ぽ", "po"]],
 ];
-const KATAKANA: [string, string][] = [
-  ["ア", "a"], ["イ", "i"], ["ウ", "u"], ["エ", "e"], ["オ", "o"],
-  ["カ", "ka"], ["キ", "ki"], ["ク", "ku"], ["ケ", "ke"], ["コ", "ko"],
-  ["サ", "sa"], ["シ", "shi"], ["ス", "su"], ["セ", "se"], ["ソ", "so"],
-  ["タ", "ta"], ["チ", "chi"], ["ツ", "tsu"], ["テ", "te"], ["ト", "to"],
-  ["ナ", "na"], ["ニ", "ni"], ["ヌ", "nu"], ["ネ", "ne"], ["ノ", "no"],
-  ["ハ", "ha"], ["ヒ", "hi"], ["フ", "fu"], ["ヘ", "he"], ["ホ", "ho"],
-  ["マ", "ma"], ["ミ", "mi"], ["ム", "mu"], ["メ", "me"], ["モ", "mo"],
-  ["ヤ", "ya"], ["ユ", "yu"], ["ヨ", "yo"],
-  ["ラ", "ra"], ["リ", "ri"], ["ル", "ru"], ["レ", "re"], ["ロ", "ro"],
-  ["ワ", "wa"], ["ヲ", "wo"], ["ン", "n"],
-  ["ガ", "ga"], ["ギ", "gi"], ["グ", "gu"], ["ゲ", "ge"], ["ゴ", "go"],
-  ["ザ", "za"], ["ジ", "ji"], ["ズ", "zu"], ["ゼ", "ze"], ["ゾ", "zo"],
-  ["ダ", "da"], ["ヂ", "ji"], ["ヅ", "zu"], ["デ", "de"], ["ド", "do"],
-  ["バ", "ba"], ["ビ", "bi"], ["ブ", "bu"], ["ベ", "be"], ["ボ", "bo"],
-  ["パ", "pa"], ["ピ", "pi"], ["プ", "pu"], ["ペ", "pe"], ["ポ", "po"],
+const KATAKANA: [string, string][][] = [
+  [["ア", "a"], ["イ", "i"], ["ウ", "u"], ["エ", "e"], ["オ", "o"]],
+  [["カ", "ka"], ["キ", "ki"], ["ク", "ku"], ["ケ", "ke"], ["コ", "ko"]],
+  [["サ", "sa"], ["シ", "shi"], ["ス", "su"], ["セ", "se"], ["ソ", "so"]],
+  [["タ", "ta"], ["チ", "chi"], ["ツ", "tsu"], ["テ", "te"], ["ト", "to"]],
+  [["ナ", "na"], ["ニ", "ni"], ["ヌ", "nu"], ["ネ", "ne"], ["ノ", "no"]],
+  [["ハ", "ha"], ["ヒ", "hi"], ["フ", "fu"], ["ヘ", "he"], ["ホ", "ho"]],
+  [["マ", "ma"], ["ミ", "mi"], ["ム", "mu"], ["メ", "me"], ["モ", "mo"]],
+  [["ヤ", "ya"], ["ユ", "yu"], ["ヨ", "yo"]],
+  [["ラ", "ra"], ["リ", "ri"], ["ル", "ru"], ["レ", "re"], ["ロ", "ro"]],
+  [["ワ", "wa"], ["ヲ", "wo"], ["ン", "n"]],
+  [["ガ", "ga"], ["ギ", "gi"], ["グ", "gu"], ["ゲ", "ge"], ["ゴ", "go"]],
+  [["ザ", "za"], ["ジ", "ji"], ["ズ", "zu"], ["ゼ", "ze"], ["ゾ", "zo"]],
+  [["ダ", "da"], ["ヂ", "ji"], ["ヅ", "zu"], ["デ", "de"], ["ド", "do"]],
+  [["バ", "ba"], ["ビ", "bi"], ["ブ", "bu"], ["ベ", "be"], ["ボ", "bo"]],
+  [["パ", "pa"], ["ピ", "pi"], ["プ", "pu"], ["ペ", "pe"], ["ポ", "po"]],
 ];
-const KANA_TABLES: Record<"hiragana" | "katakana", [string, string][]> = {
-  hiragana: HIRAGANA,
-  katakana: KATAKANA,
+const KANA_TABLES: Record<"hiragana" | "katakana", KanaRow[]> = {
+  hiragana: kanaRows(HIRAGANA),
+  katakana: kanaRows(KATAKANA),
 };
 
-/** Section kana: posisi 0–45 gojūon (dasar), 46–66 dakuten/handakuten — sisanya yōon digabung dakuten. */
+/** Section kana per BARIS: 0–11 gojūon (a s/d ん), 12–16 dakuten/handakuten. */
 const KANA_SECTIONS: { label: string; desc: string; slice: [number, number] }[] = [
   {
     label: "Gojūon — dasar",
-    desc: "46 kana asli: 5 kolom bunyi (a-i-u-e-o) × 10 baris konsonan",
-    slice: [0, 46],
+    desc: "46 kana asli: 5 kolom bunyi (a-i-u-e-o) × baris konsonan + ん",
+    slice: [0, 12],
   },
   {
     label: "Dakuten & handakuten",
     desc: "Variasi bertitik (が) & bundar (ぱ) — bunyinya jadi bersuara",
-    slice: [46, 71],
+    slice: [12, 17],
   },
 ];
 
@@ -583,15 +605,27 @@ export default function AksaraPage() {
             dakuten/handakuten di bawah.
           </p>
           {KANA_SECTIONS.map((sec, si) => {
-            const cells = KANA_TABLES[script].slice(sec.slice[0], sec.slice[1]);
-            if (cells.length === 0) return null;
+            const rows = KANA_TABLES[script].slice(sec.slice[0], sec.slice[1]);
+            if (rows.length === 0) return null;
             return (
               <div key={sec.label} className={si > 0 ? "pt-3" : ""}>
                 <p className="mb-1.5 text-sm font-semibold">{sec.label}</p>
                 <p className="mb-2.5 text-xs text-zinc-400">{sec.desc}</p>
-                <div className="grid grid-cols-5 gap-1.5">
-                  {cells.map(([kana, romaji]) => (
-                    <KanaCell key={kana} kana={kana} romaji={romaji} />
+                <div className="space-y-1.5">
+                  {rows.map((row, ri) => (
+                    <div key={ri} className="grid grid-cols-5 gap-1.5">
+                      {row.map((cell, ci) =>
+                        cell ? (
+                          <KanaCell key={cell[0]} kana={cell[0]} romaji={cell[1]} />
+                        ) : (
+                          <div
+                            key={`empty-${ci}`}
+                            aria-hidden
+                            className="rounded-xl border border-dashed border-zinc-200 py-2.5 dark:border-zinc-800/60"
+                          />
+                        ),
+                      )}
+                    </div>
                   ))}
                 </div>
               </div>

@@ -1,4 +1,4 @@
-import { and, desc, eq, sql } from "drizzle-orm";
+import { and, desc, eq, inArray, sql } from "drizzle-orm";
 import { db } from "~/lib/db/client.server";
 import { cards, items, quizSets, quizAnswers, wordbank } from "~/lib/db/schema";
 import { env } from "~/lib/env.server";
@@ -23,6 +23,7 @@ export type QuizMode =
   | "dikte"
   | "shadow"
   | "pola"
+  | "salah"
   | "toefl"
   | "bulanan";
 export const QUIZ_MODES: QuizMode[] = [
@@ -36,6 +37,7 @@ export const QUIZ_MODES: QuizMode[] = [
   "dikte",
   "shadow",
   "pola",
+  "salah",
   "toefl",
   "bulanan",
 ];
@@ -145,7 +147,7 @@ export function localDayStr(): string {
     .slice(0, 10);
 }
 
-type BuildOpts = { sources?: ("library" | "bank")[]; bankLevel?: string; scrambleTokens?: boolean; grammarCloze?: boolean };
+type BuildOpts = { sources?: ("library" | "bank")[]; bankLevel?: string; scrambleTokens?: boolean; grammarCloze?: boolean; shuffledTypes?: boolean; shufflePool?: boolean; itemIds?: number[]; typeMix?: QuizQuestion["type"][]; recallKnown?: boolean };
 
 /**
  * Segmentasi kalimat Jepang jadi token per-kata via AI (partikel selalu token
@@ -172,6 +174,8 @@ async function segmentJa(sentence: string): Promise<string[]> {
 async function collectRows(opts: BuildOpts) {
   const sources = opts.sources ?? ["library", "bank"];
   const lang = await getTargetLang();
+  // Ulas Salah: cuma item library yang ID-nya dikasih (jawaban salah terakhir).
+  const idFilter = opts.itemIds && opts.itemIds.length > 0 ? opts.itemIds : null;
   const lib = sources.includes("library")
     ? await db
         .select({
@@ -184,7 +188,13 @@ async function collectRows(opts: BuildOpts) {
           firstEn: sql<string | null>`(SELECT en FROM examples WHERE item_id = items.id ORDER BY length(en), id LIMIT 1)`,
         })
         .from(items)
-        .where(and(eq(items.status, "learning"), eq(items.lang, lang)))
+        .where(
+          and(
+            eq(items.status, "learning"),
+            eq(items.lang, lang),
+            ...(idFilter ? [inArray(items.id, idFilter)] : []),
+          ),
+        )
         .limit(300)
     : [];
 
@@ -221,6 +231,41 @@ async function buildQuestions(
   const allRows = await collectRows(opts);
   if (allRows.length === 0) return [];
 
+  // Recall: selipkan item yang sudah hafal (±15%) di antara materi belajar.
+  // Riset: retrieval sesekali atas materi hafal mencegah forgetting curve diam-diam.
+  // Kecuali mode salah (fokus penuh ke kesalahan) — dimatikan via recallKnown:false.
+  // matcha: pool learning saja = yang hafal tidak pernah dites lagi.
+  if (opts.recallKnown !== false) {
+    const lang = await getTargetLang();
+    const recallN = Math.min(6, Math.max(2, Math.round(limit * 0.15)));
+    const recallRows = await db
+      .select({
+        id: items.id,
+        text: items.text,
+        type: items.type,
+        register: items.register,
+        meaningId: items.meaningId,
+        reading: items.reading,
+        firstEn: sql<string | null>`(SELECT en FROM examples WHERE item_id = items.id ORDER BY length(en), id LIMIT 1)`,
+      })
+      .from(items)
+      .where(and(eq(items.status, "known"), eq(items.lang, lang)))
+      .orderBy(sql`RANDOM()`)
+      .limit(recallN);
+    const knownIds = new Set(allRows.map((r) => r.id));
+    const fresh = recallRows.filter((r) => r.meaningId && !knownIds.has(r.id));
+    // Sisip tiap ~6 item biar tersebar, bukan menumpuk di akhir.
+    const merged: ItemRow[] = [];
+    let ri = 0;
+    for (let k = 0; k < allRows.length; k++) {
+      merged.push(allRows[k]!);
+      if ((k + 1) % 6 === 0 && ri < fresh.length) merged.push(fresh[ri++]!);
+    }
+    while (ri < fresh.length) merged.push(fresh[ri++]!);
+    allRows.length = 0;
+    allRows.push(...merged);
+  }
+
   const dueIds = new Set(
     (
       await db
@@ -235,15 +280,19 @@ async function buildQuestions(
   const pool: ItemRow[] = [...allRows]
     .filter((r) => r.meaningId)
     .sort((a, b) => {
+      // Campur = acak bebas tanpa jadwal (beda dari daily yang due-first).
+      if (opts.shufflePool) return Math.random() - 0.5;
       const ad = dueIds.has(a.id) ? 0 : 1;
       const bd = dueIds.has(b.id) ? 0 : 1;
       return ad - bd;
     });
   if (pool.length === 0) return [];
 
-  const types: QuizQuestion["type"][] = opts.forceType
+  const baseTypes: QuizQuestion["type"][] = opts.forceType
     ? [opts.forceType]
-    : opts.typeMix ?? ["mcq_en_id", "mcq_id_en", "cloze", "listen"];
+    : (opts.typeMix ?? ["mcq_en_id", "mcq_id_en", "cloze", "listen"]);
+  // Campur = urutan tipe diacak per set (daily/intens rapi bergiliran).
+  const types = opts.shuffledTypes ? shuffle(baseTypes) : baseTypes;
   const lang = await getTargetLang();
 
   // Ketik/Susun Kata: jawaban berupa kalimat panjang (mis. kalimat hasil
@@ -264,12 +313,28 @@ async function buildQuestions(
   // Pool lebih kecil dari limit → pengulangan tak terhindarkan, dedupe dimatikan
   // biar jumlah soal tetap penuh (kloter kecil memang segitu adanya).
   const dedupe = usePool.length >= limit;
+  // Kunci jawaban MCQ/listen per tipe — kata yang sama dari sumber beda
+  // (library + bank) tidak boleh jadi soal ganda dalam satu set.
+  const usedAns = new Set<string>();
 
   for (let i = 0; questions.length < limit; i++) {
     const item = usePool[i % usePool.length];
     const type = types[questions.length % types.length];
     const others = allRows.filter((o) => o.id !== item.id && o.meaningId);
     const distractors = shuffle(others).slice(0, 3);
+    // MCQ/listen: jawaban sama (teks/arti identik lintas sumber) → lewati.
+    // Cloze dikecualikan: jawaban partikel yang sama di kalimat beda itu sah.
+    if (
+      dedupe &&
+      (type === "mcq_en_id"
+        ? usedAns.has(`m:${item.meaningId}`)
+        : type === "mcq_id_en" || type === "listen"
+          ? usedAns.has(`t:${item.text.toLowerCase().trim()}`)
+          : false)
+    ) {
+      if (i > limit * 10) break; // pengaman
+      continue;
+    }
 
     if (type === "typing") {
       // Susun Kata JP: pakai kalimat contoh, dipecah jadi token per-kata oleh AI.
@@ -294,9 +359,11 @@ async function buildQuestions(
         }
       }
       // Ketik frasa dari arti Indonesia — dinilai di server. Jawaban yang
-      // sudah keluar di set ini dilewati (pool kecil = item berulang).
+      // sudah keluar di set ini dilewati (pool kecil = item berulang), dan
+      // item kepanjangan diskip di SEMUA mode (campur/daily bisa kena typing
+      // tanpa filter pool) → loop lanjut, tipe soal dipertahankan.
       const typeAnswer = lang === "ja" ? item.text.trim() : item.text.toLowerCase().trim();
-      if (dedupe && usedText.has(typeAnswer)) {
+      if (!shortEnough(item.text) || (dedupe && usedText.has(typeAnswer))) {
         if (i > limit * 10) break; // pengaman
         continue;
       }
@@ -314,6 +381,7 @@ async function buildQuestions(
       });
     } else if (type === "mcq_en_id") {
       const opts2 = shuffle([item.meaningId!, ...distractors.map((d) => d.meaningId!)]);
+      usedAns.add(`m:${item.meaningId}`);
       questions.push({
         itemId: item.id,
         type,
@@ -325,6 +393,7 @@ async function buildQuestions(
       });
     } else if (type === "mcq_id_en") {
       const opts2 = shuffle([item.text, ...distractors.map((d) => d.text)]);
+      usedAns.add(`t:${item.text.toLowerCase().trim()}`);
       questions.push({
         itemId: item.id,
         type,
@@ -367,6 +436,14 @@ async function buildQuestions(
           }
         }
         if (hit && raw) {
+          // Tolak kalimat degenerat (blanko tanpa konteks, mis. contoh
+          // satu kata) → jatuh ke cloze biasa/MCQ di bawah.
+          // matcha: prompt "_____" polos tidak bisa dijawab.
+          const cukupKonteks =
+            lang === "ja" ? raw.length >= 6 : raw.split(/\s+/).filter(Boolean).length >= 4;
+          if (!cukupKonteks) {
+            // Lewati cabang grammar, lanjut ke cloze biasa di bawah.
+          } else {
           const others = shuffle(candidates.filter((w) => w !== hit)).slice(0, 3);
           if (blanked !== raw && others.length === 3 && (!dedupe || !usedText.has(raw))) {
             usedText.add(raw);
@@ -383,17 +460,24 @@ async function buildQuestions(
             if (i > limit * 10) break; // pengaman
             continue;
           }
+          } // tutup else cukupKonteks → lanjut cloze biasa
         }
       }
       // Cloze dari KALIMAT CONTOH (sentence mining): rumpang satu kata kunci.
       // Kalimat >25 kata diskip (melelahkan, bukan melatih) → fallback MCQ.
-      // Kalimat yang sudah dipakai di set ini diskip (anti-bosan).
-      const sentence = item.firstEn ?? "";
+      // Kalimat yang sudah dipakai di set ini diskip (anti-bosan). Baris
+      // romaji (contoh JA "kalimat\nromaji") dibuang — bocor bacaan + jelek.
+      // matcha: romaji tampil di prompt = spoiler jawaban.
+      const sentence = (item.firstEn ?? "").split("\n")[0]!.trim();
       const sentWords = (sentence.match(/[A-Za-z'\u3040-\u30ff\u4e00-\u9faf]+/g) || []).length;
       const re = new RegExp(item.text.replace(/[.*+?^${}()|[\]\\]/g, "\\$&"), "i");
       const blanked = sentence && sentWords <= 25 && (!dedupe || !usedText.has(sentence)) ? sentence.replace(re, "_____") : "";
-      if (!blanked.includes("_____")) {
+      // Tolak prompt degenerat (blanko tanpa konteks, mis. contoh == headword).
+      const sisaKonteks = blanked.replace(/_____|＿＿＿/g, "").trim();
+      const cukupIsi = lang === "ja" ? sisaKonteks.length >= 4 : sisaKonteks.split(/\s+/).filter(Boolean).length >= 3;
+      if (!blanked.includes("_____") || !cukupIsi) {
         const opts2 = shuffle([item.meaningId!, ...distractors.map((d) => d.meaningId!)]);
+        usedAns.add(`m:${item.meaningId}`);
         questions.push({
           itemId: item.id,
           type: "mcq_en_id",
@@ -418,6 +502,7 @@ async function buildQuestions(
       });
     } else {
       const opts2 = shuffle([item.text, ...distractors.map((d) => d.text)]);
+      usedAns.add(`t:${item.text.toLowerCase().trim()}`);
       questions.push({
         itemId: item.id,
         type: "listen",
@@ -450,6 +535,7 @@ function modeTitle(mode: QuizMode, day: string, lang: TargetLang = "en"): string
           dikte: "Dikte",
           shadow: "Shadowing",
           pola: "Pola Kalimat",
+          salah: "Ulas Salah",
           toefl: "Tes JLPT",
           bulanan: "JLPT Bulanan",
         }
@@ -464,6 +550,7 @@ function modeTitle(mode: QuizMode, day: string, lang: TargetLang = "en"): string
           dikte: "Dikte",
           shadow: "Shadowing",
           pola: "Pola Kalimat",
+          salah: "Ulas Salah",
           toefl: "TOEFL Test",
           bulanan: "Uji Bulanan",
         };
@@ -488,6 +575,25 @@ export async function getTodaySet() {
   return getSetForDay("daily", localDayStr(), env.DAILY_QUIZ_SIZE);
 }
 
+/** Item yang baru-baru ini dijawab SALAH (14 hari) — bahan mode Ulas Salah.
+ * Riset: melatih kesalahan = retensi tertinggi per menit. Tanpa migrasi. */
+async function recentWrongItemIds(limit = 60): Promise<number[]> {
+  const lang = await getTargetLang();
+  const cutoff = Date.now() - 14 * 86_400_000;
+  const rows = await db
+    .select({ itemId: quizAnswers.itemId })
+    .from(quizAnswers)
+    .innerJoin(quizSets, eq(quizSets.id, quizAnswers.setId))
+    .where(and(eq(quizAnswers.correct, 0), eq(quizSets.lang, lang), sql`${quizAnswers.answeredAt} >= ${cutoff}`))
+    .limit(400);
+  const freq = new Map<number, number>();
+  for (const r of rows) freq.set(r.itemId, (freq.get(r.itemId) ?? 0) + 1);
+  return [...freq.entries()]
+    .sort((a, b) => b[1] - a[1])
+    .slice(0, limit)
+    .map(([id]) => id);
+}
+
 /** Set harian per mode (satu per mode per hari). */
 export async function getSetForDay(mode: QuizMode, day: string, limit: number, opts: BuildOpts = {}) {
   const lang = await getTargetLang();
@@ -498,7 +604,26 @@ export async function getSetForDay(mode: QuizMode, day: string, limit: number, o
     .limit(1);
   if (existing) return existing;
 
-  const questions = await buildQuestions(limit, { ...opts, forceType: forceTypeFor(mode), scrambleTokens: mode === "scramble", grammarCloze: mode === "pola" });
+  // Daily = sistematis: due-first + SEMUA skill incl. ketik, urutan rapi.
+  // Campur = acak bebas: pool + urutan tipe diacak, tanpa jadwal.
+  const ALL_FIVE: QuizQuestion["type"][] = ["mcq_en_id", "mcq_id_en", "cloze", "listen", "typing"];
+  const modeOpts: BuildOpts =
+    mode === "daily" || mode === "intens" || mode === "salah"
+      ? { typeMix: ALL_FIVE }
+      : mode === "mix"
+        ? { typeMix: ALL_FIVE, shuffledTypes: true, shufflePool: true }
+        : {};
+  // Ulas Salah: khusus item yang pernah salah (library saja); kosong → pool normal.
+  const wrongIds = mode === "salah" ? await recentWrongItemIds() : [];
+  const effOpts: BuildOpts = {
+    ...opts,
+    ...modeOpts,
+    ...(wrongIds.length > 0 ? { sources: ["library"] as ("library" | "bank")[], itemIds: wrongIds } : {}),
+    // Ulas Salah fokus ke kesalahan — jangan campur materi hafal.
+    ...(mode === "salah" ? { recallKnown: false } : {}),
+  };
+
+  const questions = await buildQuestions(limit, { ...effOpts, forceType: forceTypeFor(mode), scrambleTokens: mode === "scramble", grammarCloze: mode === "pola" });
   if (questions.length === 0) return null;
 
   const [created] = await db
@@ -533,7 +658,14 @@ export async function createExtraSet(
   limit: number,
   opts: BuildOpts = {},
 ) {
-  const questions = await buildQuestions(limit, { ...opts, forceType: forceTypeFor(mode), scrambleTokens: mode === "scramble", grammarCloze: mode === "pola" });
+  const ALL_FIVE: QuizQuestion["type"][] = ["mcq_en_id", "mcq_id_en", "cloze", "listen", "typing"];
+  const modeOpts: BuildOpts =
+    mode === "intens"
+      ? { typeMix: ALL_FIVE }
+      : mode === "mix"
+        ? { typeMix: ALL_FIVE, shuffledTypes: true, shufflePool: true }
+        : {};
+  const questions = await buildQuestions(limit, { ...opts, ...modeOpts, forceType: forceTypeFor(mode), scrambleTokens: mode === "scramble", grammarCloze: mode === "pola" });
   if (questions.length === 0) return null;
   const today = localDayStr();
   const lang = await getTargetLang();

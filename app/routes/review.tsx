@@ -112,7 +112,7 @@ type Periodic = {
   bulanan: { month: string; available: boolean; exists: boolean; setId: number | null; done: number; completed: boolean };
 };
 
-type Mode = "daily" | "typing" | "intens" | "audio" | "scramble" | "mix" | "dikte" | "shadow" | "pola";
+type Mode = "daily" | "typing" | "intens" | "audio" | "scramble" | "mix" | "dikte" | "shadow" | "pola" | "salah";
 
 const MODES: {
   id: Mode | "flash" | "match";
@@ -120,18 +120,20 @@ const MODES: {
   icon: typeof Repeat;
   desc: string;
   action: "start" | "generate";
+  group: "harian" | "mingguan" | "bebas";
 }[] = [
-  { id: "daily", label: "Kuis Harian", icon: Repeat, desc: "Rutinitas 20 soal per hari — campuran pilihan ganda, cloze, dengar", action: "start" },
-  { id: "flash", label: "Flashcard", icon: Layers, desc: "Kartu ingatan yang jatuh tempo — tap flip, swipe nilai", action: "start" },
-  { id: "typing", label: "Latihan Ketik", icon: Keyboard, desc: "Ketik bahasa Inggrisnya dari arti Indonesia", action: "generate" },
-  { id: "audio", label: "Dengar", icon: Volume2, desc: "Dengarin cara bacanya, pilih arti yang tepat", action: "start" },
-  { id: "scramble", label: "Susun Kata", icon: Shuffle, desc: "Susun kata jadi frasa Inggris yang benar", action: "start" },
-  { id: "mix", label: "Campur", icon: Dices, desc: "Acak semua tipe soal — arti, ketik, dengar, susun", action: "start" },
-  { id: "dikte", label: "Dikte", icon: Ear, desc: "Dengarkan lalu ketik tepat seperti yang dibunyikan", action: "start" },
-  { id: "shadow", label: "Shadowing", icon: Mic, desc: "Dengarkan + ikuti ucapkan — latihan kelancaran", action: "start" },
-  { id: "pola", label: "Pola Kalimat", icon: PencilLine, desc: "Rumpang partikel & kata fungsi dari contoh nyata", action: "start" },
-  { id: "intens", label: "Intens Mingguan", icon: Zap, desc: "25 soal campuran buat mempertajam ingatan", action: "generate" },
-  { id: "match", label: "Match", icon: Puzzle, desc: "Minigame: pasangkan kata dengan artinya — per ronde", action: "start" },
+  { id: "daily", group: "harian", label: "Kuis Harian", icon: Repeat, desc: "Rutinitas 20 soal per hari — campuran pilihan ganda, cloze, dengar", action: "start" },
+  { id: "flash", group: "harian", label: "Flashcard", icon: Layers, desc: "Kartu ingatan yang jatuh tempo — tap flip, swipe nilai", action: "start" },
+  { id: "typing", group: "bebas", label: "Latihan Ketik", icon: Keyboard, desc: "Ketik bahasa Inggrisnya dari arti Indonesia", action: "generate" },
+  { id: "audio", group: "bebas", label: "Dengar", icon: Volume2, desc: "Dengarin cara bacanya, pilih arti yang tepat", action: "start" },
+  { id: "scramble", group: "bebas", label: "Susun Kata", icon: Shuffle, desc: "Susun kata jadi frasa Inggris yang benar", action: "start" },
+  { id: "mix", group: "bebas", label: "Campur", icon: Dices, desc: "Acak semua tipe soal — arti, ketik, dengar, susun", action: "start" },
+  { id: "dikte", group: "bebas", label: "Dikte", icon: Ear, desc: "Dengarkan lalu ketik tepat seperti yang dibunyikan", action: "start" },
+  { id: "shadow", group: "bebas", label: "Shadowing", icon: Mic, desc: "Dengarkan + ikuti ucapkan — latihan kelancaran", action: "start" },
+  { id: "pola", group: "bebas", label: "Pola Kalimat", icon: PencilLine, desc: "Rumpang partikel & kata fungsi dari contoh nyata", action: "start" },
+  { id: "salah", group: "bebas", label: "Ulas Salah", icon: RotateCcw, desc: "Ulangi yang pernah salah — 14 hari terakhir", action: "start" },
+  { id: "intens", group: "mingguan", label: "Intens Mingguan", icon: Zap, desc: "25 soal campuran buat mempertajam ingatan", action: "generate" },
+  { id: "match", group: "bebas", label: "Match", icon: Puzzle, desc: "Minigame: pasangkan kata dengan artinya — per ronde", action: "start" },
 ];
 
 /** Override label/desc mode khusus Jepang. */
@@ -142,6 +144,7 @@ const JA_MODE_TEXT: Partial<Record<string, { label?: string; desc?: string }>> =
   dikte: { desc: "Dengarkan lalu ketik bahasa Jepangnya" },
   shadow: { desc: "Dengarkan + ikuti ucapkan — latihan kelancaran" },
   pola: { desc: "Rumpang partikel dari contoh nyata" },
+  salah: { desc: "Ulangi yang pernah salah" },
 };
 
 const TYPE_META: Record<QuestionType, { label: string; icon: typeof Ear }> = {
@@ -290,9 +293,51 @@ function ModePicker({
         </div>
       ) : null}
 
-      <p className="label px-1">Latihan harian</p>
+      <p className="label px-1">Latihan harian — rutinitas inti tiap hari</p>
       <div className="space-y-2">
-        {MODES.map((m) => {
+        {MODES.filter((m) => m.group === "harian").map((m) => {
+          const label = ja ? (JA_MODE_TEXT[m.id]?.label ?? m.label) : m.label;
+          const desc = ja ? (JA_MODE_TEXT[m.id]?.desc ?? m.desc) : m.desc;
+          return (
+          <div key={m.id} className="card flex items-center gap-3 p-4">
+            <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-teal-50 text-teal-700 dark:bg-teal-950 dark:text-teal-300">
+              <m.icon className="h-5 w-5" strokeWidth={1.75} />
+            </span>
+            <div className="min-w-0 flex-1">
+              <p className="font-semibold">{label}</p>
+              <p className="truncate text-xs text-zinc-500">{desc}</p>
+            </div>
+            {m.action === "start" ? (
+              <button className="btn-primary shrink-0 text-sm" onClick={() => onStart(m.id)}>
+                Mulai
+              </button>
+            ) : (
+              <button
+                className="btn-secondary shrink-0 gap-1 text-sm"
+                disabled={genBusy === m.id}
+                onClick={() => onGenerate(m.id as "typing" | "intens")}
+              >
+                {genBusy === m.id ? (
+                  <>
+                    <Loader2 className="h-4 w-4 animate-spin" />
+                    Menyusun…
+                  </>
+                ) : (
+                  <>
+                    <Plus className="h-4 w-4" />
+                    Generate
+                  </>
+                )}
+              </button>
+            )}
+          </div>
+          );
+        })}
+      </div>
+
+      <p className="label px-1">Mingguan — set berat seminggu sekali</p>
+      <div className="space-y-2">
+        {MODES.filter((m) => m.group === "mingguan").map((m) => {
           const label = ja ? (JA_MODE_TEXT[m.id]?.label ?? m.label) : m.label;
           const desc = ja ? (JA_MODE_TEXT[m.id]?.desc ?? m.desc) : m.desc;
           return (
@@ -332,6 +377,47 @@ function ModePicker({
         })}
       </div>
       <p className="px-1 text-center text-xs text-zinc-400">
+      <p className="label px-1">Latihan bebas — tanpa jadwal, kapan pun</p>
+      <div className="space-y-2">
+        {MODES.filter((m) => m.group === "bebas").map((m) => {
+          const label = ja ? (JA_MODE_TEXT[m.id]?.label ?? m.label) : m.label;
+          const desc = ja ? (JA_MODE_TEXT[m.id]?.desc ?? m.desc) : m.desc;
+          return (
+          <div key={m.id} className="card flex items-center gap-3 p-4">
+            <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-teal-50 text-teal-700 dark:bg-teal-950 dark:text-teal-300">
+              <m.icon className="h-5 w-5" strokeWidth={1.75} />
+            </span>
+            <div className="min-w-0 flex-1">
+              <p className="font-semibold">{label}</p>
+              <p className="truncate text-xs text-zinc-500">{desc}</p>
+            </div>
+            {m.action === "start" ? (
+              <button className="btn-primary shrink-0 text-sm" onClick={() => onStart(m.id)}>
+                Mulai
+              </button>
+            ) : (
+              <button
+                className="btn-secondary shrink-0 gap-1 text-sm"
+                disabled={genBusy === m.id}
+                onClick={() => onGenerate(m.id as "typing" | "intens")}
+              >
+                {genBusy === m.id ? (
+                  <>
+                    <Loader2 className="h-4 w-4 animate-spin" />
+                    Menyusun…
+                  </>
+                ) : (
+                  <>
+                    <Plus className="h-4 w-4" />
+                    Generate
+                  </>
+                )}
+              </button>
+            )}
+          </div>
+          );
+        })}
+      </div>
         Generate = bikin set soal tambahan baru di luar jadwal harian.
       </p>
 
@@ -459,7 +545,7 @@ export default function ReviewPage() {
     urlMode === "flash" ? "flash" : urlMode === "match" ? "match" : urlMode ? "quiz" : "pick",
   );
   const [mode, setMode] = useState<Mode>(
-    urlMode && ["daily", "typing", "intens", "audio", "scramble", "mix", "dikte", "shadow", "pola"].includes(urlMode)
+    urlMode && ["daily", "typing", "intens", "audio", "scramble", "mix", "dikte", "shadow", "pola", "salah"].includes(urlMode)
       ? (urlMode as Mode)
       : "daily",
   );
@@ -612,7 +698,7 @@ export default function ReviewPage() {
   // Restore mode quiz biasa dari URL (?mode=typing dst) — refresh gak balikin ke picker.
   useEffect(() => {
     if (screen !== "quiz" || data || !urlMode) return;
-    if (["daily", "typing", "intens", "audio", "scramble", "mix", "dikte", "shadow", "pola"].includes(urlMode)) {
+    if (["daily", "typing", "intens", "audio", "scramble", "mix", "dikte", "shadow", "pola", "salah"].includes(urlMode)) {
       load(urlMode as Mode);
       return;
     }
@@ -746,6 +832,7 @@ export default function ReviewPage() {
         setReveal(false);
         setDrag(0);
         setFlashDone(0);
+        setFlashRound(1);
         setLoading(false);
       })
       .catch((e: Error) => {
@@ -908,10 +995,20 @@ export default function ReviewPage() {
   };
 
   /* ── Flashcard actions ── */
+  // Kartu habis → reshuffle + putaran baru (flashcard itu latihan TANPA
+  // batas, bukan set harian; keluar hanya via tombol Selesai).
+  // matcha: dulu habis = balik picker (kesannya hilang); endless + FSRS tetap
+  // dicatat per rating.
+  const [flashRound, setFlashRound] = useState(1);
   const advanceCard = () => {
     setFlashDone((n) => n + 1);
     if (cardIdx + 1 >= cards.length) {
-      backToPick(`Flashcard selesai — ${flashDone + 1} kartu direview`);
+      setCards((list) => [...list].sort(() => Math.random() - 0.5));
+      setCardIdx(0);
+      setReveal(false);
+      setDrag(0);
+      setFlashRound((r) => r + 1);
+      toast(`Putaran ${flashRound + 1} — kartu diacak ulang`);
     } else {
       setCardIdx((i) => i + 1);
       setReveal(false);
@@ -1131,6 +1228,7 @@ export default function ReviewPage() {
         <div className="flex items-center justify-between text-xs text-zinc-500">
           <span>
             Kartu {cardIdx + 1} / {cards.length}
+            {flashRound > 1 ? ` · putaran ${flashRound}` : ""}
           </span>
           <span className="flex items-center gap-1">
             <button
@@ -1318,7 +1416,7 @@ export default function ReviewPage() {
     const totalPairs = matchRounds.reduce((a, r) => a + r.length, 0);
     const donePairs = matchResults.current.length;
     const tileBase =
-      "flex min-h-12 cursor-pointer select-none items-center justify-between gap-1.5 rounded-xl border px-3.5 py-2.5 text-left transition-colors";
+      "flex min-h-12 cursor-pointer select-none items-start justify-between gap-1.5 rounded-xl border px-3.5 py-2.5 text-left transition-colors";
     return (
       <div className="space-y-4">
         <div className="flex items-center justify-between text-xs text-zinc-500">
@@ -1375,7 +1473,7 @@ export default function ReviewPage() {
                   className={tileBase + cls}
                   onClick={() => !isMatched && setSelectedEn(isSel ? null : pi)}
                 >
-                  <span className="truncate font-medium">{pair.word}</span>
+                  <span className="min-w-0 flex-1 break-words text-sm font-medium">{pair.word}</span>
                   <button
                     className="shrink-0 rounded-lg p-1 text-zinc-400 hover:text-teal-600 dark:hover:text-teal-300"
                     title="Dengarkan"
@@ -1410,7 +1508,7 @@ export default function ReviewPage() {
                   className={tileBase + cls}
                   onClick={() => pickMeaning(pi)}
                 >
-                  <span className="min-w-0 flex-1 truncate text-sm">{pair.meaning}</span>
+                  <span className="min-w-0 flex-1 break-words text-sm">{pair.meaning}</span>
                   {isMatched ? <CheckCircle2 className="h-4 w-4 shrink-0 text-teal-600" /> : null}
                 </div>
               );
