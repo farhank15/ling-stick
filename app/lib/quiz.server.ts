@@ -1,4 +1,4 @@
-import { and, desc, eq, inArray, sql } from "drizzle-orm";
+import { and, desc, eq, inArray, notInArray, sql } from "drizzle-orm";
 import { db } from "~/lib/db/client.server";
 import { cards, items, quizSets, quizAnswers, wordbank } from "~/lib/db/schema";
 import { env } from "~/lib/env.server";
@@ -872,8 +872,11 @@ export async function getStreak(): Promise<{ days: number; todayDone: boolean }>
   return { days, todayDone: doneDays.has(today) };
 }
 
-/** Antrian flashcard: kartu due + kartu baru hari ini (dengan contoh & catatan). */
-export async function getFlashQueue(limit = 30) {
+/** Antrian flashcard: kartu due + kartu baru hari ini (dengan contoh & catatan).
+ * exclude: itemId yang sudah tampil sesi ini — biar putaran berikutnya beda
+ * kartu + kartu baru otomatis masuk. Kalau filter menghabiskan semua, fallback
+ * ke antrean penuh (panggil ulang tanpa exclude di sisi server). */
+export async function getFlashQueue(limit = 30, exclude: number[] = []) {
   const today = localDayStr();
   const dayStart = new Date(today + "T00:00:00+07:00").getTime();
   const dayEnd = dayStart + 86_400_000;
@@ -883,6 +886,19 @@ export async function getFlashQueue(limit = 30) {
   const firstEn = sql<string | null>`(SELECT en FROM examples WHERE item_id = items.id ORDER BY length(en), id LIMIT 1)`;
   const firstId = sql<string | null>`(SELECT id_text FROM examples WHERE item_id = items.id ORDER BY length(en), id LIMIT 1)`;
   const firstKana = sql<string | null>`(SELECT kana FROM examples WHERE item_id = items.id ORDER BY length(en), id LIMIT 1)`;
+  const notShown =
+    exclude.length > 0 ? [notInArray(items.id, exclude)] : [];
+  // Kolom FSRS penuh — buat pratinjau interval tiap rating (ala Anki).
+  const fsrsCols = {
+    stability: cards.stability,
+    difficulty: cards.difficulty,
+    elapsedDays: cards.elapsedDays,
+    scheduledDays: cards.scheduledDays,
+    state: cards.state,
+    lastReview: cards.lastReview,
+    learningSteps: cards.learningSteps,
+    lapses: cards.lapses,
+  };
   const dueRows = await db
     .select({
       itemId: items.id,
@@ -895,10 +911,11 @@ export async function getFlashQueue(limit = 30) {
       firstKana,
       due: cards.due,
       reps: cards.reps,
+      ...fsrsCols,
     })
     .from(cards)
     .innerJoin(items, eq(items.id, cards.itemId))
-    .where(and(eq(items.status, "learning"), eq(items.lang, lang), sql`${cards.due} < ${Date.now()}`))
+    .where(and(eq(items.status, "learning"), eq(items.lang, lang), sql`${cards.due} < ${Date.now()}`, ...notShown))
     .orderBy(cards.due)
     .limit(limit);
   const newRows = await db
@@ -913,12 +930,57 @@ export async function getFlashQueue(limit = 30) {
       firstKana,
       due: cards.due,
       reps: cards.reps,
+      ...fsrsCols,
     })
     .from(cards)
     .innerJoin(items, eq(items.id, cards.itemId))
-    .where(and(eq(items.status, "learning"), eq(items.lang, lang), sql`${cards.due} >= ${dayStart}`, sql`${cards.due} < ${dayEnd}`, eq(cards.reps, 0)))
+    .where(and(eq(items.status, "learning"), eq(items.lang, lang), sql`${cards.due} >= ${dayStart}`, sql`${cards.due} < ${dayEnd}`, eq(cards.reps, 0), ...notShown))
     .limit(Math.max(0, limit - dueRows.length));
-  return [...dueRows, ...newRows];
+  const queue = [...dueRows, ...newRows];
+  // Exclude menghabiskan semua (mis. kartu sedikit) → fallback antrean penuh.
+  if (queue.length === 0 && exclude.length > 0) return getFlashQueue(limit, []);
+  // Pratinjau interval ala Anki per kartu ("Lupa 1mnt · Tahu 3hari").
+  const { previewGrades } = await import("~/lib/fsrs.server");
+  const now = Date.now();
+  return queue.map((c) => {
+    const fmt = (ms: number): string => {
+      const m = Math.max(1, Math.round(ms / 60000));
+      if (m < 60) return `${m}mnt`;
+      const h = Math.round(m / 60);
+      if (h < 48) return `${h}jam`;
+      const d = Math.round(h / 24);
+      if (d < 60) return `${d}hari`;
+      const mo = Math.round(d / 30);
+      if (mo < 12) return `${mo}bln`;
+      return `${Math.round(mo / 12)}thn`;
+    };
+    try {
+      const prev = previewGrades({
+        itemId: c.itemId,
+        due: c.due,
+        stability: c.stability,
+        difficulty: c.difficulty,
+        elapsedDays: c.elapsedDays,
+        scheduledDays: c.scheduledDays,
+        reps: c.reps,
+        lapses: c.lapses,
+        state: c.state,
+        lastReview: c.lastReview,
+        learningSteps: c.learningSteps,
+      });
+      return {
+        ...c,
+        intervals: {
+          1: fmt(prev[1].card.due.getTime() - now),
+          2: fmt(prev[2].card.due.getTime() - now),
+          3: fmt(prev[3].card.due.getTime() - now),
+          4: fmt(prev[4].card.due.getTime() - now),
+        },
+      };
+    } catch {
+      return { ...c, intervals: null };
+    }
+  });
 }
 
 /**

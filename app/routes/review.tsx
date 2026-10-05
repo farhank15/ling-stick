@@ -103,6 +103,7 @@ type FlashCard = {
   firstEn: string | null;
   firstId: string | null;
   firstKana?: string | null; // JA: kana contoh — furigana kartu
+  intervals?: { 1: string; 2: string; 3: string; 4: string } | null; // ala Anki
   reps: number;
 };
 
@@ -834,6 +835,8 @@ export default function ReviewPage() {
         setDrag(0);
         setFlashDone(0);
         setFlashRound(1);
+        shownIds.current.clear();
+        requeues.current.clear();
         setLoading(false);
       })
       .catch((e: Error) => {
@@ -1001,15 +1004,40 @@ export default function ReviewPage() {
   // matcha: dulu habis = balik picker (kesannya hilang); endless + FSRS tetap
   // dicatat per rating.
   const [flashRound, setFlashRound] = useState(1);
+  // ID kartu yang sudah tampil sesi ini — dikirim sebagai exclude biar putaran
+  // berikutnya beda kartu + kartu baru otomatis nyelip (server fallback penuh
+  // kalau habis). matcha: putaran 2+ isinya itu-itu saja.
+  const shownIds = useRef<Set<number>>(new Set());
   const advanceCard = () => {
+    const c = cards[cardIdx];
+    if (c) shownIds.current.add(c.itemId);
     setFlashDone((n) => n + 1);
     if (cardIdx + 1 >= cards.length) {
-      setCards((list) => [...list].sort(() => Math.random() - 0.5));
-      setCardIdx(0);
-      setReveal(false);
-      setDrag(0);
-      setFlashRound((r) => r + 1);
-      toast(`Putaran ${flashRound + 1} — kartu diacak ulang`);
+      const exclude = [...shownIds.current].join(",");
+      fetch(`/api/flash?exclude=${exclude}`)
+        .then((r) => safeJson<{ cards: FlashCard[] }>(r))
+        .then((d) => {
+          if (d.cards && d.cards.length > 0) {
+            setCards(d.cards);
+          } else {
+            setCards((list) => [...list].sort(() => Math.random() - 0.5));
+          }
+          requeues.current.clear();
+          setCardIdx(0);
+          setReveal(false);
+          setDrag(0);
+          setFlashRound((r) => {
+            toast(`Putaran ${r + 1} — kartu baru`);
+            return r + 1;
+          });
+        })
+        .catch(() => {
+          setCards((list) => [...list].sort(() => Math.random() - 0.5));
+          setCardIdx(0);
+          setReveal(false);
+          setDrag(0);
+          setFlashRound((r) => r + 1);
+        });
     } else {
       setCardIdx((i) => i + 1);
       setReveal(false);
@@ -1017,9 +1045,29 @@ export default function ReviewPage() {
     }
   };
 
+  // Requeue sesi ala Anki: Lupa/Susah → kartu balik lagi ±5 posisi
+  // (maks 2x per kartu per putaran biar sesi tidak menggembung).
+  // matcha: tanpa ini kartu gagal cuma tercatat, tidak muncul-muncul lagi.
+  const requeues = useRef(new Map<number, number>());
+  const requeueCard = (rating: 1 | 2 | 3 | 4) => {
+    if (rating !== 1 && rating !== 2) return;
+    const c = cards[cardIdx];
+    if (!c) return;
+    const n = requeues.current.get(c.itemId) ?? 0;
+    if (n >= 2) return;
+    requeues.current.set(c.itemId, n + 1);
+    setCards((list) => {
+      const at = Math.min(list.length, cardIdx + 1 + 4 + Math.floor(Math.random() * 3));
+      const next = [...list];
+      next.splice(at, 0, c);
+      return next;
+    });
+  };
+
   const rateCard = async (rating: 1 | 2 | 3 | 4, msg?: string) => {
     const c = cards[cardIdx];
     if (!c) return;
+    requeueCard(rating);
     advanceCard();
     try {
       await fetch("/api/flash", {
@@ -1390,15 +1438,27 @@ export default function ReviewPage() {
         <div className="grid grid-cols-4 gap-2">
           <button className="btn-secondary flex-col gap-1 py-2.5 text-xs" onClick={() => void rateCard(1, "Masih dipelajari — bakal muncul lagi")}>
             <XCircle className="h-4 w-4 text-red-500" /> Lupa
+            {cards[cardIdx]?.intervals ? (
+              <span className="text-[10px] font-normal text-zinc-400">{cards[cardIdx]!.intervals![1]}</span>
+            ) : null}
           </button>
           <button className="btn-secondary flex-col gap-1 py-2.5 text-xs" onClick={() => void rateCard(2)}>
             <RotateCcw className="h-4 w-4 text-amber-500" /> Susah
+            {cards[cardIdx]?.intervals ? (
+              <span className="text-[10px] font-normal text-zinc-400">{cards[cardIdx]!.intervals![2]}</span>
+            ) : null}
           </button>
           <button className="btn-secondary flex-col gap-1 py-2.5 text-xs" onClick={() => void rateCard(3)}>
             <CheckCircle2 className="h-4 w-4 text-teal-600" /> Pas
+            {cards[cardIdx]?.intervals ? (
+              <span className="text-[10px] font-normal text-zinc-400">{cards[cardIdx]!.intervals![3]}</span>
+            ) : null}
           </button>
           <button className="btn-secondary flex-col gap-1 py-2.5 text-xs" onClick={() => void knowCard()}>
             <BadgeCheck className="h-4 w-4 text-emerald-600" /> Tahu
+            {cards[cardIdx]?.intervals ? (
+              <span className="text-[10px] font-normal text-zinc-400">{cards[cardIdx]!.intervals![4]}</span>
+            ) : null}
           </button>
         </div>
       </div>

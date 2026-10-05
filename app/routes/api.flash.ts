@@ -10,7 +10,16 @@ import { getFlashQueue } from "~/lib/quiz.server";
  */
 export async function loader({ request }: LoaderFunctionArgs) {
   await requireUser(request);
-  const queue = await getFlashQueue(30);
+  // exclude=itemId,itemId — kartu yang sudah tampil sesi ini dilewati biar
+  // putaran berikutnya variatif + kartu baru otomatis nyelip. Kalau hasilnya
+  // kosong, server fallback ke antrean penuh (jangan dead-end).
+  const url = new URL(request.url);
+  const exclude = (url.searchParams.get("exclude") ?? "")
+    .split(",")
+    .map(Number)
+    .filter((n) => Number.isInteger(n) && n > 0)
+    .slice(0, 200);
+  const queue = await getFlashQueue(30, exclude);
   return Response.json({ cards: queue });
 }
 
