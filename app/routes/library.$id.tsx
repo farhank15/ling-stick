@@ -7,6 +7,7 @@ import { SpeakButton } from "~/components/SpeakButton";
 import { Highlight } from "~/components/Highlight";
 import { useToast } from "~/components/Toast";
 import { JaText, hasJa, splitReading } from "~/components/JaText";
+import { MarkdownLite } from "~/components/MarkdownLite";
 import { requireUser } from "~/lib/auth.server";
 import { deleteItem, getItemDetail, markLearning, updateItem } from "~/lib/items.server";
 import { redirect } from "react-router";
@@ -122,6 +123,8 @@ export default function ItemDetail() {
   const busy = nav.state !== "idle" || fetcher.state !== "idle";
   const checkResult = (fetcher.data as { result?: CheckResult } | undefined)?.result;
 
+  // Detail item: 2 kolom di desktop (konten + sidebar aksi) — tombol w-full
+  // wajar di sidebar sempit, ga melar selebar layar.
   return (
     <div className="space-y-4">
       <div className="flex items-center gap-2">
@@ -168,9 +171,11 @@ export default function ItemDetail() {
         <p className="text-base font-medium">{item.meaningId}</p>
       ) : null}
       {item.notesId ? (
-        <p className="text-sm italic text-zinc-500">
-          <Lightbulb className="mr-1 inline h-3.5 w-3.5" /> {item.notesId}
-        </p>
+        <div className="text-sm italic text-zinc-500">
+          {/* matcha: notesId bisa markdown dari Ling — render biar **bold** tampil. */}
+          <Lightbulb className="mr-1 inline h-3.5 w-3.5" />
+          <MarkdownLite text={item.notesId} />
+        </div>
       ) : null}
       {item.source ? (
         <p className="text-xs text-zinc-400">Sumber: {item.source}</p>
@@ -199,6 +204,9 @@ export default function ItemDetail() {
           })}
         </p>
       ) : null}
+
+      <div className="grid items-start gap-4 lg:grid-cols-3">
+        <div className="space-y-4 lg:col-span-2">
 
       {/* Contoh */}
       <section className="space-y-2">
@@ -305,9 +313,11 @@ export default function ItemDetail() {
           ))}
         </section>
       ) : null}
+      </div>
 
-      {/* Cek kalimatku (F6) */}
-      <section className="space-y-2">
+      {/* Cek kalimatku (F6) — sidebar di desktop */}
+      <div className="space-y-4 lg:sticky lg:top-20">
+      <section className="card space-y-2 p-4">
         <h2 className="label">Cek kalimatku</h2>
         <fetcher.Form method="post" action="/api/check-sentence">
           <input type="hidden" name="itemId" value={item.id} />
@@ -359,6 +369,8 @@ export default function ItemDetail() {
       <button className="btn-danger w-full" type="button" onClick={() => setConfirming(true)}>
         Hapus item
       </button>
+      </div>
+      </div>
 
       <ConfirmModal
         open={confirming}

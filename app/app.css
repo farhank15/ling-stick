@@ -11,6 +11,59 @@
   --color-accent-strong: oklch(0.55 0.12 195);
 }
 
+/* ── Tema aksen (Settings → Tampilan) ─────────────────────────────
+ * Tailwind v4 menerbitkan palet sebagai var --color-teal-*. Override di sini
+ * mewarnai ulang SELURUH pemakaian teal app-wide (btn, badge, kanji, chart).
+ * Trik: lightness/chroma dipertahankan, cuma hue digeser → kontras & dark mode
+ * tetap aman tanpa nulis ulang tiap shade.
+ * Riset warna & belajar: biru = tenang + recall (buat kuis), hangat = atensi +
+ * motivasi (buat sesi belajar), hijau = santai. Default teal = tengahnya. */
+html[data-theme="ocean"] {
+  --color-teal-50: oklch(0.984 0.014 255);
+  --color-teal-100: oklch(0.953 0.051 255);
+  --color-teal-200: oklch(0.91 0.096 255);
+  --color-teal-300: oklch(0.845 0.143 252);
+  --color-teal-400: oklch(0.777 0.152 252);
+  --color-teal-500: oklch(0.704 0.14 253);
+  --color-teal-600: oklch(0.6 0.118 255);
+  --color-teal-700: oklch(0.511 0.096 258);
+  --color-teal-800: oklch(0.437 0.078 260);
+  --color-teal-900: oklch(0.386 0.063 262);
+  --color-teal-950: oklch(0.301 0.042 260);
+  --color-accent: oklch(0.7 0.12 255);
+  --color-accent-strong: oklch(0.55 0.12 255);
+}
+html[data-theme="sunset"] {
+  --color-teal-50: oklch(0.984 0.014 65);
+  --color-teal-100: oklch(0.953 0.051 65);
+  --color-teal-200: oklch(0.91 0.096 65);
+  --color-teal-300: oklch(0.845 0.143 65);
+  --color-teal-400: oklch(0.777 0.152 65);
+  --color-teal-500: oklch(0.704 0.14 65);
+  --color-teal-600: oklch(0.6 0.118 65);
+  --color-teal-700: oklch(0.511 0.096 65);
+  --color-teal-800: oklch(0.437 0.078 65);
+  --color-teal-900: oklch(0.386 0.063 65);
+  --color-teal-950: oklch(0.301 0.042 65);
+  --color-accent: oklch(0.7 0.12 65);
+  --color-accent-strong: oklch(0.55 0.12 65);
+}
+html[data-theme="forest"] {
+  --color-teal-50: oklch(0.984 0.014 150);
+  --color-teal-100: oklch(0.953 0.051 150);
+  --color-teal-200: oklch(0.91 0.096 150);
+  --color-teal-300: oklch(0.845 0.143 150);
+  --color-teal-400: oklch(0.777 0.152 150);
+  --color-teal-500: oklch(0.704 0.14 150);
+  --color-teal-600: oklch(0.6 0.118 150);
+  --color-teal-700: oklch(0.511 0.096 150);
+  --color-teal-800: oklch(0.437 0.078 150);
+  --color-teal-900: oklch(0.386 0.063 150);
+  --color-teal-950: oklch(0.301 0.042 150);
+  --color-accent: oklch(0.7 0.12 150);
+  --color-accent-strong: oklch(0.55 0.12 150);
+}
+
 html {
   -webkit-tap-highlight-color: transparent;
   scroll-behavior: smooth;

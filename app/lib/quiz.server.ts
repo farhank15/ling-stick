@@ -82,6 +82,8 @@ export type QuizQuestion = {
   exampleEn: string | null;
   reading?: string | null; // JA: kana (+romaji) — furigana di UI shadow
   tokens?: string[]; // JA Susun Kata: token per-kata dari segmentasi AI
+  /** JA: reading per opsi (sejajar options) — furigana opsi kuis. Set lama: undefined → tanpa ruby. */
+  optionReadings?: (string | null)[];
 };
 
 type ItemRow = {
@@ -380,6 +382,7 @@ async function buildQuestions(
         reading: item.reading,
       });
     } else if (type === "mcq_en_id") {
+      // Opsi = arti Indonesia (tak perlu ruby); prompt = teks JA → bawa reading.
       const opts2 = shuffle([item.meaningId!, ...distractors.map((d) => d.meaningId!)]);
       usedAns.add(`m:${item.meaningId}`);
       questions.push({
@@ -390,9 +393,11 @@ async function buildQuestions(
         answer: String(opts2.indexOf(item.meaningId!)),
         meaningId: item.meaningId,
         exampleEn: item.firstEn,
+        reading: item.reading,
       });
     } else if (type === "mcq_id_en") {
-      const opts2 = shuffle([item.text, ...distractors.map((d) => d.text)]);
+      const pairs = shuffle([{ t: item.text, r: item.reading }, ...distractors.map((d) => ({ t: d.text, r: d.reading }))]);
+      const opts2 = pairs.map((p) => p.t);
       usedAns.add(`t:${item.text.toLowerCase().trim()}`);
       questions.push({
         itemId: item.id,
@@ -402,6 +407,8 @@ async function buildQuestions(
         answer: String(opts2.indexOf(item.text)),
         meaningId: item.meaningId,
         exampleEn: item.firstEn,
+        reading: item.reading,
+        optionReadings: pairs.map((p) => p.r ?? null),
       });
     } else if (type === "cloze") {
       // Mode Pola (forceType cloze): rumpang FUNCTION WORD dari kalimat contoh
@@ -486,10 +493,12 @@ async function buildQuestions(
           answer: String(opts2.indexOf(item.meaningId!)),
           meaningId: item.meaningId,
           exampleEn: item.firstEn,
+          reading: item.reading,
         });
         continue;
       }
-      const opts2 = shuffle([item.text, ...distractors.map((d) => d.text)]);
+      const pairs = shuffle([{ t: item.text, r: item.reading }, ...distractors.map((d) => ({ t: d.text, r: d.reading }))]);
+      const opts2 = pairs.map((p) => p.t);
       usedText.add(sentence);
       questions.push({
         itemId: item.id,
@@ -499,9 +508,12 @@ async function buildQuestions(
         answer: String(opts2.indexOf(item.text)),
         meaningId: item.meaningId,
         exampleEn: sentence,
+        reading: item.reading,
+        optionReadings: pairs.map((p) => p.r ?? null),
       });
     } else {
-      const opts2 = shuffle([item.text, ...distractors.map((d) => d.text)]);
+      const pairs = shuffle([{ t: item.text, r: item.reading }, ...distractors.map((d) => ({ t: d.text, r: d.reading }))]);
+      const opts2 = pairs.map((p) => p.t);
       usedAns.add(`t:${item.text.toLowerCase().trim()}`);
       questions.push({
         itemId: item.id,
@@ -511,6 +523,8 @@ async function buildQuestions(
         answer: String(opts2.indexOf(item.text)),
         meaningId: item.meaningId,
         exampleEn: item.firstEn,
+        reading: item.reading,
+        optionReadings: pairs.map((p) => p.r ?? null),
       });
     }
     if (i > limit * 10) break; // pengaman
@@ -711,6 +725,7 @@ export async function answerQuestionById(
   setId: number,
   index: number, correct: boolean,
   typedText?: string,
+  pos?: number,
 ) {
   const [set] = await db.select().from(quizSets).where(eq(quizSets.id, setId)).limit(1);
   if (!set) return { ok: false as const, error: "Set tidak ada" };
@@ -745,7 +760,7 @@ export async function answerQuestionById(
     }
   }
 
-  return applyAnswer(set, questions, index, isCorrect);
+  return applyAnswer(set, questions, index, isCorrect, pos);
 }
 
 /** Kompatibilitas: jawab by day (mode daily). */
@@ -765,6 +780,7 @@ async function applyAnswer(
   questions: QuizQuestion[],
   index: number,
   correct: boolean,
+  pos?: number,
 ) {
   if (set.completed) return { ok: false as const, error: "Set sudah selesai" };
   const order = JSON.parse(set.order) as number[];
@@ -781,8 +797,12 @@ async function applyAnswer(
       .where(eq(quizSets.id, set.id));
 
     if (!correct) {
-      // Selipkan ulang soal yang salah ±5 posisi dari posisi sekarang.
-      const reinsertAt = Math.min(order.length, index + 1 + 4 + Math.floor(Math.random() * 3));
+      // Selipkan ulang soal yang salah ±5 posisi dari POSISI sekarang (bukan id soal).
+      // matcha: dulu pakai index (id soal) → di turn akhir (pos 18, index kecil)
+      // selipan jatuh SEBELUM pos → user ke-mental mundur.
+      const base = Number.isInteger(pos) ? pos! : order.indexOf(index);
+      const from = base >= 0 ? base : order.length - 1;
+      const reinsertAt = Math.min(order.length, from + 1 + 4 + Math.floor(Math.random() * 3));
       const nextOrder = [...order];
       nextOrder.splice(reinsertAt, 0, index);
       await tx.update(quizSets)
@@ -939,10 +959,38 @@ export async function getFlashQueue(limit = 30, exclude: number[] = []) {
   const queue = [...dueRows, ...newRows];
   // Exclude menghabiskan semua (mis. kartu sedikit) → fallback antrean penuh.
   if (queue.length === 0 && exclude.length > 0) return getFlashQueue(limit, []);
+  // Active recall: campur kartu due/baru (acak, bukan urut due) + selipkan
+  // kartu yang sudah hafal (±20%, maks 6) biar retrieval tidak cuma yang susah.
+  // matcha: antrean deterministik + cuma status learning = bosan & forgetting curve diam-diam.
+  if (exclude.length === 0) {
+    const recallN = Math.min(6, Math.max(2, Math.round(limit * 0.2)));
+    const recallRows = await db
+      .select({
+        itemId: items.id,
+        text: items.text,
+        reading: items.reading,
+        meaningId: items.meaningId,
+        notesId: items.notesId,
+        firstEn,
+        firstId,
+        firstKana,
+        due: cards.due,
+        reps: cards.reps,
+        ...fsrsCols,
+      })
+      .from(cards)
+      .innerJoin(items, eq(items.id, cards.itemId))
+      .where(and(eq(items.status, "known"), eq(items.lang, lang)))
+      .orderBy(sql`RANDOM()`)
+      .limit(recallN);
+    const seen = new Set(queue.map((c) => c.itemId));
+    for (const r of recallRows) if (!seen.has(r.itemId)) queue.push(r);
+  }
+  const shuffled = [...queue].sort(() => Math.random() - 0.5);
   // Pratinjau interval ala Anki per kartu ("Lupa 1mnt · Tahu 3hari").
   const { previewGrades } = await import("~/lib/fsrs.server");
   const now = Date.now();
-  return queue.map((c) => {
+  return shuffled.map((c) => {
     const fmt = (ms: number): string => {
       const m = Math.max(1, Math.round(ms / 60000));
       if (m < 60) return `${m}mnt`;

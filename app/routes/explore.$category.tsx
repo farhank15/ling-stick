@@ -314,7 +314,7 @@ export default function ExploreCategory() {
       ) : null}
 
       {empty && !generating && genError ? (
-        <div className="card space-y-3">
+        <div className="card mx-auto w-full max-w-xl space-y-3">
           <p className="text-sm text-red-600 dark:text-red-400">Gagal generate: {genError}</p>
           <button className="btn-primary w-full" onClick={() => startGenerate(0)}>
             Coba lagi
@@ -323,12 +323,14 @@ export default function ExploreCategory() {
       ) : null}
 
       {empty && !generating && !genError && rows.length === 0 ? (
-        <button className="btn-primary w-full" onClick={() => startGenerate(0)}>
+        <button className="btn-primary mx-auto w-full max-w-xl" onClick={() => startGenerate(0)}>
           <Sparkles className="h-4 w-4" /> Generate sekarang
         </button>
       ) : null}
 
-      <div className="space-y-2">
+      {/* Desktop: 2 kolom biar daftar panjang kepakai lebarnya, bukan satu lajur melar.
+          matcha: kartu full-width di 5xl = baris teks kepanjangan + tombol geser jauh. */}
+      <div className="grid gap-2 lg:grid-cols-2">
         {visible.map((r) => (
           <div key={r.id} className="card">
             <div className="flex items-start justify-between gap-2">
@@ -421,7 +423,7 @@ export default function ExploreCategory() {
 
       {rows.length > 0 ? (
         <button
-          className="btn-secondary w-full"
+          className="btn-secondary mx-auto w-full max-w-xl"
           onClick={() => {
             const next = variant + 1;
             setVariant(next);

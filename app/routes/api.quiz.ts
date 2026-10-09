@@ -107,6 +107,7 @@ export async function action({ request }: ActionFunctionArgs) {
   const body = (await request.json().catch(() => ({}))) as {
     setId?: number;
     index?: number;
+    pos?: number;
     correct?: boolean;
     action?: string;
     itemId?: number;
@@ -140,7 +141,7 @@ export async function action({ request }: ActionFunctionArgs) {
   }
 
   if (Number.isInteger(body.setId)) {
-    const result = await answerQuestionById(body.setId!, body.index!, body.correct, body.typed);
+    const result = await answerQuestionById(body.setId!, body.index!, body.correct, body.typed, body.pos);
     if (!result.ok) return Response.json({ error: result.error }, { status: 400 });
     return Response.json({
       ok: true,

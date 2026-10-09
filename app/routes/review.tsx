@@ -30,6 +30,7 @@ import { requireUser } from "~/lib/auth.server";
 import { env } from "~/lib/env.server";
 import { getTargetLang } from "~/lib/lang.server";
 import { JaText, hasJa } from "~/components/JaText";
+import { MarkdownLite } from "~/components/MarkdownLite";
 import { SpeakButton } from "~/components/SpeakButton";
 import { useToast } from "~/components/Toast";
 
@@ -75,6 +76,7 @@ type QuizQuestion = {
   exampleEn: string | null;
   reading?: string | null; // JA: kana (+romaji) — furigana di UI shadow
   tokens?: string[]; // JA Susun Kata: token per-kata dari segmentasi AI
+  optionReadings?: (string | null)[]; // JA: reading per opsi
 };
 
 type SetInfo = {
@@ -252,8 +254,9 @@ function ModePicker({
 
       {/* Tes periodik — TOEFL mingguan & Uji Bulanan (JA: gaya JLPT) */}
       {periodic ? (
-        <div className="space-y-2">
+        <section className="space-y-2">
           <p className="label px-1">Tes periodik</p>
+          <div className="grid gap-2 md:grid-cols-2">
           <PeriodicCard
             kind="toefl"
             title={ja ? "Tes JLPT Mingguan" : "TOEFL Test Mingguan"}
@@ -292,11 +295,13 @@ function ModePicker({
               </p>
             </div>
           )}
-        </div>
+          </div>
+        </section>
       ) : null}
 
-      <p className="label px-1">Latihan harian — rutinitas inti tiap hari</p>
-      <div className="space-y-2">
+      <section className="space-y-2">
+        <p className="label px-1">Latihan harian — rutinitas inti tiap hari</p>
+        <div className="grid gap-2 md:grid-cols-2">
         {MODES.filter((m) => m.group === "harian").map((m) => {
           const label = ja ? (JA_MODE_TEXT[m.id]?.label ?? m.label) : m.label;
           const desc = ja ? (JA_MODE_TEXT[m.id]?.desc ?? m.desc) : m.desc;
@@ -307,7 +312,7 @@ function ModePicker({
             </span>
             <div className="min-w-0 flex-1">
               <p className="font-semibold">{label}</p>
-              <p className="truncate text-xs text-zinc-500">{desc}</p>
+              <p className="line-clamp-2 text-xs text-zinc-500">{desc}</p>
             </div>
             {m.action === "start" ? (
               <button className="btn-primary shrink-0 text-sm" onClick={() => onStart(m.id)}>
@@ -335,10 +340,14 @@ function ModePicker({
           </div>
           );
         })}
-      </div>
+        </div>
+      </section>
 
-      <p className="label px-1">Mingguan — set berat seminggu sekali</p>
-      <div className="space-y-2">
+      {/* Mingguan cuma 1 kartu — full-width featured, bukan setengah grid yang mlompong.
+          matcha: 1 item di grid 2 kolom = separuh kosong. */}
+      <section className="space-y-2">
+        <p className="label px-1">Mingguan — set berat seminggu sekali</p>
+        <div className="grid gap-2">
         {MODES.filter((m) => m.group === "mingguan").map((m) => {
           const label = ja ? (JA_MODE_TEXT[m.id]?.label ?? m.label) : m.label;
           const desc = ja ? (JA_MODE_TEXT[m.id]?.desc ?? m.desc) : m.desc;
@@ -349,7 +358,7 @@ function ModePicker({
             </span>
             <div className="min-w-0 flex-1">
               <p className="font-semibold">{label}</p>
-              <p className="truncate text-xs text-zinc-500">{desc}</p>
+              <p className="line-clamp-2 text-xs text-zinc-500">{desc}</p>
             </div>
             {m.action === "start" ? (
               <button className="btn-primary shrink-0 text-sm" onClick={() => onStart(m.id)}>
@@ -377,10 +386,15 @@ function ModePicker({
           </div>
           );
         })}
-      </div>
-      <p className="px-1 text-center text-xs text-zinc-400">
-      <p className="label px-1">Latihan bebas — tanpa jadwal, kapan pun</p>
-      <div className="space-y-2">
+        </div>
+      </section>
+
+      {/* Bebas: 8 kartu — 2 kolom di tablet, 3 di laptop biar padat rapi.
+          matcha: struktur <p> bersarang + catatan Generate dihapus — invalid HTML
+          bikin label "LATIHAN BEBAS" mepet konten. */}
+      <section className="space-y-2">
+        <p className="label px-1">Latihan bebas — tanpa jadwal, kapan pun</p>
+        <div className="grid gap-2 md:grid-cols-2 lg:grid-cols-3">
         {MODES.filter((m) => m.group === "bebas").map((m) => {
           const label = ja ? (JA_MODE_TEXT[m.id]?.label ?? m.label) : m.label;
           const desc = ja ? (JA_MODE_TEXT[m.id]?.desc ?? m.desc) : m.desc;
@@ -391,7 +405,7 @@ function ModePicker({
             </span>
             <div className="min-w-0 flex-1">
               <p className="font-semibold">{label}</p>
-              <p className="truncate text-xs text-zinc-500">{desc}</p>
+              <p className="line-clamp-2 text-xs text-zinc-500">{desc}</p>
             </div>
             {m.action === "start" ? (
               <button className="btn-primary shrink-0 text-sm" onClick={() => onStart(m.id)}>
@@ -419,9 +433,8 @@ function ModePicker({
           </div>
           );
         })}
-      </div>
-        Generate = bikin set soal tambahan baru di luar jadwal harian.
-      </p>
+        </div>
+      </section>
 
       {/* Latihan kanji multi-metode — khusus mode Jepang */}
       {ja ? (
@@ -434,7 +447,7 @@ function ModePicker({
           </span>
           <div className="min-w-0 flex-1">
             <p className="font-semibold">Latihan Kanji</p>
-            <p className="truncate text-xs text-zinc-500">
+            <p className="line-clamp-2 text-xs text-zinc-500">
               Kenalin, pilih bacaan &amp; arti per level N5–N1 — plus tabel hiragana/katakana
             </p>
           </div>
@@ -452,7 +465,7 @@ function ModePicker({
         </span>
         <div className="min-w-0 flex-1">
           <p className="font-semibold">Reading</p>
-          <p className="truncate text-xs text-zinc-500">
+          <p className="line-clamp-2 text-xs text-zinc-500">
             {ja
               ? "Baca berita & cerpen per level N5–N1 — kanji hijau + furigana, bisa diulang"
               : "Baca teks pendek per level CEFR A1–C2 dengan arti Indonesia"}
@@ -472,7 +485,7 @@ function ModePicker({
         </span>
         <div className="min-w-0 flex-1">
           <p className="font-semibold">Latihan Nulis</p>
-          <p className="truncate text-xs text-zinc-500">
+          <p className="line-clamp-2 text-xs text-zinc-500">
             Coret kanji &amp; kana di canvas — panduan samar bisa dimatikan
           </p>
         </div>
@@ -489,18 +502,21 @@ function OptionList({
   answer,
   picked,
   onPick,
+  readings,
 }: {
   options: string[];
   answer: string;
   picked: number | null;
   onPick: (i: number) => void;
+  /** JA: reading per opsi (sejajar options) — furigana tiap opsi. */
+  readings?: (string | null)[];
 }) {
   const [order, setOrder] = useState<number[]>([]);
   useEffect(() => {
     setOrder(options.map((_, i) => i).sort(() => Math.random() - 0.5));
   }, [options]);
   return (
-    <div className="space-y-2">
+    <div className="grid gap-2 md:grid-cols-2">
       {order.map((origIdx) => {
         const opt = options[origIdx];
         const isAnswer = String(origIdx) === answer;
@@ -518,6 +534,7 @@ function OptionList({
             {hasJa(opt) ? (
               <JaText
                 text={opt}
+                reading={readings?.[origIdx] ?? undefined}
                 kanjiClassName="text-teal-700 dark:text-teal-400"
                 romajiToggle={false}
               />
@@ -937,7 +954,7 @@ export default function ReviewPage() {
     void fetch("/api/quiz", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ setId: set.id, index: currentIndex, correct, typed: typedText }),
+      body: JSON.stringify({ setId: set.id, index: currentIndex, pos, correct, typed: typedText }),
     })
       .then((r) => safeJson<{ done?: number; correct?: number; order?: number[] }>(r))
       .then(applyProgress)
@@ -1046,13 +1063,20 @@ export default function ReviewPage() {
   };
 
   // Requeue sesi ala Anki: Lupa/Susah → kartu balik lagi ±5 posisi
-  // (maks 2x per kartu per putaran biar sesi tidak menggembung).
-  // matcha: tanpa ini kartu gagal cuma tercatat, tidak muncul-muncul lagi.
+  // (maks 2x per kartu per putaran biar sesi tidak menggembung), TAPI hanya
+  // kalau cooldown FSRS-nya sudah lewat (due <= now+90s). Kalau masih cooldown,
+  // kartu ditahan — sesi lanjut ke kartu lain dulu, tidak dipaksa muncul.
+  // matcha: requeue buta = kartu "Susah" muncul padahal FSRS bilang 10 mnt lagi.
   const requeues = useRef(new Map<number, number>());
-  const requeueCard = (rating: 1 | 2 | 3 | 4) => {
+  const cooldowns = useRef(new Map<number, number>());
+  const requeueCard = (rating: 1 | 2 | 3 | 4, due?: number) => {
     if (rating !== 1 && rating !== 2) return;
     const c = cards[cardIdx];
     if (!c) return;
+    if (due && due > Date.now() + 90_000) {
+      cooldowns.current.set(c.itemId, due);
+      return;
+    }
     const n = requeues.current.get(c.itemId) ?? 0;
     if (n >= 2) return;
     requeues.current.set(c.itemId, n + 1);
@@ -1064,18 +1088,77 @@ export default function ReviewPage() {
     });
   };
 
+  const fmtCooldown = (due: number) => {
+    const m = Math.max(1, Math.round((due - Date.now()) / 60000));
+    if (m < 60) return `${m} mnt lagi`;
+    const h = Math.round(m / 60);
+    if (h < 48) return `${h} jam lagi`;
+    return `${Math.round(h / 24)} hari lagi`;
+  };
+
+  const [askBusy, setAskBusy] = useState(false);
+  const [askReply, setAskReply] = useState<string | null>(null);
+
+  const askLing = async () => {
+    const c = cards[cardIdx];
+    if (!c || askBusy) return;
+    setAskBusy(true);
+    setAskReply(null);
+    try {
+      const r = await fetch("/api/chat", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          message: `Jelaskan kata "${c.text}" (${c.meaningId ?? "tanpa arti"}) singkat: arti, kapan dipakai, 1 contoh kalimat + artinya. Bahasa Indonesia.`,
+        }),
+      });
+      const d = await safeJson<{ ok?: boolean; reply?: string; error?: string }>(r);
+      if (!r.ok) throw new Error(d.error || "Ling gagal jawab");
+      setAskReply(d.reply ?? "");
+    } catch (e) {
+      toast(e instanceof Error ? e.message : "Ling gagal jawab");
+    } finally {
+      setAskBusy(false);
+    }
+  };
+
+  const saveAskToLibrary = async () => {
+    const c = cards[cardIdx];
+    if (!c || !askReply) return;
+    try {
+      const r = await fetch(`/api/items/${c.itemId}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ notesId: askReply.slice(0, 2000) }),
+      });
+      if (!r.ok) throw new Error("Gagal simpan");
+      setCards((list) =>
+        list.map((k, i) => (i === cardIdx ? { ...k, notesId: askReply.slice(0, 2000) } : k)),
+      );
+      toast("Penjelasan Ling tersimpan di Library");
+    } catch {
+      toast("Gagal simpan ke Library");
+    }
+  };
+
   const rateCard = async (rating: 1 | 2 | 3 | 4, msg?: string) => {
     const c = cards[cardIdx];
     if (!c) return;
-    requeueCard(rating);
     advanceCard();
     try {
-      await fetch("/api/flash", {
+      const r = await fetch("/api/flash", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ itemId: c.itemId, rating }),
       });
-      if (msg) toast(msg);
+      const d = await safeJson<{ ok?: boolean; due?: number }>(r);
+      // Cooldown jujur: requeue lokal hanya kalau due sudah lewat.
+      requeueCard(rating, d.due);
+      if (msg) {
+        toast(d.due && d.due > Date.now() + 90_000 ? `Dicatat — muncul lagi ${fmtCooldown(d.due)}` : msg);
+      } else if (d.due && d.due > Date.now() + 90_000 && (rating === 1 || rating === 2)) {
+        toast(`Muncul lagi ${fmtCooldown(d.due)} — lanjut kartu lain dulu`);
+      }
     } catch {
       /* tetap lanjut */
     }
@@ -1208,7 +1291,7 @@ export default function ReviewPage() {
             <p className="font-semibold">
               {streak.days > 0 ? `${streak.days} hari beruntun` : "Mulai streak hari ini"}
             </p>
-            <p className="truncate text-xs text-zinc-500">
+            <p className="line-clamp-2 text-xs text-zinc-500">
               {streak.todayDone
                 ? "Hari ini sudah latihan — besok lanjutkan"
                 : streak.days > 0
@@ -1272,12 +1355,15 @@ export default function ReviewPage() {
       );
     }
     const revealPct = Math.min(1, Math.max(0, drag / 90));
+    // Sesi fokus: sempit tengah di desktop (max-w-xl), tombol w-full tetap manusiawi.
+    // matcha: w-full di layar 5xl = tombol melar jelek.
     return (
-      <div className="space-y-4">
+      <div className="mx-auto w-full max-w-xl space-y-4">
+        {/* Flashcard = sesi santai tanpa target: tanpa progress bar & nomor kartu.
+            matcha: bar Kartu X/Y + putaran bikin kesan kejar setoran, padahal FSRS yang ngatur. */}
         <div className="flex items-center justify-between text-xs text-zinc-500">
           <span>
-            Kartu {cardIdx + 1} / {cards.length}
-            {flashRound > 1 ? ` · putaran ${flashRound}` : ""}
+            {flashDone > 0 ? `${flashDone} kartu dilatih · santai, tanpa target` : "Sesi santai · tanpa target"}
           </span>
           <span className="flex items-center gap-1">
             <button
@@ -1291,12 +1377,6 @@ export default function ReviewPage() {
               Selesai
             </button>
           </span>
-        </div>
-        <div className="h-1.5 overflow-hidden rounded-full bg-zinc-200 dark:bg-zinc-800">
-          <div
-            className="h-full bg-teal-600 transition-all dark:bg-teal-500"
-            style={{ width: `${(cardIdx / Math.max(1, cards.length)) * 100}%` }}
-          />
         </div>
 
         {/* Kartu interaktif di tengah */}
@@ -1381,7 +1461,10 @@ export default function ReviewPage() {
                   {c.notesId ? (
                     <div>
                       <p className="label">Penjelasan</p>
-                      <p className="text-sm text-zinc-600 dark:text-zinc-300">{c.notesId}</p>
+                      {/* matcha: notesId bisa berisi markdown dari Ling (**bold**) — render, jangan mentah. */}
+                      <div className="text-sm text-zinc-600 dark:text-zinc-300">
+                        <MarkdownLite text={c.notesId} />
+                      </div>
                     </div>
                   ) : null}
                   {c.firstEn ? (
@@ -1461,6 +1544,36 @@ export default function ReviewPage() {
             ) : null}
           </button>
         </div>
+
+        {/* Tanya Ling — penjelasan AI langsung di kartu + simpan ke Library (notesId). */}
+        <div className="card space-y-2 p-3">
+          <button
+            className="btn-secondary w-full justify-center gap-1.5 text-sm"
+            disabled={askBusy}
+            onClick={() => void askLing()}
+          >
+            {askBusy ? (
+              <>
+                <Loader2 className="h-4 w-4 animate-spin" /> Ling mikir…
+              </>
+            ) : (
+              <>
+                <Sparkles className="h-4 w-4" /> Tanya Ling soal kartu ini
+              </>
+            )}
+          </button>
+          {askReply ? (
+            <div className="space-y-2">
+              {/* matcha: reply Ling itu markdown (**bold**, list) — render via MarkdownLite. */}
+              <div className="text-zinc-700 dark:text-zinc-200">
+                <MarkdownLite text={askReply} />
+              </div>
+              <button className="btn-primary w-full text-sm" onClick={() => void saveAskToLibrary()}>
+                Simpan penjelasan ke Library
+              </button>
+            </div>
+          ) : null}
+        </div>
       </div>
     );
   }
@@ -1485,7 +1598,7 @@ export default function ReviewPage() {
     const tileBase =
       "flex min-h-12 cursor-pointer select-none items-start justify-between gap-1.5 rounded-xl border px-3.5 py-2.5 text-left transition-colors";
     return (
-      <div className="space-y-4">
+      <div className="mx-auto w-full max-w-xl space-y-4">
         <div className="flex items-center justify-between text-xs text-zinc-500">
           <span>
             Ronde {matchRound + 1} / {matchRounds.length}
@@ -1517,7 +1630,7 @@ export default function ReviewPage() {
 
         {/* Layout atas-bawah: kata di atas, arti di bawah — tile lebih lapang daripada
             2 kolom menyamping yang sempit (arti Indonesia sering kepotong). */}
-        <div className="space-y-2">
+        <div className="grid gap-2 md:grid-cols-2">
           <div className="grid grid-cols-2 gap-2">
             {enOrder.map((pi) => {
               const pair = round[pi];
@@ -1540,7 +1653,7 @@ export default function ReviewPage() {
                   className={tileBase + cls}
                   onClick={() => !isMatched && setSelectedEn(isSel ? null : pi)}
                 >
-                  <span className="min-w-0 flex-1 break-words text-sm font-medium">{pair.word}</span>
+                  <span className="min-w-0 flex-1 wrap-break-words text-sm font-medium">{pair.word}</span>
                   <button
                     className="shrink-0 rounded-lg p-1 text-zinc-400 hover:text-teal-600 dark:hover:text-teal-300"
                     title="Dengarkan"
@@ -1575,7 +1688,7 @@ export default function ReviewPage() {
                   className={tileBase + cls}
                   onClick={() => pickMeaning(pi)}
                 >
-                  <span className="min-w-0 flex-1 break-words text-sm">{pair.meaning}</span>
+                  <span className="min-w-0 flex-1 wrap-break-words text-sm">{pair.meaning}</span>
                   {isMatched ? <CheckCircle2 className="h-4 w-4 shrink-0 text-teal-600" /> : null}
                 </div>
               );
@@ -1703,7 +1816,7 @@ export default function ReviewPage() {
   const scrambleWords = q.tokens && q.tokens.length >= 2 ? q.tokens : (q.answer ?? "").split(/\s+/).filter(Boolean);
 
   return (
-    <div className="space-y-4">
+    <div className="mx-auto w-full max-w-xl space-y-4">
       <div>
         <div className="mb-1 flex items-center justify-between text-xs text-zinc-500">
           <span className="font-medium text-zinc-700 dark:text-zinc-300">{set.title}</span>
@@ -1990,6 +2103,7 @@ export default function ReviewPage() {
             <p className="mt-3 text-center text-2xl font-bold">
               <JaText
                 text={q.prompt}
+                reading={q.reading ?? undefined}
                 kanjiClassName="text-teal-700 dark:text-teal-400"
                 romajiToggle={false}
               />
@@ -2021,7 +2135,7 @@ export default function ReviewPage() {
       </div>
 
       {!isTypingUI && !isScrambleUI ? (
-        <OptionList options={q.options} answer={q.answer} picked={picked} onPick={pick} />
+        <OptionList options={q.options} answer={q.answer} picked={picked} onPick={pick} readings={q.optionReadings} />
       ) : null}
 
       {picked !== null && !isTypingUI && !isScrambleUI ? (

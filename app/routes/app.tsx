@@ -104,7 +104,7 @@ export default function AppLayout() {
     to === "/" ? location.pathname === "/" : location.pathname.startsWith(to);
 
   return (
-    <div className="mx-auto flex min-h-dvh max-w-md flex-col">
+    <div className="mx-auto flex min-h-dvh w-full max-w-md flex-col md:max-w-3xl lg:max-w-5xl">
       {/* z-40: header + dropdown notif harus di atas SEMUA sticky konten (toolbar library z-20, chips explore z-10, dst) */}
       <header className="sticky top-0 z-40 flex items-center justify-between bg-zinc-50/80 px-4 py-3 backdrop-blur-md dark:bg-zinc-950/80">
         <Link to="/" className="flex items-center gap-2 font-bold tracking-tight">
@@ -259,7 +259,7 @@ export default function AppLayout() {
         ) : null}
       </div>
 
-      <main className={`flex-1 px-4 pb-36 pt-4 ${nav.state !== "idle" ? "opacity-60 transition-opacity" : ""}`}>
+      <main className={`mx-auto w-full max-w-md flex-1 px-4 pb-36 pt-4 md:max-w-3xl lg:max-w-5xl ${nav.state !== "idle" ? "opacity-60 transition-opacity" : ""}`}>
         {/* Halaman dgn header sendiri (mis. detail explore) pasang h1-nya sendiri */}
         {handle.title && !handle.ownHeader ? (
           <h1 className="mb-4 text-xl font-bold tracking-tight">{handle.title}</h1>
@@ -269,7 +269,9 @@ export default function AppLayout() {
 
       {/* Floating bottom nav — bar melayang rounded + pill di item aktif */}
       <nav className="fixed inset-x-0 bottom-0 z-30 px-4 pb-[calc(env(safe-area-inset-bottom)+12px)]">
-        <div className="mx-auto grid max-w-md grid-cols-6 gap-1 rounded-2xl border border-zinc-200/80 bg-white/90 p-1.5 shadow-lg shadow-zinc-900/5 backdrop-blur-md dark:border-zinc-800 dark:bg-zinc-900/90 dark:shadow-black/20">
+        {/* Floating bottom nav — tetap di bawah (HP & laptop), melebar di layar besar.
+            matcha: bukan sidebar monoton — dock melayang yang responsif. */}
+        <div className="mx-auto grid w-full max-w-md grid-cols-6 gap-1 rounded-2xl border border-zinc-200/80 bg-white/90 p-1.5 shadow-lg shadow-zinc-900/5 backdrop-blur-md md:max-w-xl dark:border-zinc-800 dark:bg-zinc-900/90 dark:shadow-black/20">
           {NAV.map((n) => {
             const active = isActive(n.to);
             return (

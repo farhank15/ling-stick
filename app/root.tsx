@@ -29,6 +29,12 @@ export function Layout({ children }: { children: React.ReactNode }) {
       <head>
         <meta charSet="utf-8" />
         <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+        {/* Tema aksen sebelum paint — baca localStorage biar ga kedip teal dulu. */}
+        <script
+          dangerouslySetInnerHTML={{
+            __html: `try{var t=localStorage.getItem("lingstick-theme");if(t&&t!=="teal")document.documentElement.dataset.theme=t;}catch(e){}`,
+          }}
+        />
         <Meta />
         <Links />
       </head>

@@ -251,7 +251,7 @@ function GenKanjiButton({ level }: { level: string }) {
     }
   };
   return (
-    <div className="flex flex-col items-center gap-1.5">
+    <div className="mx-auto flex w-full max-w-xl flex-col items-center gap-1.5">
       <button
         onClick={generate}
         disabled={busy}
@@ -449,8 +449,9 @@ function KanjiPractice({
   }
 
   const isReading = method === "reading";
+  // Sesi latihan: sempit tengah di desktop.
   return (
-    <div className="space-y-4">
+    <div className="mx-auto w-full max-w-xl space-y-4">
       <div className="flex items-center justify-between text-xs text-zinc-500">
         <span>
           Soal {qi + 1} / {mcqs.length} · benar {score}
@@ -625,8 +626,9 @@ export default function AksaraPage() {
     }).catch(() => {});
   };
 
+  // Tabel kana: batas 2xl biar sel ga jadi raksasa di desktop.
   return (
-    <div className="space-y-4">
+    <div className="mx-auto w-full max-w-2xl space-y-4">
       {/* Tab aksara */}
       <div className="grid grid-cols-3 gap-1.5">
         {SCRIPTS.map((s) => (

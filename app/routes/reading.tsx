@@ -211,14 +211,14 @@ function ReadingList({
       {nextUp ? (
         <Link
           to={`/reading?open=${nextUp.id}`}
-          className="btn-primary w-full justify-center gap-1.5"
+          className="btn-primary mx-auto w-full max-w-xl justify-center gap-1.5"
         >
           <BookOpenCheck className="h-4 w-4" /> Lanjut baca: {nextUp.title} ({nextUp.level})
         </Link>
       ) : null}
 
       {/* Generate bacaan baru — debounce: disabled sampai selesai */}
-      <button className="btn-primary w-full" onClick={() => void generate()} disabled={busy || generating}>
+      <button className="btn-primary mx-auto w-full max-w-xl" onClick={() => void generate()} disabled={busy || generating}>
         {busy || generating ? (
           <>
             <Loader2 className="h-4 w-4 animate-spin" /> Menulis bacaan… (±30 detik)
@@ -237,7 +237,8 @@ function ReadingList({
           <p className="mt-1 text-sm text-zinc-500">Tap tombol di atas — bacaan dibikin ±30 detik.</p>
         </div>
       ) : (
-        <div className="space-y-2">
+        // Daftar bacaan: 2 kolom di desktop.
+        <div className="grid gap-2 lg:grid-cols-2">
           {list.map((r) => (
             <div
               key={r.id}
@@ -277,7 +278,7 @@ function ReadingList({
       )}
 
       {list.length > 0 && !busy && !generating ? (
-        <button className="btn-secondary w-full gap-1" onClick={() => void generate()}>
+        <button className="btn-secondary mx-auto w-full max-w-xl gap-1" onClick={() => void generate()}>
           <Plus className="h-4 w-4" /> Tambah bacaan {level ?? levels[0]}
         </button>
       ) : null}
@@ -332,8 +333,9 @@ function ReadingReader({
     }).catch(() => {});
   }, [reading.id]);
 
+  // Layar baca: lebar artikel di desktop (2xl), tombol tetap wajar.
   return (
-    <div className="space-y-4">
+    <div className="mx-auto w-full max-w-2xl space-y-4">
       <div className="flex items-center justify-between">
         <Link to="/reading" className="btn-ghost gap-1 text-sm">
           <ArrowLeft className="h-4 w-4" /> Daftar

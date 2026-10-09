@@ -232,45 +232,71 @@ export async function generateBankWords(opts: GenOptions): Promise<{ added: numb
 }
 
 async function existingWordsForPrompt(level: Cefr, lang: "en" | "ja"): Promise<string> {
-  const rows = await db
-    .select({ text: wordbank.text })
-    .from(wordbank)
-    .where(and(eq(wordbank.cefr, level), eq(wordbank.lang, lang)))
-    .limit(300);
-  return rows.length ? rows.map((r) => r.text.toLowerCase()).join(", ") : "(none)";
+  // Hindari kata yang sudah di bank (level ini) DAN yang sudah di library —
+  // tanpa ini LLM generate kata yang user udah simpan (duplikat UX).
+  // matcha: prompt cuma avoid bank → kata library muncul lagi sebagai "baru".
+  // 2 SELECT ringan ber-limit, bukan full scan.
+  const [bankRows, libRows] = await Promise.all([
+    db
+      .select({ text: wordbank.text })
+      .from(wordbank)
+      .where(and(eq(wordbank.cefr, level), eq(wordbank.lang, lang)))
+      .limit(200),
+    db
+      .select({ text: items.text })
+      .from(items)
+      .where(eq(items.lang, lang))
+      .orderBy(sql`RANDOM()`)
+      .limit(200),
+  ]);
+  const seen = new Set<string>();
+  for (const r of [...bankRows, ...libRows]) {
+    const t = r.text.toLowerCase().trim();
+    if (t) seen.add(t);
+    if (seen.size >= 400) break;
+  }
+  return seen.size ? [...seen].join(", ") : "(none)";
 }
 
-/** Simpan hasil generate: skip duplikat (text_norm unik). */
+/** Simpan hasil generate: skip duplikat bank DAN library (batch-check, 2 query).
+ *  LLM kadang tetap generate kata yang dihindari di prompt — guard DB ini
+ *  yang menjamin bank cuma berisi kata fresh. */
 async function insertGenerated(
   level: Cefr,
   words: { text: string; type?: string; register?: string; meaning_id: string; use_when_id?: string; examples?: BankExample[] }[],
   source: string,
 ): Promise<{ added: number; skipped: number }> {
+  const lang = await getTargetLang();
+  const cands = words
+    .map((w) => ({ text: w.text.trim(), w }))
+    .filter((c) => c.text && c.w.meaning_id)
+    .map((c) => ({ ...c, norm: normalizeText(c.text) }));
+  const norms = [...new Set(cands.map((c) => c.norm))];
+  const taken = new Set<string>();
+  if (norms.length) {
+    const [inBank, inLib] = await Promise.all([
+      db.select({ t: wordbank.textNorm }).from(wordbank).where(and(inArray(wordbank.textNorm, norms), eq(wordbank.lang, lang))),
+      db.select({ t: items.textNorm }).from(items).where(and(inArray(items.textNorm, norms), eq(items.lang, lang))),
+    ]);
+    for (const r of [...inBank, ...inLib]) if (r.t) taken.add(r.t);
+  }
   let added = 0;
   let skipped = 0;
-  for (const w of words) {
-    const text = w.text.trim();
-    if (!text || !w.meaning_id) continue;
-    const norm = normalizeText(text);
-    const lang = await getTargetLang();
-    const [dup] = await db
-      .select({ id: wordbank.id })
-      .from(wordbank)
-      .where(and(eq(wordbank.textNorm, norm), eq(wordbank.lang, lang)))
-      .limit(1);
-    if (dup) {
+  for (const c of cands) {
+    if (taken.has(c.norm)) {
       skipped++;
       continue;
     }
+    taken.add(c.norm);
     await db.insert(wordbank).values({
-      text,
-      textNorm: norm,
-      type: w.type || "word",
-      register: w.register || "neutral",
+      text: c.text,
+      textNorm: c.norm,
+      type: c.w.type || "word",
+      register: c.w.register || "neutral",
       cefr: level,
-      meaningId: w.meaning_id,
-      useWhenId: w.use_when_id || null,
-      examplesJson: JSON.stringify((w.examples ?? []).slice(0, 4)),
+      meaningId: c.w.meaning_id,
+      useWhenId: c.w.use_when_id || null,
+      examplesJson: JSON.stringify((c.w.examples ?? []).slice(0, 4)),
       status: "new",
       source,
       lang,
@@ -281,27 +307,34 @@ async function insertGenerated(
   return { added, skipped };
 }
 
-/** Simpan hasil generate JA: reading/romaji dilipat ke meaning & examples. Skip duplikat per lang. */
+/** Simpan hasil generate JA: reading/romaji dilipat ke meaning & examples. Skip duplikat bank + library (batch). */
 async function insertGeneratedJa(
   level: Cefr,
   words: { text: string; reading?: string; romaji?: string; type?: string; register?: string; meaning_id: string; use_when_id?: string; examples?: { en: string; id: string; romaji?: string; kana?: string }[] }[],
   source: string,
 ): Promise<{ added: number; skipped: number }> {
+  const cands = words
+    .map((w) => ({ text: w.text.trim(), w }))
+    .filter((c) => c.text && c.w.meaning_id)
+    .map((c) => ({ ...c, norm: normalizeText(c.text) }));
+  const norms = [...new Set(cands.map((c) => c.norm))];
+  const taken = new Set<string>();
+  if (norms.length) {
+    const [inBank, inLib] = await Promise.all([
+      db.select({ t: wordbank.textNorm }).from(wordbank).where(and(inArray(wordbank.textNorm, norms), eq(wordbank.lang, "ja"))),
+      db.select({ t: items.textNorm }).from(items).where(and(inArray(items.textNorm, norms), eq(items.lang, "ja"))),
+    ]);
+    for (const r of [...inBank, ...inLib]) if (r.t) taken.add(r.t);
+  }
   let added = 0;
   let skipped = 0;
-  for (const w of words) {
-    const text = w.text.trim();
-    if (!text || !w.meaning_id) continue;
-    const norm = normalizeText(text);
-    const [dup] = await db
-      .select({ id: wordbank.id })
-      .from(wordbank)
-      .where(and(eq(wordbank.textNorm, norm), eq(wordbank.lang, "ja")))
-      .limit(1);
-    if (dup) {
+  for (const c of cands) {
+    if (taken.has(c.norm)) {
       skipped++;
       continue;
     }
+    taken.add(c.norm);
+    const w = c.w;
     // meaningId DIJAGA MURNI Indonesia — reading/romaji tersimpan terpisah di kolom
     // `reading` ("かな (romaji)") biar UI bisa render furigana + toggle romaji.
     // Contoh JA: en = kalimat Jepang murni, kana = bacaan penuh (sumber furigana per
@@ -312,8 +345,8 @@ async function insertGeneratedJa(
       kana: e.kana || null,
     }));
     await db.insert(wordbank).values({
-      text,
-      textNorm: norm,
+      text: c.text,
+      textNorm: c.norm,
       type: w.type || "word",
       register: w.register || "neutral",
       cefr: level,

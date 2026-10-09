@@ -324,7 +324,8 @@ export default function Library() {
             : "Belum ada item. Mulai dari tab Tambah!"}
         </p>
       ) : (
-        <ul className="space-y-2">
+        // Desktop: 2 kolom (satu lajur di 5xl = baris melar).
+        <ul className="grid gap-2 lg:grid-cols-2">
           {rows.map((r) => (
             <li key={r.id} className="relative">
               {/* Checkbox lingkaran — TANPA z-index, biar gak nembus di atas toolbar

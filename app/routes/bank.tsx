@@ -266,7 +266,8 @@ export default function BankPage() {
       </div>
 
       {genOpen ? (
-        <div className="card space-y-3 p-4">
+        // Form generate: sempit tengah di desktop — input w-full melar jelek.
+        <div className="card mx-auto w-full max-w-xl space-y-3 p-4">
           <div className="flex items-center gap-2">
             <Sparkles className="h-4 w-4 text-teal-600 dark:text-teal-400" />
             <p className="text-sm font-semibold">Generate kata baru (AI)</p>
@@ -381,7 +382,9 @@ export default function BankPage() {
         </div>
       ) : (
         <>
-          <ul className="space-y-2">
+          {/* Desktop: 2 kolom biar daftar kepakai lebarnya.
+              matcha: satu lajur kartu panjang di 5xl = baris teks kepanjangan. */}
+          <ul className="grid gap-2 lg:grid-cols-2">
             {visible.map((e) => {
               const isOpen = expanded === e.id;
               const isDrag = dragId === e.id;

@@ -140,7 +140,9 @@ export default function WritePage() {
     chars.length <= 2 ? "text-[8rem]" : chars.length <= 4 ? "text-[4rem]" : "text-[2.5rem]";
 
   return (
-    <div className="space-y-4">
+    <>
+      {/* Sesi canvas: sempit tengah di desktop. */}
+      <div className="mx-auto w-full max-w-xl space-y-4">
       {level ? (
         <p className="text-xs text-zinc-400">
           Target dari Bank Kata level <span className="font-semibold">{level}</span>
@@ -234,6 +236,7 @@ export default function WritePage() {
           Lanjut <ArrowRight className="h-4 w-4" strokeWidth={1.75} />
         </button>
       </div>
-    </div>
+      </div>
+    </>
   );
 }

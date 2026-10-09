@@ -63,8 +63,9 @@ export default function Extract() {
     toast(`${selected.size} ekspresi tersimpan ke Library`);
   };
 
+  // Form ekstrak: textarea + tombol sempit tengah di desktop.
   return (
-    <div className="space-y-4">
+    <div className="mx-auto w-full max-w-2xl space-y-4">
       <p className="text-sm text-zinc-500 dark:text-zinc-400">
         Tempel subtitle / chat / komen Reddit / artikel (maks {MAX} karakter). AI nandain
         idiom, slang, reaksi & phrasal verb yang menarik.
@@ -140,7 +141,7 @@ export default function Extract() {
               </li>
             ))}
           </ul>
-          <div className="fixed inset-x-0 bottom-14 z-10 mx-auto max-w-md border-t border-zinc-200 bg-white/95 px-4 py-3 backdrop-blur dark:border-zinc-800 dark:bg-zinc-950/95">
+          <div className="fixed inset-x-0 bottom-14 z-10 mx-auto w-full max-w-2xl border-t border-zinc-200 bg-white/95 px-4 py-3 backdrop-blur dark:border-zinc-800 dark:bg-zinc-950/95">
             <button className="btn-primary w-full" disabled={selected.size === 0} onClick={() => void saveSelected()}>
               Simpan {selected.size} ekspresi
             </button>

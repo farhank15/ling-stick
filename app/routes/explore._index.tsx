@@ -175,7 +175,7 @@ export default function ExploreIndex() {
             </p>
           </div>
         ) : (
-          <div className="space-y-2">
+          <div className="grid gap-2 lg:grid-cols-2">
             {visible.map((e: EotdRow) => (
               <div key={e.id} className="card">
                 <div className="flex items-start justify-between gap-2">
@@ -235,7 +235,7 @@ export default function ExploreIndex() {
       {/* Grid kategori */}
       <section>
         <h2 className="label mb-2">Kategori</h2>
-        <div className="grid grid-cols-2 gap-2">
+        <div className="grid grid-cols-2 gap-2 md:grid-cols-3 lg:grid-cols-4">
           {categories.map((c) => (
             <Link
               key={c.slug}

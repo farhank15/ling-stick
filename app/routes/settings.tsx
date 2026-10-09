@@ -123,8 +123,9 @@ export default function Settings() {
     }
   };
 
+  // Pengaturan: form sempit tengah di desktop. matcha: tombol w-full melar.
   return (
-    <div className="space-y-4">
+    <div className="mx-auto w-full max-w-2xl space-y-4">
       {/* Skeleton statistik — bloknya di paling atas, jadi harus ada feedback sejak awal */}
       {statsLoading ? (
         <div className="card animate-pulse space-y-3" aria-hidden>
@@ -140,6 +141,7 @@ export default function Settings() {
         <StatsSection stats={stats} />
       ) : null}
       <LangPicker current={data.targetLang} />
+      <ThemePicker />
 
       <section className="card space-y-1.5">
         <h2 className="label">LLM</h2>
@@ -182,6 +184,7 @@ export default function Settings() {
 
       <section className="card space-y-2">
         <h2 className="label">Backup & restore</h2>
+        <div className="grid gap-2 md:grid-cols-2">
         <a href="/api/export" className="btn-secondary w-full" download>
           <Download className="h-4 w-4" strokeWidth={1.75} /> Export semua data (JSON)
         </a>
@@ -192,6 +195,7 @@ export default function Settings() {
         >
           <FileUp className="h-4 w-4" strokeWidth={1.75} /> Import dari backup
         </button>
+        </div>
         <input
           ref={fileRef}
           type="file"
@@ -211,7 +215,7 @@ export default function Settings() {
       <section className="space-y-2">
         <Form method="post">
           <button
-            className="btn-danger w-full"
+            className="btn-danger mx-auto w-full max-w-xl"
             type="button"
             disabled={nav.state !== "idle"}
             onClick={() => {
@@ -286,6 +290,66 @@ function LangPicker({ current }: { current: TargetLang }) {
     </section>
   );
 }
+
+/** Tema aksen — pilih di sini, seluruh app ikut (localStorage, tanpa reload).
+ *  Riset warna & belajar: biru = tenang + recall (pas kuis), hangat = atensi +
+ *  motivasi (pas sesi belajar), hijau = santai. Default teal = tengahnya. */
+function ThemePicker() {
+  const toast = useToast();
+  const [theme, setTheme] = useState(() => {
+    if (typeof window === "undefined") return "teal";
+    return localStorage.getItem("lingstick-theme") ?? "teal";
+  });
+
+  const pick = (t: string) => {
+    setTheme(t);
+    try {
+      if (t === "teal") {
+        localStorage.removeItem("lingstick-theme");
+        document.documentElement.removeAttribute("data-theme");
+      } else {
+        localStorage.setItem("lingstick-theme", t);
+        document.documentElement.dataset.theme = t;
+      }
+      toast(`Tema: ${THEMES.find((x) => x.id === t)?.label ?? t}`);
+    } catch {
+      /* storage penuh/diblokir — tema sesi ini tetap kepasang */
+    }
+  };
+
+  return (
+    <section className="card space-y-2">
+      <h2 className="label">Tampilan — tema aksen</h2>
+      <div className="grid grid-cols-2 gap-2 md:grid-cols-4">
+        {THEMES.map((t) => (
+          <button
+            key={t.id}
+            type="button"
+            onClick={() => pick(t.id)}
+            className={`rounded-xl border-2 px-3 py-2.5 text-left transition ${
+              theme === t.id
+                ? "border-zinc-900 dark:border-zinc-100"
+                : "border-zinc-200 hover:border-zinc-300 dark:border-zinc-700 dark:hover:border-zinc-600"
+            }`}
+          >
+            <span className="flex items-center gap-2">
+              <span className="h-5 w-5 rounded-full border border-black/10" style={{ background: t.dot }} />
+              <span className="font-semibold">{t.label}</span>
+            </span>
+            <span className="mt-0.5 block text-[11px] leading-snug text-zinc-500">{t.desc}</span>
+          </button>
+        ))}
+      </div>
+    </section>
+  );
+}
+
+const THEMES = [
+  { id: "teal", label: "Teal", desc: "Default seimbang", dot: "#0d9488" },
+  { id: "ocean", label: "Ocean", desc: "Biru tenang — buat kuis", dot: "#2563eb" },
+  { id: "sunset", label: "Sunset", desc: "Hangat — buat sesi belajar", dot: "#d97706" },
+  { id: "forest", label: "Forest", desc: "Hijau santai", dot: "#16a34a" },
+];
 
 function StatsSection({ stats }: { stats: Stats }) {
   const maxItem = Math.max(1, ...stats.last7.map((d) => d.total));
