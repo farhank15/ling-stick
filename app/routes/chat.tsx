@@ -276,9 +276,9 @@ export default function Chat() {
     }
   };
 
-  // Kolom chat: sempit tengah di desktop biar bubble ga melar.
+  // Kolom chat: tengah di desktop — 3xl (bubble 88% tetap kebaca, ga selebar koran).
   return (
-    <div className="relative mx-auto flex w-full max-w-2xl flex-1 flex-col space-y-3">
+    <div className="relative mx-auto flex w-full max-w-3xl flex-1 flex-col space-y-3">
       {/* Header kecil: riwayat + obrolan baru — sticky di bawah app header */}
       <div className="sticky top-13 z-10 -mx-4 flex items-center justify-between gap-2 bg-zinc-50/95 px-4 py-1.5 backdrop-blur dark:bg-zinc-950/95">
         <div className="relative">

@@ -165,7 +165,7 @@ export default function Extract() {
                   />
                   <span className="min-w-0 flex-1">
                     <span className="flex flex-wrap items-center gap-1.5">
-                      <span className="font-semibold break-words">{e.text}</span>
+                      <span className="font-semibold wrap-break-words">{e.text}</span>
                       {exists[i] ? (
                         <span className="badge bg-teal-50 text-teal-700 dark:bg-teal-950 dark:text-teal-300">
                           di Library
@@ -182,7 +182,7 @@ export default function Extract() {
                     <span className="block text-sm text-zinc-600 dark:text-zinc-400">
                       {e.meaning_id}
                     </span>
-                    <span className="block text-xs break-words italic text-zinc-400">“{e.sentence_en}”</span>
+                    <span className="block text-xs wrap-break-words italic text-zinc-400">“{e.sentence_en}”</span>
                   </span>
                 </label>
               </li>

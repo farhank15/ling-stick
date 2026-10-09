@@ -505,7 +505,7 @@ export default function BankPage() {
                                         className="text-sm font-medium"
                                       />
                                     ) : (
-                                      <p className="whitespace-pre-line text-sm font-medium break-words">{ex.en}</p>
+                                      <p className="whitespace-pre-line text-sm font-medium wrap-break-words">{ex.en}</p>
                                     )}
                                   </div>
                                   <SpeakButton
