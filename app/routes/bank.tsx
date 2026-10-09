@@ -389,8 +389,10 @@ export default function BankPage() {
               const isOpen = expanded === e.id;
               const isDrag = dragId === e.id;
               const dx = isDrag ? drag : 0;
+              // li min-w-0: grid item default min-width:auto → kata panjang tanpa
+              // spasi (URL/compound) bikin kartu melar selebar konten (over-width HP).
               return (
-                <li key={e.id} className="relative">
+                <li key={e.id} className="relative min-w-0">
                   {/* Overlay swipe */}
                   <div
                     className="pointer-events-none absolute inset-0 z-10 flex items-center rounded-2xl border-2 border-teal-400 bg-teal-50/95 px-4 dark:bg-teal-950/90"
@@ -438,7 +440,7 @@ export default function BankPage() {
                         {hasJa(e.text) ? (
                           /* JA: kanji + furigana redup di atas. Tanpa icon toggle di sini
                              — baris list harus bersih; romaji di-toggle di detail. */
-                          <span className="block font-semibold">
+                          <span className="block font-semibold wrap-break-words">
                             <JaText text={e.text} reading={e.reading} romajiToggle={false} kanjiClassName="text-teal-700 dark:text-teal-400" className="font-semibold" />
                           </span>
                         ) : (
@@ -503,7 +505,7 @@ export default function BankPage() {
                                         className="text-sm font-medium"
                                       />
                                     ) : (
-                                      <p className="whitespace-pre-line text-sm font-medium">{ex.en}</p>
+                                      <p className="whitespace-pre-line text-sm font-medium break-words">{ex.en}</p>
                                     )}
                                   </div>
                                   <SpeakButton

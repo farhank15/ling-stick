@@ -20,6 +20,7 @@ export default function Extract() {
   const [text, setText] = useState("");
   const [selected, setSelected] = useState<Set<number>>(new Set());
   const [exprs, setFetched] = useState<Expr[]>([]);
+  const [exists, setExists] = useState<boolean[]>([]);
   const [busy, setBusyExtract] = useState(false);
   const [extractError, setExtractError] = useState<string | null>(null);
 
@@ -30,6 +31,18 @@ export default function Extract() {
       else n.add(i);
       return n;
     });
+
+  // Otomatis centang yang BARU aja — yang udah di Library tidak dicentang
+  // (tetap bisa dicentang manual kalau mau nambah contoh).
+  const selectNew = () => {
+    const n = new Set<number>();
+    exprs.forEach((_, i) => {
+      if (!exists[i]) n.add(i);
+    });
+    setSelected(n);
+  };
+
+  const newCount = exprs.filter((_, i) => !exists[i]).length;
 
   const saveOne = async (e: Expr) => {
     await fetch("/api/items", {
@@ -98,7 +111,16 @@ export default function Extract() {
               if (!res.ok) setExtractError(data.error ?? "Ekstraksi gagal");
               else {
                 setExtractError(null);
-                setFetched(data.expressions ?? []);
+                const list = (data.expressions ?? []) as Expr[];
+                const ex = (data.exists ?? []) as boolean[];
+                setFetched(list);
+                setExists(list.map((_, i) => Boolean(ex[i])));
+                // Langsung centang yang baru — user tinggal Simpan.
+                const n = new Set<number>();
+                list.forEach((_, i) => {
+                  if (!ex[i]) n.add(i);
+                });
+                setSelected(n);
               }
             } catch {
               setExtractError("Server nggak merespons");
@@ -117,25 +139,50 @@ export default function Extract() {
 
       {exprs.length > 0 ? (
         <>
+          <div className="flex items-center justify-between px-1">
+            <p className="text-xs text-zinc-500">
+              {newCount > 0 ? (
+                <><span className="font-semibold text-teal-700 dark:text-teal-300">{newCount} baru</span> · {exprs.length - newCount} udah di Library</>
+              ) : (
+                "Semuanya udah ada di Library — mantap!"
+              )}
+            </p>
+            {newCount > 0 && newCount !== selected.size ? (
+              <button className="text-xs font-medium text-teal-700 hover:underline dark:text-teal-300" onClick={selectNew}>
+                Pilih yang baru aja
+              </button>
+            ) : null}
+          </div>
           <ul className="space-y-2">
             {exprs.map((e, i) => (
-              <li key={`${e.text}-${i}`} className="card">
+              <li key={`${e.text}-${i}`} className={`card ${exists[i] ? "opacity-70" : ""}`}>
                 <label className="flex items-start gap-2.5">
                   <input
                     type="checkbox"
-                    className="mt-1 h-4 w-4 accent-teal-600"
+                    className="mt-1 h-4 w-4 shrink-0 accent-teal-600"
                     checked={selected.has(i)}
                     onChange={() => toggle(i)}
                   />
-                  <span className="min-w-0">
-                    <span className="font-semibold">{e.text}</span>
-                    <span className="badge ml-1.5 bg-zinc-100 text-zinc-500 dark:bg-zinc-800 dark:text-zinc-400">
-                      {e.register}
+                  <span className="min-w-0 flex-1">
+                    <span className="flex flex-wrap items-center gap-1.5">
+                      <span className="font-semibold break-words">{e.text}</span>
+                      {exists[i] ? (
+                        <span className="badge bg-teal-50 text-teal-700 dark:bg-teal-950 dark:text-teal-300">
+                          di Library
+                        </span>
+                      ) : (
+                        <span className="badge bg-amber-50 text-amber-700 dark:bg-amber-950 dark:text-amber-300">
+                          baru
+                        </span>
+                      )}
+                    </span>
+                    <span className="mt-0.5 block text-[11px] text-zinc-400">
+                      {e.type} · {e.register}
                     </span>
                     <span className="block text-sm text-zinc-600 dark:text-zinc-400">
                       {e.meaning_id}
                     </span>
-                    <span className="block text-xs italic text-zinc-400">“{e.sentence_en}”</span>
+                    <span className="block text-xs break-words italic text-zinc-400">“{e.sentence_en}”</span>
                   </span>
                 </label>
               </li>

@@ -333,9 +333,10 @@ function ReadingReader({
     }).catch(() => {});
   }, [reading.id]);
 
-  // Layar baca: lebar artikel di desktop (2xl), tombol tetap wajar.
+  // Layar baca: artikel lega di desktop (3xl) — paragraf max-w-prose biar
+  // panjang baris tetap enak dibaca, tombol tetap wajar.
   return (
-    <div className="mx-auto w-full max-w-2xl space-y-4">
+    <div className="mx-auto w-full max-w-3xl space-y-4">
       <div className="flex items-center justify-between">
         <Link to="/reading" className="btn-ghost gap-1 text-sm">
           <ArrowLeft className="h-4 w-4" /> Daftar
