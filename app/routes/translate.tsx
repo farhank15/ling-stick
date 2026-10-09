@@ -76,6 +76,7 @@ export default function Translate() {
     }
     const timer = setTimeout(async () => {
       setBusy(true);
+      translatedText.current = t;
       try {
         const res = await fetch("/api/translate", {
           method: "POST",
@@ -126,15 +127,21 @@ export default function Translate() {
   };
 
   // Cara baca + contoh dimuat OTOMATIS begitu hasil terjemahan muncul — tanpa klik.
+  // matcha: deps dulu [result, from, text] → tiap ketikan (result lama!) fetch baru
+  // pakai teks mentah → request saling bunuh (alive=false semua), spinner nyangkut
+  // + contoh/suara telat atau untuk teks yang salah. Sekarang: cuma jalan saat
+  // result settle, pakai teks yang BENERAN diterjemahkan (snapshot ref).
   const usageKey = useRef("");
+  const translatedText = useRef("");
+  const usageSeq = useRef(0);
   useEffect(() => {
-    if (!result) return;
-    const foreign = (from === "id" ? (result.translation ?? "") : text).trim();
+    if (!result || busy) return;
+    const foreign = (from === "id" ? (result.translation ?? "") : translatedText.current || text).trim();
     if (!foreign) return;
-    const key = `${from}:${foreign.slice(0, 300)}`;
+    const key = `${from}:${ja ? "ja" : "en"}:${foreign.slice(0, 300)}`;
     if (usageKey.current === key) return;
     usageKey.current = key;
-    let alive = true;
+    const mySeq = ++usageSeq.current;
     setUsageBusy(true);
     void (async () => {
       try {
@@ -147,17 +154,15 @@ export default function Translate() {
           }),
         });
         const data = await res.json();
-        if (alive && data.result) setUsage(data.result);
+        if (usageSeq.current === mySeq && data.result) setUsage(data.result);
       } catch {
         /* diam — cara baca bersifat opsional */
       } finally {
-        if (alive) setUsageBusy(false);
+        if (usageSeq.current === mySeq) setUsageBusy(false);
       }
     })();
-    return () => {
-      alive = false;
-    };
-  }, [result, from, text]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [result, from, busy, ja]);
 
   const speak = (s: string, lang?: string) => {
     if (typeof window === "undefined" || !window.speechSynthesis) return;
