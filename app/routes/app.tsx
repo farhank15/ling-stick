@@ -57,10 +57,16 @@ export default function AppLayout() {
   const [history, setHistory] = useState<{ day: string; title: string; total: number; done: number; correct: number; completed: number }[]>([]);
   const notifRef = useRef<HTMLDivElement | null>(null);
 
-  const loadNotifs = () => {
+  // Throttle: status bel cuma refresh kalau terakhir >60 dtk lalu. Pindah page
+  // itu EventBus-nya navigasi — fetch tiap pathname bikin server Turso remote
+  // kepukul + transisi kerasa delay. Dot telat 1 menit = tidak masalah.
+  // matcha: fetch /api/quiz?status=1 tiap pindah page.
+  const lastNotifAt = useRef(0);
+  const loadNotifs = (force = false) => {
     // Dot bel cuma butuh status (ringan). Riwayat (14 set + order JSON) hanya
     // diambil saat bel dibuka — dulu ikut tiap pindah page, buang 1 request.
-    // matcha: 2 fetch per pathname change → 1; history lazy di onToggleNotif.
+    if (!force && Date.now() - lastNotifAt.current < 60_000) return;
+    lastNotifAt.current = Date.now();
     fetch("/api/quiz?status=1")
       .then((r) => r.json())
       .then((d) => {
@@ -73,6 +79,7 @@ export default function AppLayout() {
   const onToggleNotif = () => {
     setNotifOpen((o) => {
       if (!o) {
+        loadNotifs(true);
         fetch("/api/quiz?history=1")
           .then((r) => r.json())
           .then((d) => setHistory(d.history ?? []))
@@ -84,6 +91,7 @@ export default function AppLayout() {
 
   useEffect(() => {
     loadNotifs();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [location.pathname]);
 
   // Panaskan TTS engine sekali — klik speaker pertama jadi langsung bunyi.
@@ -251,15 +259,15 @@ export default function AppLayout() {
           </Link>
         </div>
       </header>
-      {/* Bar loading global saat pindah page — umpan balik instan biar jeda
-          loader kerasa responsif, bukan macet. */}
+      {/* Bar loading global saat pindah page — tipis aja, tanpa redupin konten.
+          matcha: opacity-60 tiap navigasi bikin delay kerasa 2x (kedip + nunggu). */}
       <div className="h-0.5 w-full bg-transparent">
         {nav.state !== "idle" ? (
           <div className="h-0.5 origin-left animate-pulse bg-teal-500 transition-all" style={{ width: "70%" }} />
         ) : null}
       </div>
 
-      <main className={`mx-auto w-full max-w-md flex-1 px-4 pb-36 pt-4 md:max-w-3xl lg:max-w-5xl ${nav.state !== "idle" ? "opacity-60 transition-opacity" : ""}`}>
+      <main className="mx-auto w-full max-w-md flex-1 px-4 pb-36 pt-4 md:max-w-3xl lg:max-w-5xl">
         {/* Halaman dgn header sendiri (mis. detail explore) pasang h1-nya sendiri */}
         {handle.title && !handle.ownHeader ? (
           <h1 className="mb-4 text-xl font-bold tracking-tight">{handle.title}</h1>

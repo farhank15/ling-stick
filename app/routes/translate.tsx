@@ -76,7 +76,6 @@ export default function Translate() {
     }
     const timer = setTimeout(async () => {
       setBusy(true);
-      translatedText.current = t;
       try {
         const res = await fetch("/api/translate", {
           method: "POST",
@@ -126,19 +125,16 @@ export default function Translate() {
     setSaved(false);
   };
 
-  // Cara baca + contoh dimuat OTOMATIS begitu hasil terjemahan muncul — tanpa klik.
-  // matcha: deps dulu [result, from, text] → tiap ketikan (result lama!) fetch baru
-  // pakai teks mentah → request saling bunuh (alive=false semua), spinner nyangkut
-  // + contoh/suara telat atau untuk teks yang salah. Sekarang: cuma jalan saat
-  // result settle, pakai teks yang BENERAN diterjemahkan (snapshot ref).
+  // Cara baca + contoh: di-fetch LANGSUNG bareng hasil translate (paralel di
+  // dalam handler yang sama), bukan efek terpisah yang nunggu serial.
+  // matcha: dulu efek [result,busy] = translate selesai → baru mulai contoh
+  // (2 round-trip AI beruntun). Sekarang 1x nunggu untuk dua-duanya.
   const usageKey = useRef("");
-  const translatedText = useRef("");
   const usageSeq = useRef(0);
-  useEffect(() => {
-    if (!result || busy) return;
-    const foreign = (from === "id" ? (result.translation ?? "") : translatedText.current || text).trim();
+  const fetchUsage = (foreignText: string, dir: string) => {
+    const foreign = foreignText.trim();
     if (!foreign) return;
-    const key = `${from}:${ja ? "ja" : "en"}:${foreign.slice(0, 300)}`;
+    const key = `${dir}:${foreign.slice(0, 300)}`;
     if (usageKey.current === key) return;
     usageKey.current = key;
     const mySeq = ++usageSeq.current;
@@ -148,10 +144,7 @@ export default function Translate() {
         const res = await fetch("/api/usage-examples", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({
-            text: foreign.slice(0, 300),
-            direction: from === "ja" ? "ja2id" : from === "en" ? "en2id" : ja ? "id2ja" : "id2en",
-          }),
+          body: JSON.stringify({ text: foreign.slice(0, 300), direction: dir }),
         });
         const data = await res.json();
         if (usageSeq.current === mySeq && data.result) setUsage(data.result);
@@ -161,8 +154,56 @@ export default function Translate() {
         if (usageSeq.current === mySeq) setUsageBusy(false);
       }
     })();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [result, from, busy, ja]);
+  };
+
+  useEffect(() => {
+    const t = text.trim();
+    const mySeq = ++seq.current;
+    if (t.length < 2) {
+      setResult(null);
+      setUsage(null);
+      return;
+    }
+    const timer = setTimeout(async () => {
+      setBusy(true);
+      try {
+        const to = from === "ja" ? "id" : from === "en" ? "id" : ja ? "ja" : "en";
+        const dir = from === "ja" ? "ja2id" : from === "en" ? "en2id" : ja ? "id2ja" : "id2en";
+        // Contoh + cara baca butuh sisi asing: kalau from=id itu HASIL translate
+        // (belum ada → nunggu), kalau from=en/ja itu INPUT (udah ada → paralel).
+        if (from !== "id") fetchUsage(t, dir);
+        const res = await fetch("/api/translate", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            text: t.slice(0, 2000),
+            from,
+            to,
+            style: active.style,
+            tone: active.tone || undefined,
+            prefer: "lara",
+          }),
+        });
+        const data = await res.json();
+        if (seq.current !== mySeq) return;
+        if (!res.ok) {
+          toast(data.error ?? "Gagal menerjemahkan");
+          setResult(null);
+        } else {
+          setResult(data);
+          setSaved(false);
+          setUsage(null);
+          usageKey.current = "";
+          if (from === "id") fetchUsage(data.translation ?? "", dir);
+        }
+      } catch {
+        if (seq.current === mySeq) toast("Server nggak merespons");
+      } finally {
+        if (seq.current === mySeq) setBusy(false);
+      }
+    }, 500);
+    return () => clearTimeout(timer);
+  }, [text, from, preset, toast, active.style, active.tone, ja]);
 
   const speak = (s: string, lang?: string) => {
     if (typeof window === "undefined" || !window.speechSynthesis) return;
