@@ -1099,6 +1099,12 @@ export default function ReviewPage() {
   const [askBusy, setAskBusy] = useState(false);
   const [askReply, setAskReply] = useState<string | null>(null);
 
+  // Penjelasan Ling milik kartu ini aja — ganti kartu = hilang.
+  // matcha: askReply nyangkut ke kartu berikutnya.
+  useEffect(() => {
+    setAskReply(null);
+  }, [cardIdx, cards]);
+
   const askLing = async () => {
     const c = cards[cardIdx];
     if (!c || askBusy) return;
