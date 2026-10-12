@@ -45,7 +45,7 @@ export default function Extract() {
   const newCount = exprs.filter((_, i) => !exists[i]).length;
 
   const saveOne = async (e: Expr) => {
-    await fetch("/api/items", {
+    const res = await fetch("/api/items", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
@@ -65,15 +65,36 @@ export default function Extract() {
         ],
       }),
     });
+    if (!res.ok) throw new Error(`Gagal simpan "${e.text}"`);
   };
 
+  // Simpan paralel (3 sekaligus) + progres + kunci anti-spam. Dulu: await
+  // satu-satu tanpa loader, tombol tetap aktif → user spam = duplikat.
+  // matcha: saveSelected tanpa guard + tanpa feedback.
+  const [saving, setSaving] = useState(false);
+  const [saveProgress, setSaveProgress] = useState({ done: 0, total: 0 });
   const saveSelected = async () => {
-    for (const i of selected) {
-      await saveOne(exprs[i]);
+    if (saving || selected.size === 0) return;
+    const idx = [...selected];
+    setSaving(true);
+    setSaveProgress({ done: 0, total: idx.length });
+    let ok = 0;
+    // Batch 3 paralel biar cepat tapi ga menghajar server.
+    for (let i = 0; i < idx.length; i += 3) {
+      const batch = idx.slice(i, i + 3);
+      const results = await Promise.allSettled(batch.map((j) => saveOne(exprs[j])));
+      ok += results.filter((r) => r.status === "fulfilled").length;
+      setSaveProgress({ done: Math.min(idx.length, i + 3), total: idx.length });
     }
     setSelected(new Set());
     setText("");
-    toast(`${selected.size} ekspresi tersimpan ke Library`);
+    setSaving(false);
+    setSaveProgress({ done: 0, total: 0 });
+    toast(
+      ok === idx.length
+        ? `${ok} ekspresi tersimpan ke Library`
+        : `${ok}/${idx.length} tersimpan — ${idx.length - ok} gagal, coba lagi`,
+    );
   };
 
   // Form ekstrak: textarea + tombol sempit tengah di desktop.
@@ -188,10 +209,33 @@ export default function Extract() {
               </li>
             ))}
           </ul>
-          <div className="fixed inset-x-0 bottom-14 z-10 mx-auto w-full max-w-2xl border-t border-zinc-200 bg-white/95 px-4 py-3 backdrop-blur dark:border-zinc-800 dark:bg-zinc-950/95">
-            <button className="btn-primary w-full" disabled={selected.size === 0} onClick={() => void saveSelected()}>
-              Simpan {selected.size} ekspresi
+          {/* Spacer: konten terakhir jangan ketutup bar simpan (fixed). */}
+          <div className="h-28" />
+          {/* Bar simpan: di atas bottom-nav (tinggi nav ~80px + safe-area),
+              bukan bottom-14 yang ketimpa nav. matcha: tombol ketutup nav. */}
+          <div
+            className="fixed inset-x-0 z-10 mx-auto w-full max-w-2xl border-t border-zinc-200 bg-white/95 px-4 py-3 backdrop-blur dark:border-zinc-800 dark:bg-zinc-950/95"
+            style={{ bottom: "calc(88px + env(safe-area-inset-bottom))" }}
+          >
+            <button
+              className="btn-primary w-full"
+              disabled={selected.size === 0 || saving}
+              onClick={() => void saveSelected()}
+            >
+              {saving ? (
+                <>Menyimpan {saveProgress.done}/{saveProgress.total}…</>
+              ) : (
+                <>Simpan {selected.size} ekspresi</>
+              )}
             </button>
+            {saving ? (
+              <div className="mt-2 h-1 overflow-hidden rounded-full bg-zinc-200 dark:bg-zinc-800">
+                <div
+                  className="h-full bg-teal-600 transition-all dark:bg-teal-500"
+                  style={{ width: `${(saveProgress.done / Math.max(1, saveProgress.total)) * 100}%` }}
+                />
+              </div>
+            ) : null}
           </div>
         </>
       ) : null}
