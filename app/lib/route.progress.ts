@@ -244,6 +244,9 @@ async function buildRouteMap(lang: string): Promise<RouteMap> {
       const p = list[i]!;
       const isPassed = Boolean((p as StepProgress & { passed?: boolean }).passed);
       if (isPassed) {
+        // Step lulus TETAP terbuka (bisa diulang) + centang + garis hijau.
+        // matcha: state tak pernah di-set passed → lulus malah tampil gembok.
+        p.state = "passed";
         xp += 100;
         if (p.grade === 100) xp += 25;
         continue;
@@ -279,4 +282,58 @@ async function buildRouteMap(lang: string): Promise<RouteMap> {
 /** Step lanjut (untuk kartu Home). */
 export async function getNextStep(): Promise<StepProgress | null> {
   return (await getRouteMap()).next;
+}
+
+export type StepQA = { q: string; a: string; at: number };
+export type StepNotes = { note: string; qa: StepQA[] };
+
+/** Catatan + Tanya-Jawab tersimpan per step. */
+export async function getStepNotes(stepId: string): Promise<StepNotes> {
+  const lang = await getTargetLang();
+  const { routeNotes } = await import("~/lib/db/schema");
+  const [row] = await db
+    .select()
+    .from(routeNotes)
+    .where(and(eq(routeNotes.stepId, stepId), eq(routeNotes.lang, lang)))
+    .limit(1);
+  let qa: StepQA[] = [];
+  try {
+    const parsed = JSON.parse(row?.qaJson ?? "[]") as StepQA[];
+    if (Array.isArray(parsed)) qa = parsed.filter((x) => x?.q && x?.a);
+  } catch {
+    /* abaikan */
+  }
+  return { note: row?.note ?? "", qa: qa.slice(-20) };
+}
+
+/** Simpan catatan bebas per step (upsert). */
+export async function saveStepNote(stepId: string, note: string): Promise<void> {
+  const lang = await getTargetLang();
+  const { routeNotes } = await import("~/lib/db/schema");
+  const now = Date.now();
+  // Upsert hanya menyentuh note — qaJson yang sudah ada dipertahankan
+  // (insert baru pasti belum punya qa).
+  await db
+    .insert(routeNotes)
+    .values({ stepId, lang, note: note.slice(0, 5000), qaJson: "[]", updatedAt: now })
+    .onConflictDoUpdate({
+      target: [routeNotes.stepId, routeNotes.lang],
+      set: { note: note.slice(0, 5000), updatedAt: now },
+    });
+}
+
+/** Tambah 1 Tanya-Jawab Ling ke catatan step (maks 20 terakhir). */
+export async function addStepQA(stepId: string, q: string, a: string): Promise<StepQA[]> {
+  const lang = await getTargetLang();
+  const { routeNotes } = await import("~/lib/db/schema");
+  const cur = await getStepNotes(stepId);
+  const qa = [...cur.qa, { q: q.slice(0, 500), a: a.slice(0, 3000), at: Date.now() }].slice(-20);
+  await db
+    .insert(routeNotes)
+    .values({ stepId, lang, note: cur.note, qaJson: JSON.stringify(qa), updatedAt: Date.now() })
+    .onConflictDoUpdate({
+      target: [routeNotes.stepId, routeNotes.lang],
+      set: { qaJson: JSON.stringify(qa), updatedAt: Date.now() },
+    });
+  return qa;
 }

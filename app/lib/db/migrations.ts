@@ -124,6 +124,15 @@ export const MIGRATIONS: string[] = [
     value TEXT NOT NULL
   );
 
+  CREATE TABLE IF NOT EXISTS route_notes (
+    step_id    TEXT NOT NULL,
+    lang       TEXT NOT NULL DEFAULT 'ja',
+    note       TEXT NOT NULL DEFAULT '',
+    qa_json    TEXT NOT NULL DEFAULT '[]',
+    updated_at INTEGER NOT NULL,
+    PRIMARY KEY (step_id, lang)
+  );
+
   CREATE TABLE IF NOT EXISTS quiz_sets (
     id         INTEGER PRIMARY KEY,
     day        TEXT NOT NULL,

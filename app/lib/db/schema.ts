@@ -167,6 +167,19 @@ export const settings = sqliteTable("settings", {
   value: text("value").notNull(),
 });
 
+/** Catatan + Tanya-Jawab Ling per step rute (sumber kebenaran materi tetap md). */
+export const routeNotes = sqliteTable(
+  "route_notes",
+  {
+    stepId: text("step_id").notNull(),
+    lang: text("lang").notNull().default("ja"),
+    note: text("note").notNull().default(""),
+    qaJson: text("qa_json").notNull().default("[]"),
+    updatedAt: integer("updated_at").notNull(),
+  },
+  (t) => [uniqueIndex("route_notes_step_lang_uq").on(t.stepId, t.lang)],
+);
+
 export const chatSessions = sqliteTable("chat_sessions", {
   id: integer("id").primaryKey({ autoIncrement: true }),
   title: text("title").notNull().default("Obrolan baru"),

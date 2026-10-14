@@ -1,7 +1,7 @@
 import type { LoaderFunctionArgs, MetaFunction } from "react-router";
 import { Link, useLoaderData, useNavigate } from "react-router";
 import { useState } from "react";
-import { ArrowLeft, ArrowRight, BadgeCheck, CheckCircle2, ExternalLink, Loader2, RotateCcw } from "lucide-react";
+import { ArrowLeft, ArrowRight, BadgeCheck, CheckCircle2, ExternalLink, Loader2, MessageCircleQuestion, RotateCcw, Save } from "lucide-react";
 import { requireUser } from "~/lib/auth.server";
 import { getRouteMap } from "~/lib/route.progress";
 import { JaText, hasJa } from "~/components/JaText";
@@ -16,15 +16,85 @@ export async function loader({ request, params }: LoaderFunctionArgs) {
   const stepId = params.stepId ?? "";
   const found = map.steps.find((s) => s.step.step_id === stepId) ?? null;
   const exam = map.exams.find((e) => `exam-${e.segment}` === stepId) ?? null;
-  return { step: found?.step ?? null, state: found?.state ?? null, grade: found?.grade ?? null, setId: found?.setId ?? null, exam };
+  const { getStepNotes } = await import("~/lib/route.progress");
+  const notes = stepId ? await getStepNotes(stepId).catch(() => ({ note: "", qa: [] })) : { note: "", qa: [] };
+  return { step: found?.step ?? null, state: found?.state ?? null, grade: found?.grade ?? null, setId: found?.setId ?? null, exam, notes };
 }
 
 export default function RuteStep() {
-  const { step, state, grade, exam } = useLoaderData<typeof loader>();
+  const { step, state, grade, notes } = useLoaderData<typeof loader>();
   const navigate = useNavigate();
   const toast = useToast();
   const [busy, setBusy] = useState(false);
-  void exam;
+
+  // Tanya Ling (mentor step) — jawaban bisa disimpan ke catatan step ini.
+  const [question, setQuestion] = useState("");
+  const [askBusy, setAskBusy] = useState(false);
+  const [askReply, setAskReply] = useState<string | null>(null);
+  const [qaList, setQaList] = useState<{ q: string; a: string; at: number }[]>(notes.qa ?? []);
+  const [note, setNote] = useState(notes.note ?? "");
+  const [noteBusy, setNoteBusy] = useState(false);
+
+  const ask = async () => {
+    const q = question.trim();
+    if (!q || askBusy || !step) return;
+    setAskBusy(true);
+    setAskReply(null);
+    try {
+      const r = await fetch("/api/chat", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          message: `Konteks: saya belajar pola "${step.pattern}" (${step.title_id}, ${step.level}). Pertanyaan: ${q}. Jawab singkat Bahasa Indonesia + contoh bila perlu.`,
+        }),
+      });
+      const d = await r.json();
+      if (!r.ok) throw new Error(d.error || "Ling gagal jawab");
+      setAskReply(d.reply ?? "");
+    } catch (e) {
+      toast(e instanceof Error ? e.message : "Ling gagal jawab");
+    } finally {
+      setAskBusy(false);
+    }
+  };
+
+  const saveQA = async () => {
+    const q = question.trim();
+    if (!q || !askReply || !step) return;
+    try {
+      const r = await fetch("/api/route", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ stepId: step.step_id, qa: { q, a: askReply } }),
+      });
+      const d = await r.json();
+      if (!r.ok) throw new Error(d.error || "Gagal simpan");
+      setQaList(d.qa ?? []);
+      setAskReply(null);
+      setQuestion("");
+      toast("Tersimpan di catatan step ini");
+    } catch (e) {
+      toast(e instanceof Error ? e.message : "Gagal simpan");
+    }
+  };
+
+  const saveNote = async () => {
+    if (!step || noteBusy) return;
+    setNoteBusy(true);
+    try {
+      const r = await fetch("/api/route", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ stepId: step.step_id, note }),
+      });
+      if (!r.ok) throw new Error("Gagal simpan");
+      toast("Catatan tersimpan");
+    } catch (e) {
+      toast(e instanceof Error ? e.message : "Gagal simpan");
+    } finally {
+      setNoteBusy(false);
+    }
+  };
 
   if (!step) {
     return (
@@ -162,6 +232,67 @@ export default function RuteStep() {
       {locked ? (
         <p className="text-center text-xs text-zinc-400">Selesaikan step sebelumnya buat buka latihan ini.</p>
       ) : null}
+
+      {/* Tanya Ling — mentor khusus step ini. Jawaban bisa disimpan. */}
+      <div className="card space-y-2 p-4">
+        <p className="label flex items-center gap-1.5">
+          <MessageCircleQuestion className="h-3.5 w-3.5" /> Tanya Ling soal step ini
+        </p>
+        <div className="flex gap-2">
+          <input
+            className="input-area min-h-11 flex-1 py-2.5 text-sm"
+            placeholder="Contoh: bedanya は dan が di kalimat negatif?"
+            value={question}
+            maxLength={500}
+            onChange={(e) => setQuestion(e.target.value)}
+            onKeyDown={(e) => {
+              if (e.key === "Enter") void ask();
+            }}
+          />
+          <button className="btn-primary shrink-0" disabled={askBusy || !question.trim()} onClick={() => void ask()}>
+            {askBusy ? <Loader2 className="h-4 w-4 animate-spin" /> : "Tanya"}
+          </button>
+        </div>
+        {askReply ? (
+          <div className="space-y-2 rounded-xl bg-zinc-50 p-3 dark:bg-zinc-800/60">
+            <MarkdownLite text={askReply} />
+            <button className="btn-secondary w-full gap-1.5 text-xs" onClick={() => void saveQA()}>
+              <Save className="h-3.5 w-3.5" /> Simpan jawaban ke catatan step
+            </button>
+          </div>
+        ) : null}
+        {qaList.length > 0 ? (
+          <div className="space-y-2 border-t border-zinc-100 pt-2 dark:border-zinc-800">
+            <p className="text-[11px] font-medium uppercase tracking-wide text-zinc-400">
+              Tersimpan ({qaList.length})
+            </p>
+            {qaList.map((x, i) => (
+              <div key={`${x.at}-${i}`} className="space-y-1 rounded-xl border border-zinc-100 p-2.5 dark:border-zinc-800">
+                <p className="text-sm font-medium">{x.q}</p>
+                <div className="text-sm text-zinc-600 dark:text-zinc-300">
+                  <MarkdownLite text={x.a} />
+                </div>
+              </div>
+            ))}
+          </div>
+        ) : null}
+      </div>
+
+      {/* Catatan bebas step ini */}
+      <div className="card space-y-2 p-4">
+        <p className="label">Catatanku</p>
+        <textarea
+          className="input-area min-h-20 text-sm"
+          placeholder="Tulis ringkasan / mnemonik sendiri buat pola ini…"
+          value={note}
+          maxLength={5000}
+          onChange={(e) => setNote(e.target.value)}
+        />
+        <button className="btn-secondary w-full gap-1.5 text-sm" disabled={noteBusy} onClick={() => void saveNote()}>
+          {noteBusy ? <Loader2 className="h-4 w-4 animate-spin" /> : <Save className="h-4 w-4" />}
+          Simpan catatan
+        </button>
+      </div>
     </div>
   );
 }

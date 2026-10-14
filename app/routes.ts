@@ -32,6 +32,7 @@ export default [
   route("api/usage-examples", "routes/api.usage-examples.ts"),
   route("api/review", "routes/api.review.ts"),
   route("api/quiz", "routes/api.quiz.ts"),
+  route("api/route", "routes/api.route.ts"),
   route("api/flash", "routes/api.flash.ts"),
   route("api/match", "routes/api.match.ts"),
   route("api/bank", "routes/api.bank.ts"),
