@@ -1,27 +1,15 @@
-import type { ActionFunctionArgs, LoaderFunctionArgs, MetaFunction } from "react-router";
+import type { LoaderFunctionArgs, MetaFunction } from "react-router";
 import { Link, redirect, useLoaderData, useSearchParams } from "react-router";
 import { useEffect, useRef, useState } from "react";
 import {
-  ArrowRight,
-  BadgeCheck,
-  BookOpenCheck,
-  CheckCircle2,
   Eye,
-  Layers,
   Loader2,
-  PencilLine,
   RotateCcw,
-  Sparkles,
   Volume2,
-  XCircle,
 } from "lucide-react";
 import { requireUser } from "~/lib/auth.server";
-import { db } from "~/lib/db/client.server";
-import { wordbank } from "~/lib/db/schema";
 import { getTargetLang } from "~/lib/lang.server";
-import { and, eq, ne } from "drizzle-orm";
 import { ttsLang } from "~/lib/utils.shared";
-import { JaText, hasJa, splitReading } from "~/components/JaText";
 import { SpeakButton } from "~/components/SpeakButton";
 
 export const meta: MetaFunction = () => [{ title: "Aksara Jepang — LingStick" }];
@@ -162,16 +150,6 @@ const SCRIPT_LABEL: Record<Script, string> = {
 };
 const LEVELS = ["N5", "N4", "N3", "N2", "N1"] as const;
 
-const KANJI_RE = /[\u4e00-\u9faf\u3005\u3007]/;
-
-type AksaraWord = {
-  id: number;
-  text: string;
-  reading: string | null;
-  meaningId: string | null;
-  status: string; // new | learning | known (dari wordbank)
-};
-
 export async function loader({ request }: LoaderFunctionArgs) {
   await requireUser(request);
   const lang = await getTargetLang();
@@ -185,17 +163,8 @@ export async function loader({ request }: LoaderFunctionArgs) {
   const levelParam = url.searchParams.get("level");
   const level = (LEVELS as readonly string[]).includes(levelParam ?? "") ? levelParam! : "N5";
 
-  // Kanji words per level (buat list & target latihan) + pool lintas level (distraktor MCQ).
-  const rows = await db
-    .select({ id: wordbank.id, text: wordbank.text, reading: wordbank.reading, meaningId: wordbank.meaningId, cefr: wordbank.cefr, status: wordbank.status })
-    .from(wordbank)
-    .where(and(eq(wordbank.lang, "ja"), ne(wordbank.type, "kana")))
-    .limit(500);
-  const hasKanji = (r: { text: string; meaningId: string | null }) => KANJI_RE.test(r.text) && Boolean(r.meaningId);
-  const levelRows = rows.filter((r) => hasKanji(r) && r.cefr === level);
-  const poolRows = rows.filter(hasKanji);
-
   // Referensi kanji kanonis (seed dataset) + progres flashcard — khusus tab kanji.
+  // Daftar kosakata wordbank lama sudah dihapus (dobel dengan sistem baru).
   let kanjiList: { char: string; meaningId: string; strokes: number; jlpt: number | null; freq: number | null; components: string[] }[] = [];
   let kanjiComponents: { component: string; count: number }[] = [];
   let kanjiProgress: { total: number; done: number } | null = null;
@@ -212,359 +181,16 @@ export async function loader({ request }: LoaderFunctionArgs) {
   return {
     script,
     level,
-    levelWords: levelRows.slice(0, 100) as AksaraWord[],
-    poolWords: poolRows.slice(0, 300) as AksaraWord[],
     kanjiList,
     kanjiComponents,
     kanjiProgress,
   };
 }
 
-/** Tombol tandai di daftar kanji: mulai belajar / hafal — row wordbank TETAP ada (cuma ganti status). */
-export async function action({ request }: ActionFunctionArgs) {
-  await requireUser(request);
-  if ((await getTargetLang()) !== "ja") {
-    return Response.json({ error: "Khusus mode Jepang" }, { status: 400 });
-  }
-  const body = (await request.json().catch(() => ({}))) as { id?: number; action?: string };
-  const id = Number(body.id);
-  if (!Number.isInteger(id) || id <= 0) {
-    return Response.json({ error: "id nggak valid" }, { status: 400 });
-  }
-  const { learnBankKeep, markBankKnownKeep } = await import("~/lib/bank.server");
-  if (body.action === "learn") {
-    const itemId = await learnBankKeep(id);
-    return Response.json({ ok: true, itemId });
-  }
-  if (body.action === "known") {
-    await markBankKnownKeep(id);
-    return Response.json({ ok: true });
-  }
-  return Response.json({ error: "action nggak dikenal" }, { status: 400 });
-}
-
-/* ── Generate kanji per N-level — reuse /api/bank (generateBankWords JA) ── */
-function GenKanjiButton({ level }: { level: string }) {
-  const [busy, setBusy] = useState(false);
-  const [msg, setMsg] = useState<string | null>(null);
-  const generate = async () => {
-    if (busy) return;
-    setBusy(true);
-    setMsg(null);
-    try {
-      const r = await fetch("/api/bank", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ action: "generate", level, count: 10 }),
-      });
-      const d = (await r.json().catch(() => ({}))) as { error?: string; added?: number; skipped?: number };
-      if (!r.ok || d.error) throw new Error(d.error || "Generate gagal");
-      setMsg(`${d.added ?? 0} kanji baru level ${level} ditambahkan`);
-      setBusy(false);
-      window.location.reload();
-    } catch (e) {
-      setMsg(e instanceof Error ? e.message : "Generate gagal");
-      setBusy(false);
-    }
-  };
-  return (
-    <div className="mx-auto flex w-full max-w-xl flex-col items-center gap-1.5">
-      <button
-        onClick={generate}
-        disabled={busy}
-        className="btn-secondary w-full justify-center gap-1.5 py-2.5 text-sm"
-      >
-        {busy ? <Loader2 className="h-4 w-4 animate-spin" /> : <Sparkles className="h-4 w-4" />}
-        {busy ? "Lagi generate…" : `Generate ${level} via AI`}
-      </button>
-      {msg ? <span className="text-xs text-zinc-500 dark:text-zinc-400">{msg}</span> : null}
-    </div>
-  );
-}
-
-/* ── Latihan kanji: pilihan ganda (bacaan / arti) ── */
-type Method = "list" | "reading" | "arti";
-type Mcq = { word: AksaraWord; options: string[]; answer: number };
-
-function buildMcqs(words: AksaraWord[], pool: AksaraWord[], method: "reading" | "arti"): Mcq[] {
-  const keyOf = (w: AksaraWord) =>
-    method === "reading" ? splitReading(w.reading).kana || w.reading || "" : w.meaningId ?? "";
-  const src = words.length >= 4 ? words : pool;
-  if (src.length < 4) return [];
-  const bag = [...src].sort(() => Math.random() - 0.5);
-  const qs: Mcq[] = [];
-  for (const w of bag) {
-    if (qs.length >= 10) break;
-    const correct = keyOf(w);
-    if (!correct) continue;
-    const dis = [...new Set(pool.filter((o) => o.id !== w.id).map(keyOf))]
-      .filter((v) => v && v !== correct)
-      .sort(() => Math.random() - 0.5)
-      .slice(0, 3);
-    if (dis.length < 3) continue;
-    const options = [correct, ...dis].sort(() => Math.random() - 0.5);
-    qs.push({ word: w, options, answer: options.indexOf(correct) });
-  }
-  return qs;
-}
-
-function KanjiPractice({
-  words,
-  pool,
-  level,
-  statusOf,
-  onMark,
-  emptyHint,
-}: {
-  words: AksaraWord[];
-  pool: AksaraWord[];
-  level: string;
-  statusOf: (w: AksaraWord) => string;
-  onMark: (id: number, action: "learn" | "known") => void;
-  emptyHint?: string;
-}) {
-  const [method, setMethod] = useState<Method>("list");
-  const [mcqs, setMcqs] = useState<Mcq[]>([]);
-  const [qi, setQi] = useState(0);
-  const [picked, setPicked] = useState<number | null>(null);
-  const [score, setScore] = useState(0);
-  const [showKey, setShowKey] = useState(false); // bantuan baca di mode list
-
-  useEffect(() => {
-    if (method === "list") {
-      setMcqs([]);
-      return;
-    }
-    setMcqs(buildMcqs(words, pool, method));
-    setQi(0);
-    setPicked(null);
-    setScore(0);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [method, level]);
-
-  const q = mcqs[qi];
-  const done = Boolean(mcqs.length) && qi >= mcqs.length;
-
-  if (method === "list") {
-    return (
-      <div className="space-y-3">
-        <div className="flex items-center justify-between gap-2">
-          <p className="text-xs text-zinc-500">
-            {words.length > 0 ? `${words.length} kosakata kanji level ${level}` : `Belum ada kanji level ${level}`}
-          </p>
-          <button className="btn-ghost inline-flex items-center gap-1 text-xs" onClick={() => setShowKey((v) => !v)}>
-            <Eye className="h-3.5 w-3.5" /> {showKey ? "Sembunyikan bacaan" : "Tampilkan bacaan"}
-          </button>
-        </div>
-        {words.length === 0 ? (
-          <div className="py-10 text-center">
-            <Layers className="mx-auto h-10 w-10 text-teal-600 dark:text-teal-400" strokeWidth={1.5} />
-            <p className="mt-3 font-medium">Belum ada kosakata kanji di level ini</p>
-            <p className="mt-1 text-sm text-zinc-500">
-              {emptyHint ?? `Generate kata di Bank Kata level ${level} — nanti otomatis nongol di sini.`}
-            </p>
-            <Link to="/bank" className="btn-secondary mt-4 inline-flex">
-              Buka Bank Kata <ArrowRight className="h-4 w-4" />
-            </Link>
-          </div>
-        ) : (
-          <ul className="space-y-2">
-            {words.map((w) => (
-              <li key={w.id} className="card flex items-center gap-3 p-3.5">
-                <span className="min-w-0 flex-1">
-                  <JaText text={w.text} reading={w.reading} kanjiClassName="text-teal-700 dark:text-teal-400" className="text-xl font-semibold" />
-                  {showKey && w.reading ? (
-                    <span className="mt-0.5 block text-xs text-zinc-400 dark:text-zinc-500">{w.reading}</span>
-                  ) : null}
-                  <span className="block truncate text-xs text-zinc-500">{w.meaningId}</span>
-                </span>
-                {/* Tandai status: new→belajar (BookOpenCheck), learning→hafal (CheckCircle2), known→balikin (BadgeCheck) */}
-                {statusOf(w) === "known" ? (
-                  <button
-                    className="shrink-0 rounded-lg p-1.5 text-teal-600 dark:text-teal-400"
-                    title="Sudah hafal — klik buat belajar lagi"
-                    onClick={() => onMark(w.id, "learn")}
-                  >
-                    <BadgeCheck className="h-4.5 w-4.5" />
-                  </button>
-                ) : statusOf(w) === "learning" ? (
-                  <button
-                    className="shrink-0 rounded-lg p-1.5 text-zinc-400 hover:bg-zinc-100 hover:text-teal-600 dark:hover:bg-zinc-800"
-                    title="Tandai hafal"
-                    onClick={() => onMark(w.id, "known")}
-                  >
-                    <CheckCircle2 className="h-4.5 w-4.5" />
-                  </button>
-                ) : (
-                  <button
-                    className="shrink-0 rounded-lg p-1.5 text-zinc-400 hover:bg-zinc-100 hover:text-teal-600 dark:hover:bg-zinc-800"
-                    title="Mulai belajar (masuk review)"
-                    onClick={() => onMark(w.id, "learn")}
-                  >
-                    <BookOpenCheck className="h-4.5 w-4.5" />
-                  </button>
-                )}
-                <SpeakButton
-                  text={w.text}
-                  className="h-4.5 w-4.5"
-                  buttonClassName="shrink-0 rounded-lg p-1.5 text-zinc-400 hover:bg-zinc-100 hover:text-teal-600 dark:hover:bg-zinc-800"
-                />
-                <Link
-                  to={`/write?level=${level}`}
-                  className="shrink-0 rounded-lg p-1.5 text-zinc-400 hover:bg-zinc-100 hover:text-teal-600 dark:hover:bg-zinc-800"
-                  title="Latihan nulis"
-                >
-                  <PencilLine className="h-4.5 w-4.5" />
-                </Link>
-              </li>
-            ))}
-          </ul>
-        )}
-      </div>
-    );
-  }
-
-  if (mcqs.length === 0) {
-    return (
-      <div className="py-10 text-center">
-        <BookOpenCheck className="mx-auto h-10 w-10 text-teal-600 dark:text-teal-400" strokeWidth={1.5} />
-        <p className="mt-3 font-medium">Kosakata belum cukup buat latihan</p>
-        <p className="mt-1 text-sm text-zinc-500">Minimal 4 kosakata kanji — tambah dari Bank Kata dulu ya.</p>
-        <button className="btn-secondary mt-4" onClick={() => setMethod("list")}>
-          Kembali ke daftar
-        </button>
-      </div>
-    );
-  }
-
-  if (done) {
-    return (
-      <div className="py-10 text-center">
-        <CheckCircle2 className="mx-auto h-12 w-12 text-teal-600 dark:text-teal-400" strokeWidth={1.5} />
-        <p className="mt-3 text-lg font-bold">Selesai!</p>
-        <p className="mt-1 text-sm text-zinc-500">
-          Benar {score} dari {mcqs.length} soal ({Math.round((score / mcqs.length) * 100)}%)
-        </p>
-        <div className="mt-5 flex justify-center gap-2">
-          <button
-            className="btn-secondary"
-            onClick={() => {
-              setMcqs(buildMcqs(words, pool, method));
-              setQi(0);
-              setPicked(null);
-              setScore(0);
-            }}
-          >
-            <RotateCcw className="h-4 w-4" /> Ulangi
-          </button>
-          <button className="btn-primary" onClick={() => setMethod("list")}>
-            Daftar kanji
-          </button>
-        </div>
-      </div>
-    );
-  }
-
-  const isReading = method === "reading";
-  // Sesi latihan: sempit tengah di desktop.
-  return (
-    <div className="mx-auto w-full max-w-xl space-y-4">
-      <div className="flex items-center justify-between text-xs text-zinc-500">
-        <span>
-          Soal {qi + 1} / {mcqs.length} · benar {score}
-        </span>
-        <button className="btn-ghost text-xs" onClick={() => setMethod("list")}>
-          Keluar
-        </button>
-      </div>
-      <div className="h-1.5 overflow-hidden rounded-full bg-zinc-200 dark:bg-zinc-800">
-        <div
-          className="h-full bg-teal-600 transition-all dark:bg-teal-500"
-          style={{ width: `${(qi / mcqs.length) * 100}%` }}
-        />
-      </div>
-
-      <div className="card flex min-h-24 flex-col items-center justify-center gap-1 py-6">
-        {isReading ? (
-          /* Pilih bacaan: kanji TANPA furigana — itu latihannya */
-          <p className="text-4xl font-bold">{q.word.text}</p>
-        ) : (
-          <JaText text={q.word.text} reading={q.word.reading} kanjiClassName="text-teal-700 dark:text-teal-400" className="text-4xl font-bold" />
-        )}
-        <p className="mt-1 text-xs text-zinc-400">
-          {isReading ? "Pilih cara baca yang tepat" : "Pilih arti yang tepat"}
-        </p>
-      </div>
-
-      <div className="space-y-2">
-        {q.options.map((opt, i) => {
-          const isAnswer = i === q.answer;
-          const isPicked = picked === i;
-          let cls = "btn-secondary w-full justify-start text-left";
-          if (picked !== null) {
-            if (isAnswer) cls += " !border-teal-500 !bg-teal-50 !text-teal-800 dark:!bg-teal-950 dark:!text-teal-300";
-            else if (isPicked) cls += " !border-red-300 !bg-red-50 !text-red-700 dark:!bg-red-950 dark:!text-red-300";
-            else cls += " opacity-50";
-          }
-          return (
-            <button
-              key={i}
-              className={cls}
-              disabled={picked !== null}
-              onClick={() => {
-                if (picked !== null) return;
-                setPicked(i);
-                if (i === q.answer) setScore((s) => s + 1);
-                if (isReading) speak(q.word.text);
-              }}
-            >
-              {opt}
-              {picked !== null && isAnswer ? (
-                <CheckCircle2 className="ml-auto h-4 w-4 shrink-0" />
-              ) : picked !== null && isPicked ? (
-                <XCircle className="ml-auto h-4 w-4 shrink-0" />
-              ) : null}
-            </button>
-          );
-        })}
-      </div>
-
-      {picked !== null ? (
-        <div className="space-y-3">
-          <div
-            className={`rounded-xl px-4 py-3 text-sm ${
-              picked === q.answer
-                ? "bg-teal-50 text-teal-800 dark:bg-teal-950 dark:text-teal-300"
-                : "bg-amber-50 text-amber-800 dark:bg-amber-950 dark:text-amber-300"
-            }`}
-          >
-            {picked === q.answer ? (
-              <span className="font-medium">Benar!</span>
-            ) : (
-              <span>
-                Jawaban yang tepat: <strong>{q.options[q.answer]}</strong>
-              </span>
-            )}
-            {q.word.meaningId ? (
-              <span className="block text-xs opacity-80">
-                {q.word.text} — {q.word.meaningId}
-              </span>
-            ) : null}
-          </div>
-          <button
-            className="btn-primary w-full"
-            onClick={() => {
-              setQi((i) => i + 1);
-              setPicked(null);
-            }}
-          >
-            Lanjut <ArrowRight className="h-4 w-4" />
-          </button>
-        </div>
-      ) : null}
-    </div>
-  );
-}
+/* ── Sistem kanji lama (wordbank + MCQ + generate) DIHAPUS — dobel dengan
+ * referensi kanonis + flash 3 mode di bawah. Generate kosakata tetap ada di
+ * halaman Bank Kata (fungsinya kosakata, bukan referensi kanji).
+ * matcha: dua sistem kanji paralel = user bingung + data dobel. */
 
 /** Sel grid kana: klik = bunyi. Saat bunyi, romaji keganti spinner (anti-spam + feedback). */
 function KanaCell({ kana, romaji }: { kana: string; romaji: string }) {
@@ -609,7 +235,7 @@ function KanaCell({ kana, romaji }: { kana: string; romaji: string }) {
 }
 
 export default function AksaraPage() {
-  const { script, level, levelWords, poolWords, kanjiList, kanjiComponents, kanjiProgress } =
+  const { script, level, kanjiList, kanjiComponents, kanjiProgress } =
     useLoaderData<typeof loader>();
   const [params, setParams] = useSearchParams();
 
@@ -618,30 +244,6 @@ export default function AksaraPage() {
     if (next.script) p.set("script", next.script);
     if (next.level) p.set("level", next.level);
     setParams(p, { preventScrollReset: true });
-  };
-
-  // Filter status client-side — default "learning" (Sedang dipelajari), snapshot loader, no refetch.
-  const [statusFilter, setStatusFilter] = useState<"all" | "learning" | "known">("learning");
-  const [overrides, setOverrides] = useState<Record<number, string>>({});
-
-  const statusOf = (w: AksaraWord) => overrides[w.id] ?? w.status;
-  // "Sedang belajar" mencakup status new (kata fresh generate/bank yang belum
-  // ditandai apa-apa) — kalau tidak, hasil generate tidak kelihatan di filter
-  // default. matcha: generate sukses tapi list kosong = false-gagal.
-  const filteredWords = levelWords.filter((w) => {
-    if (statusFilter === "all") return true;
-    if (statusFilter === "known") return statusOf(w) === "known";
-    return statusOf(w) === "learning" || statusOf(w) === "new";
-  });
-
-  /** Tandai dari daftar kanji: optimistic update + POST ke action route ini. */
-  const mark = (id: number, act: "learn" | "known") => {
-    setOverrides((prev) => ({ ...prev, [id]: act === "learn" ? "learning" : "known" }));
-    void fetch("/aksara", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ id, action: act }),
-    }).catch(() => {});
   };
 
   // Tabel kana: batas 2xl biar sel ga jadi raksasa di desktop.
@@ -778,59 +380,11 @@ export default function AksaraPage() {
             ))}
           </div>
 
-          {/* Generate kanji per level N — via Bank Kata (sumber sama: wordbank + LLM) */}
-          <div className="w-full rounded-2xl border border-dashed border-teal-300 bg-teal-50/50 p-4 text-center dark:border-teal-800 dark:bg-teal-950/30">
-            <p className="text-sm font-semibold text-teal-800 dark:text-teal-200">
-              Kurang kosakata {level}?
-            </p>
-            <p className="mt-0.5 text-xs text-zinc-500 dark:text-zinc-400">
-              Generate langsung ke level ini via AI — otomatis masuk list & latihan.
-            </p>
-            <div className="mt-3">
-              <GenKanjiButton level={level} />
-            </div>
-          </div>
-
-          {/* Filter status full-width: Sedang belajar + Hafal di tengah, Semua di kanan */}
-          <div className="grid w-full grid-cols-3 gap-1.5">
-            {(
-              [
-                ["learning", "Sedang belajar"],
-                ["known", "Hafal"],
-                ["all", "Semua"],
-              ] as const
-            ).map(([key, label]) => (
-              <button
-                key={key}
-                onClick={() => setStatusFilter(key)}
-                className={`chip w-full justify-center ${statusFilter === key ? "chip-active" : ""}`}
-              >
-                {label}
-              </button>
-            ))}
-          </div>
-
           <KanjiRef
             list={kanjiList ?? []}
             components={kanjiComponents ?? []}
             progress={kanjiProgress}
             level={level}
-          />
-
-          <KanjiPractice
-            key={level}
-            words={filteredWords}
-            pool={poolWords}
-            level={level}
-            statusOf={statusOf}
-            onMark={mark}
-            emptyHint={
-              statusFilter !== "all" && levelWords.length > 0
-                ? statusFilter === "known"
-                  ? "Belum ada yang ditandai hafal — tandai lewat icon centang di daftar."
-                  : "Belum ada yang sedang belajar — tandai lewat icon buku di daftar."
-                : undefined
-            }
           />
 
           <p className="text-center text-xs text-zinc-400">
@@ -931,13 +485,45 @@ function KanjiRef({
         ) : null}
       </div>
       <KanjiGrid list={list} compFilter={compFilter} openChar={openChar} onOpen={open} />
+      {list.length === 0 ? (
+        <div className="card p-4 text-center">
+          <p className="font-medium">Kanji {level} belum di-seed</p>
+          <p className="mt-1 text-xs text-zinc-500">
+            N5 sudah lengkap (107 kanji). N4+ menyusul dengan pola seed yang sama — lihat docs/KANJI.md.
+          </p>
+        </div>
+      ) : null}
+      {/* Sheet detail: bottom-sheet di HP, panel tengah di desktop.
+          matcha: detail inline di bawah grid = scroll jauh + konteks grid hilang. */}
       {openChar ? (
-        <div className="card space-y-3 p-4">
-          {detailBusy || !detail || detail.char !== openChar ? (
-            <p className="py-4 text-center text-sm text-zinc-400">Memuat {openChar}…</p>
-          ) : (
-            <KanjiDetailView detail={detail} />
-          )}
+        <div className="fixed inset-0 z-40" role="dialog" aria-modal="true" aria-label={`Detail ${openChar}`}>
+          <div
+            className="absolute inset-0 bg-black/40 dark:bg-black/60"
+            onClick={() => {
+              setOpenChar(null);
+              setDetail(null);
+            }}
+          />
+          <div className="absolute inset-x-0 bottom-0 mx-auto max-h-[85dvh] w-full max-w-lg overflow-y-auto rounded-t-3xl bg-white p-4 pb-[calc(env(safe-area-inset-bottom)+16px)] shadow-2xl sm:inset-0 sm:m-auto sm:h-fit sm:max-h-[85dvh] sm:max-w-lg sm:rounded-3xl dark:bg-zinc-900">
+            <div className="mx-auto mb-3 h-1 w-10 rounded-full bg-zinc-300 sm:hidden dark:bg-zinc-700" />
+            <div className="mb-2 flex items-center justify-between">
+              <p className="text-2xl font-bold">{openChar}</p>
+              <button
+                className="btn-ghost px-2 py-1 text-xs"
+                onClick={() => {
+                  setOpenChar(null);
+                  setDetail(null);
+                }}
+              >
+                Tutup
+              </button>
+            </div>
+            {detailBusy || !detail || detail.char !== openChar ? (
+              <p className="py-8 text-center text-sm text-zinc-400">Memuat {openChar}…</p>
+            ) : (
+              <KanjiDetailView detail={detail} />
+            )}
+          </div>
         </div>
       ) : null}
       <KanjiFlash level={level} />
