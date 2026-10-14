@@ -11,7 +11,9 @@
     "build": "react-router build",
     "start": "react-router-serve ./build/server/index.js",
     "typecheck": "react-router typegen && tsc --noEmit",
-    "route:validate": "tsx scripts/route-validate.ts"
+    "route:validate": "tsx scripts/route-validate.ts",
+    "kanji:seed": "tsx scripts/kanji-seed.ts",
+    "kanji:import": "tsx scripts/kanji-import.ts"
   },
   "dependencies": {
     "@libsql/client": "^0.18.0",

@@ -135,6 +135,54 @@ export const MIGRATIONS: string[] = [
     PRIMARY KEY (step_id, lang)
   );
 
+  -- Kanji referensi (data kanonis dari KANJIDIC2/kanjiapi.dev, BUKAN LLM).
+  CREATE TABLE IF NOT EXISTS kanji (
+    char         TEXT PRIMARY KEY,
+    meaning_id   TEXT NOT NULL, -- arti Indonesia (kurasi)
+    strokes      INTEGER NOT NULL DEFAULT 0,
+    grade        INTEGER, -- 1-6 kyōiku, 8 jōyō lain
+    freq         INTEGER, -- rank Mainichi Shimbun (kecil = sering)
+    jlpt         INTEGER, -- 5..1 (patokan komunitas Waller/Kanshudo, tak resmi)
+    svg          TEXT -- KanjiVG stroke order (CC BY-SA 3.0)
+  );
+  CREATE TABLE IF NOT EXISTS kanji_readings (
+    kanji   TEXT NOT NULL REFERENCES kanji(char) ON DELETE CASCADE,
+    type    TEXT NOT NULL, -- on | kun
+    reading TEXT NOT NULL,
+    primary_pick INTEGER NOT NULL DEFAULT 0, -- 1 = bacaan inti
+    PRIMARY KEY (kanji, type, reading)
+  );
+  CREATE TABLE IF NOT EXISTS kanji_components (
+    kanji     TEXT NOT NULL REFERENCES kanji(char) ON DELETE CASCADE,
+    component TEXT NOT NULL,
+    PRIMARY KEY (kanji, component)
+  );
+  CREATE TABLE IF NOT EXISTS kanji_vocab (
+    id      INTEGER PRIMARY KEY,
+    kanji   TEXT NOT NULL REFERENCES kanji(char) ON DELETE CASCADE,
+    word    TEXT NOT NULL,
+    reading TEXT NOT NULL, -- kana penuh
+    gloss   TEXT NOT NULL, -- arti Indonesia singkat
+    common  INTEGER NOT NULL DEFAULT 0
+  );
+  CREATE INDEX IF NOT EXISTS kanji_vocab_kanji_idx ON kanji_vocab(kanji);
+  -- Kartu FSRS khusus kanji (3 mode per kanji, scheduler reuse fsrs.server).
+  CREATE TABLE IF NOT EXISTS kanji_cards (
+    kanji   TEXT NOT NULL,
+    mode    TEXT NOT NULL, -- recognition | recall | reading
+    due     INTEGER NOT NULL,
+    stability REAL,
+    difficulty REAL,
+    elapsed_days INTEGER,
+    scheduled_days INTEGER,
+    reps    INTEGER NOT NULL DEFAULT 0,
+    lapses  INTEGER NOT NULL DEFAULT 0,
+    state   INTEGER NOT NULL DEFAULT 0,
+    learning_steps INTEGER NOT NULL DEFAULT 0,
+    last_review INTEGER,
+    PRIMARY KEY (kanji, mode)
+  );
+
   CREATE TABLE IF NOT EXISTS quiz_sets (
     id         INTEGER PRIMARY KEY,
     day        TEXT NOT NULL,

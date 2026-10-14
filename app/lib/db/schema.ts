@@ -172,7 +172,75 @@ export const settings = sqliteTable("settings", {
   value: text("value").notNull(),
 });
 
-/** Catatan + Tanya-Jawab Ling per step rute (sumber kebenaran materi tetap md). */
+/** Kanji referensi (data kanonis KANJIDIC2/KanjiVG, bukan LLM). */
+export const kanji = sqliteTable("kanji", {
+  char: text("char").primaryKey(),
+  meaningId: text("meaning_id").notNull(),
+  strokes: integer("strokes").notNull().default(0),
+  grade: integer("grade"),
+  freq: integer("freq"),
+  jlpt: integer("jlpt"), // 5..1 — patokan komunitas (tak resmi)
+  svg: text("svg"), // KanjiVG (CC BY-SA 3.0)
+});
+
+export const kanjiReadings = sqliteTable(
+  "kanji_readings",
+  {
+    kanji: text("kanji")
+      .notNull()
+      .references(() => kanji.char, { onDelete: "cascade" }),
+    type: text("type").notNull(), // on | kun
+    reading: text("reading").notNull(),
+    primaryPick: integer("primary_pick").notNull().default(0),
+  },
+  (t) => [primaryKey({ columns: [t.kanji, t.type, t.reading] })],
+);
+
+export const kanjiComponents = sqliteTable(
+  "kanji_components",
+  {
+    kanji: text("kanji")
+      .notNull()
+      .references(() => kanji.char, { onDelete: "cascade" }),
+    component: text("component").notNull(),
+  },
+  (t) => [primaryKey({ columns: [t.kanji, t.component] })],
+);
+
+export const kanjiVocab = sqliteTable(
+  "kanji_vocab",
+  {
+    id: integer("id").primaryKey({ autoIncrement: true }),
+    kanji: text("kanji")
+      .notNull()
+      .references(() => kanji.char, { onDelete: "cascade" }),
+    word: text("word").notNull(),
+    reading: text("reading").notNull(),
+    gloss: text("gloss").notNull(),
+    common: integer("common").notNull().default(0),
+  },
+  (t) => [index("kanji_vocab_kanji_idx").on(t.kanji)],
+);
+
+/** Kartu FSRS khusus kanji — 3 mode per kanji, scheduler reuse fsrs.server. */
+export const kanjiCards = sqliteTable(
+  "kanji_cards",
+  {
+    kanji: text("kanji").notNull(),
+    mode: text("mode").notNull(), // recognition | recall | reading
+    due: integer("due").notNull(),
+    stability: real("stability"),
+    difficulty: real("difficulty"),
+    elapsedDays: integer("elapsed_days"),
+    scheduledDays: integer("scheduled_days"),
+    reps: integer("reps").notNull().default(0),
+    lapses: integer("lapses").notNull().default(0),
+    state: integer("state").notNull().default(0),
+    learningSteps: integer("learning_steps").notNull().default(0),
+    lastReview: integer("last_review"),
+  },
+  (t) => [primaryKey({ columns: [t.kanji, t.mode] })],
+);
 export const routeNotes = sqliteTable(
   "route_notes",
   {
