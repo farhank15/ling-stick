@@ -66,48 +66,6 @@ export default function Translate() {
 
   const active = STYLE_PRESETS.find((p) => p.key === preset)!;
 
-  useEffect(() => {
-    const t = text.trim();
-    const mySeq = ++seq.current;
-    if (t.length < 2) {
-      setResult(null);
-      setUsage(null);
-      return;
-    }
-    const timer = setTimeout(async () => {
-      setBusy(true);
-      try {
-        const res = await fetch("/api/translate", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({
-            text: t.slice(0, 2000),
-            from,
-            to: from === "ja" ? "id" : from === "en" ? "id" : ja ? "ja" : "en",
-            style: active.style,
-            tone: active.tone || undefined,
-            prefer: "lara",
-          }),
-        });
-        const data = await res.json();
-        if (seq.current !== mySeq) return;
-        if (!res.ok) {
-          toast(data.error ?? "Gagal menerjemahkan");
-          setResult(null);
-        } else {
-          setResult(data);
-          setSaved(false);
-          setUsage(null);
-        }
-      } catch {
-        if (seq.current === mySeq) toast("Server nggak merespons");
-      } finally {
-        if (seq.current === mySeq) setBusy(false);
-      }
-    }, 900);
-    return () => clearTimeout(timer);
-  }, [text, from, preset, toast, active.style, active.tone]);
-
   const swapTo = (target: "en" | "id" | "ja") => {
     if (target === from) return;
     const prev = result?.translation?.trim();
@@ -131,7 +89,8 @@ export default function Translate() {
   // (2 round-trip AI beruntun). Sekarang 1x nunggu untuk dua-duanya.
   const usageKey = useRef("");
   const usageSeq = useRef(0);
-  const fetchUsage = (foreignText: string, dir: string) => {
+  const abortRef = useRef<AbortController | null>(null);
+  const fetchUsage = (foreignText: string, dir: string, signal: AbortSignal) => {
     const foreign = foreignText.trim();
     if (!foreign) return;
     const key = `${dir}:${foreign.slice(0, 300)}`;
@@ -145,11 +104,12 @@ export default function Translate() {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({ text: foreign.slice(0, 300), direction: dir }),
+          signal,
         });
         const data = await res.json();
         if (usageSeq.current === mySeq && data.result) setUsage(data.result);
       } catch {
-        /* diam — cara baca bersifat opsional */
+        /* abort / gagal diam — cara baca bersifat opsional */
       } finally {
         if (usageSeq.current === mySeq) setUsageBusy(false);
       }
@@ -159,9 +119,17 @@ export default function Translate() {
   useEffect(() => {
     const t = text.trim();
     const mySeq = ++seq.current;
+    // Batalkan request lama tiap input/gaya berubah — biar request basi mati
+    // di jaringan, bukan cuma diabaikan. matcha: tanpa abort, typo-fix = 2
+    // translate + 2 usage jalan bareng, spinner rebutan + hasil telat.
+    abortRef.current?.abort();
+    const ctrl = new AbortController();
+    abortRef.current = ctrl;
     if (t.length < 2) {
       setResult(null);
       setUsage(null);
+      setBusy(false);
+      setUsageBusy(false);
       return;
     }
     const timer = setTimeout(async () => {
@@ -171,7 +139,7 @@ export default function Translate() {
         const dir = from === "ja" ? "ja2id" : from === "en" ? "en2id" : ja ? "id2ja" : "id2en";
         // Contoh + cara baca butuh sisi asing: kalau from=id itu HASIL translate
         // (belum ada → nunggu), kalau from=en/ja itu INPUT (udah ada → paralel).
-        if (from !== "id") fetchUsage(t, dir);
+        if (from !== "id") fetchUsage(t, dir, ctrl.signal);
         const res = await fetch("/api/translate", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
@@ -183,6 +151,7 @@ export default function Translate() {
             tone: active.tone || undefined,
             prefer: "lara",
           }),
+          signal: ctrl.signal,
         });
         const data = await res.json();
         if (seq.current !== mySeq) return;
@@ -192,17 +161,24 @@ export default function Translate() {
         } else {
           setResult(data);
           setSaved(false);
-          setUsage(null);
-          usageKey.current = "";
-          if (from === "id") fetchUsage(data.translation ?? "", dir);
+          // Jangan null-kan usage kalau key-nya udah cocok (paralel menang) —
+          // dulu setUsage(null) + reset key bikin fetch ulang sia-sia tiap hasil.
+          const finalKey = `${dir}:${(from === "id" ? (data.translation ?? "") : t).slice(0, 300)}`;
+          if (usageKey.current !== finalKey) {
+            setUsage(null);
+            if (from === "id") fetchUsage(data.translation ?? "", dir, ctrl.signal);
+          }
         }
-      } catch {
+      } catch (e) {
+        if ((e as Error)?.name === "AbortError") return;
         if (seq.current === mySeq) toast("Server nggak merespons");
       } finally {
         if (seq.current === mySeq) setBusy(false);
       }
     }, 500);
-    return () => clearTimeout(timer);
+    return () => {
+      clearTimeout(timer);
+    };
   }, [text, from, preset, toast, active.style, active.tone, ja]);
 
   const speak = (s: string, lang?: string) => {
