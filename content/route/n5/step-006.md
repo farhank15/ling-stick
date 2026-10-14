@@ -10,10 +10,12 @@ objectives:
   - "Memakai この・その・あの sebelum nomina"
 explanation_id: "こ = dekat pembicara (これ = ini di tanganku), そ = dekat lawan bicara (それ = itu di tanganmu), あ = jauh dari keduanya (あれ = itu di sana). どれ = yang mana (pilih dari 3+). Bentuk berdiri sendiri: これ・それ・あれ・どれ. Bentuk penyambung nomina: この・その・あの・どの + N (この本 = buku ini)."
 formation: "これ/それ/あれ/どれ (mandiri) | この/その/あの/どの + N"
+register_note_id: "Penunjuk netral di semua register; bedanya di akhiran kalimat (です vs だ)."
 examples:
   - { jp: "これは私のペンです。", kana: "これはわたしのペンです。", romaji: "kore wa watashi no pen desu.", arti_id: "Ini pulpen saya.", pola_ref: "これ" }
   - { jp: "そのかばんはいくらですか。", kana: "そのかばんはいくらですか。", romaji: "sono kaban wa ikura desu ka.", arti_id: "Tas itu (di dekatmu) berapa harganya?", pola_ref: "その + N" }
   - { jp: "あれは富士山です。", kana: "あれはふじさんです。", romaji: "are wa fujisan desu.", arti_id: "Itu (di sana) Gunung Fuji.", pola_ref: "あれ" }
+  - { jp: "これ俺の。", kana: "これおれの。", romaji: "kore ore no.", arti_id: "Ini punya gue. [kasual]", pola_ref: "これ", register: "kasual" }
 pitfalls_id:
   - "それ vs あれ: kalau benda jauh dari KEDUANYA → あれ, bukan それ."
   - "この vs これ: この本 (buku ini) vs これは本です (ini adalah buku) — この selalu diikuti nomina."

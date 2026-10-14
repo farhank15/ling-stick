@@ -10,10 +10,12 @@ objectives:
   - "Versi kasual なくちゃ・なきゃ"
 explanation_id: "V-なければなりません = harus (薬を飲まなければなりません). Rumus: Nai-form minus い + ければなりません. Versi sopan pendek: ないといけません. Kasual: なくちゃ / なきゃ (行かなくちゃ = harus pergi nih). Negatif keharusan (tidak perlu): なくてもいいです."
 formation: "Nai(-い) + ければなりません | ないといけません | kasual: なくちゃ/なきゃ"
+register_note_id: "Ke temple formal pakai なければなりません; ngobrol biasa cukup なくちゃ."
 examples:
   - { jp: "毎日薬を飲まなければなりません。", kana: "まいにちくすりをのまなければなりません。", romaji: "mainichi kusuri o nomanakereba narimasen.", arti_id: "Setiap hari harus minum obat.", pola_ref: "V-なければなりません" }
   - { jp: "もう帰らなくちゃ。", kana: "もうかえらなくちゃ。", romaji: "mou kaeranakucha.", arti_id: "Aku harus pulang sekarang.", pola_ref: "V-なくちゃ" }
   - { jp: "今日は来なくてもいいです。", kana: "きょうはこなくてもいいです。", romaji: "kyou wa konakute mo ii desu.", arti_id: "Hari ini tidak perlu datang.", pola_ref: "V-なくてもいい" }
+  - { jp: "宿題やらなきゃ。", kana: "しゅくだいやらなきゃ。", romaji: "shukudai yaranakya.", arti_id: "Harus ngerjain PR nih. [kasual]", pola_ref: "V-なきゃ", register: "kasual" }
 pitfalls_id:
   - "なければ vs なくては: keduanya benar, なければ lebih umum."
   - "Tidak perlu = なくてもいい (bukan なければならない + ない)."

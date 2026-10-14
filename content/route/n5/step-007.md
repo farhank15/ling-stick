@@ -10,10 +10,12 @@ objectives:
   - "Menandai tujuan/arah dengan に・へ + 行きます"
 explanation_id: "を menandai OBJEK aksi (ごはんを食べる). に menandai TUJUAN tiba / WAKTU (学校に行く, 3時に). へ = に versi arah (ditulis へ dibaca え), nuansa arah perjalanan. Pola inti: 場所に/へ行きます・来ます・帰ります."
 formation: "N を V | 場所に/へ 行く・来る・帰る | 時間に V"
+register_note_id: "Partikel sama di semua register; versi kasual cukup ganti akhiran (行きます→行く)."
 examples:
   - { jp: "パンを食べます。", kana: "パンをたべます。", romaji: "pan o tabemasu.", arti_id: "Makan roti.", pola_ref: "NをV" }
   - { jp: "学校へ行きます。", kana: "がっこうへいきます。", romaji: "gakkou e ikimasu.", arti_id: "Pergi ke sekolah.", pola_ref: "場所へ行く" }
   - { jp: "7時に起きます。", kana: "しちじにおきます。", romaji: "shichiji ni okimasu.", arti_id: "Bangun jam 7.", pola_ref: "時間にV" }
+  - { jp: "パン食べる。", kana: "パンたべる。", romaji: "pan taberu.", arti_id: "Makan roti. [kasual — を sering di-drop]", pola_ref: "NをV", register: "kasual" }
 pitfalls_id:
   - "へ dibaca え sebagai partikel."
   - "を tidak dipakai untuk tujuan (×学校をいきます)."

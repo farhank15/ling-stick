@@ -10,10 +10,12 @@ objectives:
   - "Negasi dan tanya keinginan"
 explanation_id: "たいです = ingin. Buang ます dari bentuk sopan, tambah たいです: たべます→たべたいです, のみます→のみたいです, します→したいです. Karena たい adalah kata sifat い: negatif たくないです, lampau たかったです. Subjek keinginan orang lain pakai がる (hindari di N5 — cukup untuk diri sendiri)."
 formation: "ますstem + たいです | たくないです (tidak ingin) | たかったです (ingin dulu)"
+register_note_id: "たいです aman; たい (tanpa です) untuk teman dekat. Jangan pakai たい untuk keinginan orang lain."
 examples:
   - { jp: "寿司を食べたいです。", kana: "すしをたべたいです。", romaji: "sushi o tabetai desu.", arti_id: "Saya ingin makan sushi.", pola_ref: "V-たいです" }
   - { jp: "日本に行きたいです。", kana: "にほんにいきたいです。", romaji: "nihon ni ikitai desu.", arti_id: "Saya ingin pergi ke Jepang.", pola_ref: "V-たいです" }
   - { jp: "今日は何もしたくないです。", kana: "きょうはなにもしたくないです。", romaji: "kyou wa nani mo shitakunai desu.", arti_id: "Hari ini tidak ingin melakukan apa-apa.", pola_ref: "V-たくないです" }
+  - { jp: "寿司食べたい！", kana: "すしたべたい！", romaji: "sushi tabetai!", arti_id: "Pengen sushi! [kasual]", pola_ref: "V-たい", register: "kasual" }
 pitfalls_id:
   - "たい menempel ke stem ます (×たべるたい)."
   - "Untuk orang lain jangan たい langsung (dia ingin = たがっている — materi N4)."

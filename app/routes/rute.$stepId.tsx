@@ -173,19 +173,39 @@ export default function RuteStep() {
       </div>
 
       <div className="card space-y-3 p-4">
-        <p className="label">Contoh ({step.examples.length})</p>
+        <p className="label">Contoh ({step.examples.length}) · formal vs kasual</p>
+        {step.register_note_id ? (
+          <p className="rounded-xl bg-sky-50 px-3 py-2 text-xs text-sky-800 dark:bg-sky-950/60 dark:text-sky-200">
+            {step.register_note_id}
+          </p>
+        ) : null}
         {step.examples.map((ex, i) => (
           <div key={i} className="border-b border-zinc-100 pb-2 last:border-0 last:pb-0 dark:border-zinc-800">
-            {hasJa(ex.jp) ? (
-              <JaText
-                text={ex.jp}
-                reading={ex.romaji ? `${ex.kana} (${ex.romaji})` : ex.kana}
-                kanjiClassName="text-teal-700 dark:text-teal-400"
-                className="font-semibold"
-              />
-            ) : (
-              <p className="font-semibold">{ex.jp}</p>
-            )}
+            <div className="flex items-start justify-between gap-2">
+              <div className="min-w-0">
+                {hasJa(ex.jp) ? (
+                  <JaText
+                    text={ex.jp}
+                    reading={ex.romaji ? `${ex.kana} (${ex.romaji})` : ex.kana}
+                    kanjiClassName="text-teal-700 dark:text-teal-400"
+                    className="font-semibold"
+                  />
+                ) : (
+                  <p className="font-semibold">{ex.jp}</p>
+                )}
+              </div>
+              <span
+                className={`shrink-0 rounded-md px-1.5 py-0.5 text-[10px] font-bold ${
+                  ex.register === "kasual"
+                    ? "bg-violet-100 text-violet-700 dark:bg-violet-950 dark:text-violet-300"
+                    : ex.register === "anime"
+                      ? "bg-red-100 text-red-700 dark:bg-red-950 dark:text-red-300"
+                      : "bg-zinc-100 text-zinc-500 dark:bg-zinc-800 dark:text-zinc-400"
+                }`}
+              >
+                {ex.register === "kasual" ? "kasual" : ex.register === "anime" ? "anime ⚠" : "formal"}
+              </span>
+            </div>
             <p className="mt-0.5 text-xs text-zinc-500">{ex.arti_id}</p>
             {ex.pola_ref ? <p className="text-[11px] text-zinc-400">{ex.pola_ref}</p> : null}
           </div>

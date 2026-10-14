@@ -10,10 +10,12 @@ objectives:
   - "Menyatakan bersama (と) dan juga (も)"
 explanation_id: "で = TEMPAT aksi terjadi (学校で勉強する) atau ALAT (バスで行く, はしで食べる). と = BERSAMA (友達と行く) atau kutipan (と言う). も = JUGA — menggantikan は/が/を (わたしも学生です). Beda に vs で: に = titik tiba/keberadaan, で = tempat aksi."
 formation: "場所でV (aksi) | 道具でV | NとV (bersama) | Nも (juga)"
+register_note_id: "Partikel sama di semua register; kasual sering drop partikel (友達と→友達と tetap, を yang hilang)."
 examples:
   - { jp: "図書館で本を読みます。", kana: "としょかんでほんをよみます。", romaji: "toshokan de hon o yomimasu.", arti_id: "Membaca buku di perpustakaan.", pola_ref: "場所でV" }
   - { jp: "はしでごはんを食べます。", kana: "はしでごはんをたべます。", romaji: "hashi de gohan o tabemasu.", arti_id: "Makan nasi dengan sumpit.", pola_ref: "道具でV" }
   - { jp: "友達と映画を見ます。", kana: "ともだちとえいがをみます。", romaji: "tomodachi to eiga o mimasu.", arti_id: "Menonton film bersama teman.", pola_ref: "NとV" }
+  - { jp: "友達と映画見る。", kana: "ともだちとえいがみる。", romaji: "tomodachi to eiga miru.", arti_id: "Nonton bareng teman. [kasual — を drop]", pola_ref: "NとV", register: "kasual" }
 pitfalls_id:
   - "に vs で: 学校にいる (ada di sekolah) vs 学校で勉強する (belajar di sekolah)."
   - "も menggantikan partikel: ×わたしはも — langsung わたしも."

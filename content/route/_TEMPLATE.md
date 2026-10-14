@@ -14,10 +14,10 @@ objectives:
   - "Tujuan 2"
 explanation_id: "Penjelasan singkat Bahasa Indonesia (min 20 karakter)."
 formation: "Aturan bentuk (markdown singkat)."
+register_note_id: "ください = sopan (ke siapa pun aman). Bentuk て polos = ke teman dekat saja."
 examples:
-  - { jp: "食べてください。", kana: "たべてください。", romaji: "tabete kudasai.", arti_id: "Tolong makan.", pola_ref: "V-て + ください" }
-  - { jp: "水を飲んでください。", kana: "みずをのんでください。", romaji: "mizu o nonde kudasai.", arti_id: "Tolong minum air.", pola_ref: "V-て + ください" }
-  - { jp: "ゆっくり話してください。", kana: "ゆっくりはなしてください。", romaji: "yukkuri hanashite kudasai.", arti_id: "Tolong bicara pelan-pelan.", pola_ref: "V-て + ください" }
+  - { jp: "食べてください。", kana: "たべてください。", romaji: "tabete kudasai.", arti_id: "Tolong makan. [sopan]", pola_ref: "V-て + ください", register: "formal" }
+  - { jp: "水飲んで。", kana: "みずのんで。", romaji: "mizu nonde.", arti_id: "Minum gih. [kasual — teman dekat saja]", pola_ref: "V-て", register: "kasual" }
 pitfalls_id:
   - "Jebakan umum pembelajar Indonesia."
 cloze_items:

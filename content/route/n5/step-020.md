@@ -10,10 +10,12 @@ objectives:
   - "Kalimat lampau/kini/depan dengan penanda waktu"
 explanation_id: "Relatif: 昨日 (kemarin)・今日 (hari ini)・明日 (besok), 先週・今週・来週, 去年・今年・来年. Absolut: 月曜日・3月・2024年. Aturan に: jam/hari/tanggal/bulan spesifik pakai に (3時に, 月曜日に) — tapi 今日・明日・毎日・先週 TANPA に. Lampau kasual/sopan ikuti V-た/V-ました."
 formation: "昨日/今日/明日 (tanpa に) | N時・N曜日・N月 + に | V-た/V-ました (lampau)"
+register_note_id: "Penanda waktu netral; beda register di akhir kalimat (見ました vs 見た)."
 examples:
   - { jp: "昨日映画を見ました。", kana: "きのうえいがをみました。", romaji: "kinou eiga o mimashita.", arti_id: "Kemarin menonton film.", pola_ref: "昨日 + V-ました" }
   - { jp: "月曜日に試験があります。", kana: "げつようびにしけんがあります。", romaji: "getsuyoubi ni shiken ga arimasu.", arti_id: "Hari Senin ada ujian.", pola_ref: "N曜日 + に" }
   - { jp: "来年日本に行きます。", kana: "らいねんにほんにいきます。", romaji: "rainen nihon ni ikimasu.", arti_id: "Tahun depan pergi ke Jepang.", pola_ref: "来年 (tanpa に)" }
+  - { jp: "昨日映画見た。", kana: "きのうえいがみた。", romaji: "kinou eiga mita.", arti_id: "Kemarin nonton. [kasual]", pola_ref: "昨日 + V-た", register: "kasual" }
 pitfalls_id:
   - "今日・明日・毎日・毎週・先週 tanpa に (×明日に)."
   - "月 (bulan) pakai に: 3月に. 週 juga: 来週に."

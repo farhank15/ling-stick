@@ -10,10 +10,13 @@ objectives:
   - "Menilai kemampuan dengan 上手・下手"
 explanation_id: "Suka/tidak: Nがすきです / きらいです (猫がすきです). Kemampuan: Nがじょうずです (上手 = pandai) / へたです (下手 = payah). Keduanya pakai が karena N adalah fokus penilaian. Penguat: とても (sangat), あまり〜ない (tidak begitu), 全然〜ない (sama sekali tidak)."
 formation: "Nがすき/きらい | Nがじょうず/へた | とても/あまり/全然"
+register_note_id: "すき/じょうず pakai が di semua register. お前 (anime) jangan dipakai — naturalnya あなた/名前+さん."
 examples:
   - { jp: "私は日本語が好きです。", kana: "わたしはにほんごがすきです。", romaji: "watashi wa nihongo ga suki desu.", arti_id: "Saya suka bahasa Jepang.", pola_ref: "Nがすき" }
   - { jp: "彼は歌がとても上手です。", kana: "かれはうたがとてもじょうずです。", romaji: "kare wa uta ga totemo jouzu desu.", arti_id: "Dia sangat pandai bernyanyi.", pola_ref: "Nがじょうず" }
   - { jp: "納豆はあまり好きじゃないです。", kana: "なっとうはあまりすきじゃないです。", romaji: "nattou wa amari suki janai desu.", arti_id: "Tidak begitu suka natto.", pola_ref: "あまり〜ない" }
+  - { jp: "カラオケ好き？", kana: "カラオケすき？", romaji: "karaoke suki?", arti_id: "Suka karaoke? [kasual]", pola_ref: "Nがすき (が drop)", register: "kasual" }
+  - { jp: "お前はもう死んでいる。", kana: "おまえはもうしんでいる。", romaji: "omae wa mou shindeiru.", arti_id: "'Kau sudah mati.' [anime — お前 ke orang asli = kasar; naturalnya あなたは]", pola_ref: "お前 (yakuwarigo)", register: "anime" }
 pitfalls_id:
   - "すき pakai が (×すきは/を) — kecuali kontras: すしはすき (sushi sih suka)."
   - "上手 pakai が; orangnya pakai は (彼は歌が上手)."

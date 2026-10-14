@@ -10,10 +10,12 @@ objectives:
   - "Urutan sebab dengan てから"
 explanation_id: "NからNまで = dari–sampai: 9時から5時まで (jam 9 sampai 5), 東京から大阪まで. V-てから = setelah: 食べてから、歯をみがきます (setelah makan, sikat gigi). から juga = karena (kasual) tapi itu N4 — di N5 cukup rentang + urutan."
 formation: "NからNまで | V-てから、V"
+register_note_id: "から/まで netral semua register; bedanya akhiran kalimat."
 examples:
   - { jp: "9時から5時まで働きます。", kana: "くじからごじまではたらきます。", romaji: "kuji kara goji made hatarakimasu.", arti_id: "Bekerja dari jam 9 sampai jam 5.", pola_ref: "NからNまで" }
   - { jp: "手を洗ってから食べます。", kana: "てをあらってからたべます。", romaji: "te o aratte kara tabemasu.", arti_id: "Setelah cuci tangan, makan.", pola_ref: "V-てから" }
   - { jp: "家から駅まで歩きます。", kana: "いえからえきまであるきます。", romaji: "ie kara eki made arukimasu.", arti_id: "Jalan kaki dari rumah sampai stasiun.", pola_ref: "NからNまで (tempat)" }
+  - { jp: "9時から5時まで働く。", kana: "くじからごじまではたらく。", romaji: "kuji kara goji made hataraku.", arti_id: "Kerja jam 9 sampe jam 5. [kasual]", pola_ref: "NからNまで", register: "kasual" }
 pitfalls_id:
   - "まで termasuk titik akhir (sampai jam 5 = masih kerja jam 5)."
   - "てから = urutan tegas; て saja = rangkaian longgar."

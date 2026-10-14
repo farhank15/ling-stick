@@ -10,10 +10,13 @@ objectives:
   - "Bedakan dengan てはいけません"
 explanation_id: "V-ないでください = tolong jangan (ここで吸わないでください). Lebih halus dari てはいけません (dilarang keras). Rumus: Nai-form + でください (tanpa perubahan lagi). Kasual: ないで (見ないで = jangan lihat!)."
 formation: "V-ない + でください (halus) | banding: V-てはいけません (keras)"
+register_note_id: "ないでください halus ke siapa pun; ないで polos ke teman. Versi anime 黙れ jangan ditiru."
 examples:
   - { jp: "ここで写真を撮らないでください。", kana: "ここでしゃしんをとらないでください。", romaji: "koko de shashin o toranaide kudasai.", arti_id: "Tolong jangan foto di sini.", pola_ref: "V-ないでください" }
   - { jp: "心配しないでください。", kana: "しんぱいしないでください。", romaji: "shinpai shinaide kudasai.", arti_id: "Tolong jangan khawatir.", pola_ref: "V-ないでください" }
   - { jp: "まだ開けないで！", kana: "まだあけないで！", romaji: "mada akenaide!", arti_id: "Jangan dibuka dulu!", pola_ref: "V-ないで (kasual)" }
+  - { jp: "見ないで！", kana: "みないで！", romaji: "minaide!", arti_id: "Jangan liat! [kasual]", pola_ref: "V-ないで", register: "kasual" }
+  - { jp: "黙れ！", kana: "だまれ！", romaji: "damare!", arti_id: "'Diam lo!' [anime/kasar — naturalnya 静かにしてください]", pola_ref: "imperatif kasar", register: "anime" }
 pitfalls_id:
   - "ないでください (mohon) vs なくてください (× salah)."
   - "Untuk benda: 静かにしてください (bukan 静かしないで)."

@@ -10,10 +10,12 @@ objectives:
   - "Mengganti nomina dengan の (yang ...)"
 explanation_id: "AのB = B milik/terkait A: わたしの本 (bukuku), 日本の車 (mobil Jepang), 友達のかばん. の juga pengganti nomina: 赤いの (yang merah), 大きいのが好き (suka yang besar). Rangkaian: これはわたしの友達の車です (ini mobil temanku)."
 formation: "AのB (milik/atribut) | Adj + の (pengganti: yang ...)"
+register_note_id: "の netral semua register; kasual sering memadatkan (俺の→おれの sama, beda di akhiran)."
 examples:
   - { jp: "これは私の本です。", kana: "これはわたしのほんです。", romaji: "kore wa watashi no hon desu.", arti_id: "Ini buku saya.", pola_ref: "AのB" }
   - { jp: "赤いのが好きです。", kana: "あかいのがすきです。", romaji: "akai no ga suki desu.", arti_id: "Saya suka yang merah.", pola_ref: "Adj + の" }
   - { jp: "田中さんの車は新しいです。", kana: "たなかさんのくるまはあたらしいです。", romaji: "tanaka san no kuruma wa atarashii desu.", arti_id: "Mobil Tanaka baru.", pola_ref: "AのB" }
+  - { jp: "赤いのがいい。", kana: "あかいのがいい。", romaji: "akai no ga ii.", arti_id: "Yang merah aja. [kasual]", pola_ref: "Adj + の", register: "kasual" }
 pitfalls_id:
   - "Urutan terbalik dari Indonesia: 友達の車 = mobil teman (bukan teman mobil)."
   - "の + の beruntun wajar (わたしの友達の本)."

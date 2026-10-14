@@ -14,6 +14,8 @@ const exampleSchema = z.object({
   romaji: z.string().default(""),
   arti_id: z.string().min(1),
   pola_ref: z.string().default(""),
+  // Register pemakaian — default formal (backward compatible dengan step lama).
+  register: z.enum(["formal", "kasual", "anime"]).default("formal"),
 });
 
 const clozeItemSchema = z.object({
@@ -39,6 +41,8 @@ export const routeStepSchema = z.object({
   objectives: z.array(z.string().min(1)).min(1).max(3),
   explanation_id: z.string().min(20).max(2000),
   formation: z.string().default(""),
+  // 1 kalimat kapan formal vs kasual pola ini (wajib bila ada contoh anime).
+  register_note_id: z.string().max(500).default(""),
   examples: z.array(exampleSchema).min(3).max(8),
   pitfalls_id: z.array(z.string().min(1)).default([]),
   cloze_items: z.array(clozeItemSchema).min(5).max(12),

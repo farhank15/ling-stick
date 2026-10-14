@@ -10,10 +10,12 @@ objectives:
   - "Menawarkan dengan ましょうか"
 explanation_id: "V-ましょう = ayo (一緒に食べましょう = ayo makan bareng). V-ましょうか = tawaran/pertanyaan (手伝いましょうか = mau saya bantu?). Kasual: stem + う (行こう = ayo pergi — materi N5 akhir/N4 awal, cukup kenal)."
 formation: "V-ましょう (ayo) | V-ましょうか (tawaran) | kasual: stem+う"
+register_note_id: "ましょう sopan dan hangat; ke teman cukup stem+う (行こう) atau ましょう polos."
 examples:
   - { jp: "一緒に昼ごはんを食べましょう。", kana: "いっしょにひるごはんをたべましょう。", romaji: "issho ni hirugohan o tabemashou.", arti_id: "Ayo makan siang bareng.", pola_ref: "V-ましょう" }
   - { jp: "荷物を持ちましょうか。", kana: "にもつをもちましょうか。", romaji: "nimotsu o mochimashou ka.", arti_id: "Mau saya bawakan barangnya?", pola_ref: "V-ましょうか" }
   - { jp: "明日9時に会いましょう。", kana: "あしたくじにあいましょう。", romaji: "ashita kuji ni aimashou.", arti_id: "Besok ketemu jam 9 ya.", pola_ref: "V-ましょう (janji)" }
+  - { jp: "一緒に行こう！", kana: "いっしょにいこう！", romaji: "issho ni ikou!", arti_id: "Ikut yuk! [kasual]", pola_ref: "V-う", register: "kasual" }
 pitfalls_id:
   - "ましょうか = bertanya ke lawan (jangan untuk ajak diri sendiri)."
   - "Balasan ajakan: ええ、そうしましょう (oke!) / すみません、今日はちょっと... (tolak halus)."

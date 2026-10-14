@@ -184,6 +184,18 @@ export function loadAllSteps(): LoadedStep[] {
             throw new Error(`cloze answer "${c.answer}" muncul di distractors`);
           }
         }
+        // Aturan register: tiap step min 1 formal + 1 kasual (pasangan);
+        // anime maks 1 dan wajib ditempeli register_note_id korektif.
+        // matcha: materi full desu/masu = kaku buat target ngobrol santai.
+        const regs = step.examples.map((e) => e.register);
+        if (!regs.includes("formal") || !regs.includes("kasual")) {
+          throw new Error(`butuh pasangan contoh formal + kasual (ada: ${[...new Set(regs)].join(", ")})`);
+        }
+        const animeN = regs.filter((r) => r === "anime").length;
+        if (animeN > 1) throw new Error(`contoh anime maks 1/step (ada ${animeN})`);
+        if (animeN === 1 && !step.register_note_id.trim()) {
+          throw new Error(`contoh anime wajib ditempeli register_note_id korektif`);
+        }
         out.push({ step, file: full });
       } catch (e) {
         const msg = e instanceof Error ? e.message : String(e);

@@ -10,10 +10,12 @@ objectives:
   - "Pengalaman dengan たことがある"
 explanation_id: "Bentuk Ta = lampau kasual: Te-form ganti て→た (たべて→たべた, のんで→のんだ, して→した). V-たことがある = pernah (日本に行ったことがある). Negatif pengalaman: たことがない. Pertanyaan: ことがありますか."
 formation: "Te→Ta (て→た・で→だ) | V-たことがある (pernah) | V-たことがない"
+register_note_id: "Cerita pengalaman sopan pakai ました/ことがあります; ke teman pakai た/ことがある."
 examples:
   - { jp: "昨日映画を見た。", kana: "きのうえいがをみた。", romaji: "kinou eiga o mita.", arti_id: "Kemarin nonton film. (kasual)", pola_ref: "V-た" }
   - { jp: "富士山に登ったことがある。", kana: "ふじさんにのぼったことがある。", romaji: "fujisan ni nobotta koto ga aru.", arti_id: "Pernah mendaki Gunung Fuji.", pola_ref: "V-たことがある" }
   - { jp: "納豆を食べたことがない。", kana: "なっとうをたべたことがない。", romaji: "nattou o tabeta koto ga nai.", arti_id: "Belum pernah makan natto.", pola_ref: "V-たことがない" }
+  - { jp: "富士山登ったことある？", kana: "ふじさんのぼったことある？", romaji: "fujisan nobotta koto aru?", arti_id: "Pernah daki Fuji? [kasual]", pola_ref: "V-たことある", register: "kasual" }
 pitfalls_id:
   - "で→だ: のんだ・およいだ (bukan のんた)."
   - "ことがある selalu lampau (×行くことがある untuk pengalaman)."

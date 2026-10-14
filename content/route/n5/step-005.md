@@ -10,10 +10,12 @@ objectives:
   - "Membuat kalimat sifat + negasi + lampau"
 explanation_id: "Kata sifat い berakhiran い (たかい, おいしい, さむい) — negatif: ganti い→くない (たかくない), lampau: かった (たかかった). Kata sifat な tidak berakhiran い (きれい, べんり, しずか — きれい tampak い tapi な!) — butuh な sebelum nomina (きれいな花), negatif: じゃない (きれいじゃない), lampau: だった."
 formation: "い-adj: い→くない / かった | な-adj: な + N / じゃない / だった | kecuali: きれい・きらい・ゆうめい = な"
+register_note_id: "です aman; akhiran だ・だった untuk teman dekat. Sifatnya sama, bungkusnya beda."
 examples:
   - { jp: "このりんごはおいしいです。", kana: "このりんごはおいしいです。", romaji: "kono ringo wa oishii desu.", arti_id: "Apel ini enak.", pola_ref: "い-adj + です" }
   - { jp: "京都はきれいな町です。", kana: "きょうとはきれいなまちです。", romaji: "kyouto wa kirei na machi desu.", arti_id: "Kyoto adalah kota yang indah.", pola_ref: "な-adj + な + N" }
   - { jp: "昨日は寒くなかったです。", kana: "きのうはさむくなかったです。", romaji: "kinou wa samukunakatta desu.", arti_id: "Kemarin tidak dingin.", pola_ref: "い-adj negatif lampau" }
+  - { jp: "このラーメンうまい！", kana: "このラーメンうまい！", romaji: "kono raamen umai!", arti_id: "Ramen ini enak banget! [kasual]", pola_ref: "い-adj plain", register: "kasual" }
 pitfalls_id:
   - "きれい, きらい, ゆうめい berakhiran い tapi golongan な."
   - "いい (bagus) tak beraturan: negatif よくない, lampau よかった."

@@ -10,10 +10,12 @@ objectives:
   - "Membuat kalimat negatif sopan dengan ません"
 explanation_id: "Bentuk Nai = versi negatif kasual. Kelompok 2: ganti る→ない (たべる→たべない). Kelompok 1: ubah vokal u→a + ない (のむ→のまない, かく→かかない, はなす→はなさない). Khusus: う→わ (あう→あわない), ある→ない. Tak beraturan: する→しない, くる→こない. Versi sopan: ません (たべません)."
 formation: "Kel.2 る→ない | Kel.1 u→a+ない (う→わない) | する→しない くる→こない ある→ない | sopan: ません"
+register_note_id: "ません aman; ない polos untuk teman dekat dan wajib sebelum ければ・なくちゃ."
 examples:
   - { jp: "今日は肉を食べない。", kana: "きょうはにくをたべない。", romaji: "kyou wa niku o tabenai.", arti_id: "Hari ini tidak makan daging.", pola_ref: "V-ない" }
   - { jp: "お酒を飲みません。", kana: "おさけをのみません。", romaji: "osake o nomimasen.", arti_id: "Tidak minum alkohol.", pola_ref: "V-ません" }
   - { jp: "明日は来ないでください。", kana: "あしたはこないでください。", romaji: "ashita wa konaide kudasai.", arti_id: "Besok tolong jangan datang.", pola_ref: "V-ないでください" }
+  - { jp: "今日は行かない。", kana: "きょうはいかない。", romaji: "kyou wa ikanai.", arti_id: "Hari ini nggak pergi. [kasual]", pola_ref: "V-ない", register: "kasual" }
 pitfalls_id:
   - "う verbs: あう→あわない (bukan あうない), かう→かわない."
   - "ある negatifnya ない (bukan あらない)."

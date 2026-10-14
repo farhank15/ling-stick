@@ -10,10 +10,12 @@ objectives:
   - "Memakai ています (sedang berlangsung)"
 explanation_id: "Bentuk Te menyambung aksi berurutan: 朝ごはんを食べて、学校に行きます (sarapan DULU lalu berangkat). V-ています = sedang berlangsung (テレビを見ています) atau keadaan hasil (結婚しています = sudah menikah). Negatif sambung: なくて (食べなくて)."
 formation: "V-て、V (urutan) | V-ています (progres/hasil) | V-なくて (negatif sambung)"
+register_note_id: "ています netral — dipakai formal dan kasual (bedanya akhiran: います vs いる)."
 examples:
   - { jp: "手を洗って、ごはんを食べます。", kana: "てをあらって、ごはんをたべます。", romaji: "te o aratte, gohan o tabemasu.", arti_id: "Cuci tangan, lalu makan.", pola_ref: "V-て、V" }
   - { jp: "今音楽を聞いています。", kana: "いまおんがくをきいています。", romaji: "ima ongaku o kiiteimasu.", arti_id: "Sekarang sedang mendengarkan musik.", pola_ref: "V-ています" }
   - { jp: "彼はもう結婚しています。", kana: "かれはもうけっこんしています。", romaji: "kare wa mou kekkon shiteimasu.", arti_id: "Dia sudah menikah.", pola_ref: "V-ています (hasil)" }
+  - { jp: "今音楽聞いてる。", kana: "いまおんがくきいてる。", romaji: "ima ongaku kiiteru.", arti_id: "Lagi dengerin musik. [kasual — ている→てる, を drop]", pola_ref: "V-てる", register: "kasual" }
 pitfalls_id:
   - "Urutan penting: 食べて行く (makan lalu pergi) ≠ 行って食べる (pergi lalu makan)."
   - "ています untuk aksi sesaat (死ぬ→死んでいる = sudah mati, bukan sedang mati)."

@@ -10,10 +10,13 @@ objectives:
   - "Memakai permintaan sopan ください"
 explanation_id: "Bentuk Te menyambung aksi; pola permintaan sopan: V-て + ください. Kelompok 1 (う): のむ→のんで, かく→かいて, はなす→はなして, まつ→まって. Kelompok 2: たべる→たべて, みる→みて. Tak beraturan: する→して, くる→きて."
 formation: "Kel.1 う→って/んで/いて/して | Kel.2 る→て | する→して くる→きて | + ください"
+register_note_id: "ください sopan ke siapa pun; て polos (食べて) cuma ke teman dekat — ke orang asing terdengar nyuruh."
 examples:
   - { jp: "食べてください。", kana: "たべてください。", romaji: "tabete kudasai.", arti_id: "Tolong makan.", pola_ref: "V-て + ください" }
   - { jp: "水を飲んでください。", kana: "みずをのんでください。", romaji: "mizu o nonde kudasai.", arti_id: "Tolong minum air.", pola_ref: "V-て + ください" }
   - { jp: "ゆっくり話してください。", kana: "ゆっくりはなしてください。", romaji: "yukkuri hanashite kudasai.", arti_id: "Tolong bicara pelan-pelan.", pola_ref: "V-て + ください" }
+  - { jp: "水飲んで。", kana: "みずのんで。", romaji: "mizu nonde.", arti_id: "Minum gih. [kasual — teman dekat]", pola_ref: "V-て", register: "kasual" }
+  - { jp: "ちょっと待って。", kana: "ちょっとまって。", romaji: "chotto matte.", arti_id: "Tunggu bentar. [kasual]", pola_ref: "V-て", register: "kasual" }
 pitfalls_id:
   - "Jangan pakai bentuk kamus + ください (×食べるください)."
   - "きいてください ambigu (dengar/tanya) — lihat konteks."

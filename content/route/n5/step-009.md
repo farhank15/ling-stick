@@ -10,10 +10,12 @@ objectives:
   - "Memakai counter つ・人・時"
 explanation_id: "Jam: 時 (じ) — 1時 いちじ, 3時 さんじ, 4時 よじ, 7時 しちじ, 9時 くじ (bacaan spesial!). Menit: 分 — 1分 いっぷん, 3分 さんぷん, 6分 ろっぷん, 8分 はっぷん, 10分 じゅっぷん (bunyi ぷ berubah). Counter benda umum: ひとつ・ふたつ・みっつ・よっつ・いつつ (1-5 spesial). Orang: ひとり・ふたり, lalu さんにん. Umur: さい (20歳 はたち spesial)."
 formation: "N時 (+に) | N分 | ひとつ/ふたつ/みっつ | N人 | N歳"
+register_note_id: "Angka/counter netral — beda register cuma di akhir kalimat."
 examples:
   - { jp: "4時に会いましょう。", kana: "よじにあいましょう。", romaji: "yoji ni aimashou.", arti_id: "Mari bertemu jam 4.", pola_ref: "N時に" }
   - { jp: "りんごをみっつください。", kana: "りんごをみっつください。", romaji: "ringo o mittsu kudasai.", arti_id: "Tolong 3 apel.", pola_ref: "counter つ" }
   - { jp: "家族は4人です。", kana: "かぞくはよにんです。", romaji: "kazoku wa yonin desu.", arti_id: "Keluarga (terdiri dari) 4 orang.", pola_ref: "N人" }
+  - { jp: "4時にね。", kana: "よじにね。", romaji: "yoji ni ne.", arti_id: "Jam 4 ya. [kasual]", pola_ref: "N時に", register: "kasual" }
 pitfalls_id:
   - "4時=よじ, 7時=しちじ, 9時=くじ — jangan いちよじ/ななじ/きゅうじ."
   - "ひとり・ふたり (1-2 orang) spesial, 3+ pakai にん."
