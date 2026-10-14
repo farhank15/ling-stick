@@ -169,8 +169,27 @@ function gradeOf(done: number, total: number, correct: number): number | null {
 }
 
 /** Peta progres penuh bahasa aktif. XP = 100/pass + 25 perfect (dihitung, tanpa storage). */
+const mapCache = new Map<string, { at: number; map: RouteMap }>();
+const MAP_TTL = 30_000;
+
 export async function getRouteMap(): Promise<RouteMap> {
   const lang = await getTargetLang();
+  const cached = mapCache.get(lang);
+  // Cache 30 dtk: peta dibuka berulang (map ↔ step ↔ review) tanpa bayar ulang.
+  // Invalidasi otomatis saat jawab soal? Tidak — TTL pendek cukup; progres
+  // terbaru muncul maksimal 30 dtk kemudian (atau refresh).
+  if (cached && Date.now() - cached.at < MAP_TTL) return cached.map;
+  const map = await buildRouteMap(lang);
+  mapCache.set(lang, { at: Date.now(), map });
+  return map;
+}
+
+/** Hapus cache peta (dipanggil setelah jawab soal rute biar progres langsung segar). */
+export function clearRouteMapCache() {
+  mapCache.clear();
+}
+
+async function buildRouteMap(lang: string): Promise<RouteMap> {
   const steps = loadAllSteps()
     .map(({ step }) => step)
     .filter((s) => (lang === "ja" ? s.step_id.startsWith("ja-") : false));

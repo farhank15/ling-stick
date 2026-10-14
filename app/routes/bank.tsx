@@ -94,11 +94,12 @@ export async function loader({ request }: { request: Request }) {
   // Filter level tetap client-fetch (refresh). Import server di-dynamic (RRv7).
   // matcha: dulu entries kosong + loading=true → tiap kunjungan ada jeda spinner.
   const { listBank, getBankStats } = await import("~/lib/bank.server");
-  const [entries, stats] = await Promise.all([
+  const [entries, stats, targetLang] = await Promise.all([
     listBank({ status: "new" }),
     getBankStats(),
+    getTargetLang(),
   ]);
-  return { lang: await getTargetLang(), entries, stats };
+  return { lang: targetLang, entries, stats };
 }
 
 export default function BankPage() {

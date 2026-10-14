@@ -89,12 +89,12 @@ export default function Rute() {
           </div>
           <div className="flex gap-1">
             {prevSeg !== undefined ? (
-              <Link to={`/rute?seg=${prevSeg}`} className="btn-ghost p-2" aria-label="Segmen sebelumnya">
+              <Link to={`/rute?seg=${prevSeg}`} prefetch="intent" className="btn-ghost p-2" aria-label="Segmen sebelumnya">
                 <ChevronLeft className="h-5 w-5" />
               </Link>
             ) : null}
             {nextSeg !== undefined ? (
-              <Link to={`/rute?seg=${nextSeg}`} className="btn-ghost p-2" aria-label="Segmen berikut">
+              <Link to={`/rute?seg=${nextSeg}`} prefetch="intent" className="btn-ghost p-2" aria-label="Segmen berikut">
                 <ChevronRight className="h-5 w-5" />
               </Link>
             ) : null}

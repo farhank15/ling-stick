@@ -152,8 +152,13 @@ export function splitFrontmatter(file: string): { front: Record<string, unknown>
 
 export type LoadedStep = { step: RouteStep; file: string };
 
+// Cache in-memory: konten statis (berubah hanya saat deploy/merge md baru).
+// Tanpa ini tiap request (home, /rute, validate) baca + parse 20+ file.
+let stepsCache: LoadedStep[] | null = null;
+
 /** Muat + validasi SEMUA step. Throw dengan daftar error per file. */
 export function loadAllSteps(): LoadedStep[] {
+  if (stepsCache) return stepsCache;
   const out: LoadedStep[] = [];
   const errors: string[] = [];
   if (!existsSync(CONTENT_DIR)) return out;
@@ -196,5 +201,12 @@ export function loadAllSteps(): LoadedStep[] {
     ids.set(step.step_id, file);
     orders.set(step.order, file);
   }
-  return out.sort((a, b) => a.step.order - b.step.order);
+  const sorted = out.sort((a, b) => a.step.order - b.step.order);
+  stepsCache = sorted;
+  return sorted;
+}
+
+/** Reset cache (dipakai validate/test setelah md berubah tanpa restart). */
+export function clearStepsCache() {
+  stepsCache = null;
 }

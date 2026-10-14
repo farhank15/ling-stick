@@ -96,16 +96,19 @@ export async function getBankStats() {
   const baseConds =
     lang === "ja" ? [eq(wordbank.lang, lang), ne(wordbank.type, "kana")] : [eq(wordbank.lang, lang)];
   const statConds = and(...baseConds);
-  const perLevel = await db
-    .select({ cefr: wordbank.cefr, total: sql<number>`count(*)` })
-    .from(wordbank)
-    .where(and(statConds, eq(wordbank.status, "new")))
-    .groupBy(wordbank.cefr);
-  const perStatus = await db
-    .select({ status: wordbank.status, total: sql<number>`count(*)` })
-    .from(wordbank)
-    .where(statConds)
-    .groupBy(wordbank.status);
+  // Dua agregasi independen — paralel (hemat 1 round-trip Turso).
+  const [perLevel, perStatus] = await Promise.all([
+    db
+      .select({ cefr: wordbank.cefr, total: sql<number>`count(*)` })
+      .from(wordbank)
+      .where(and(statConds, eq(wordbank.status, "new")))
+      .groupBy(wordbank.cefr),
+    db
+      .select({ status: wordbank.status, total: sql<number>`count(*)` })
+      .from(wordbank)
+      .where(statConds)
+      .groupBy(wordbank.status),
+  ]);
   const byLevel = Object.fromEntries(perLevel.map((r) => [r.cefr, Number(r.total)])) as Record<string, number>;
   const byStatus = Object.fromEntries(perStatus.map((r) => [r.status, Number(r.total)])) as Record<string, number>;
   return {

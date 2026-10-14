@@ -55,15 +55,20 @@ export async function loader({ request }: LoaderFunctionArgs) {
 
   const levelParam = url.searchParams.get("level");
   const level = isReadingLevelFor(lang, levelParam) ? levelParam! : null;
+  // Daftar + bacaan lanjutan independen — paralel (hemat 1 round-trip).
+  const [list, nextUp] = await Promise.all([
+    listReadings(lang, level ?? undefined),
+    level ? Promise.resolve(null) : nextReading(lang),
+  ]);
   return {
     mode: "list" as const,
     lang,
     level,
     levels: readingLevels(lang),
     reading: null,
-    list: await listReadings(lang, level ?? undefined),
+    list,
     // Graded path: bacaan berikutnya yang belum dibaca (termudah dulu).
-    nextUp: level ? null : await nextReading(lang),
+    nextUp,
   };
 }
 

@@ -14,26 +14,28 @@ export const meta: MetaFunction = () => [{ title: "LingStick" }];
 export async function loader({ request }: LoaderFunctionArgs) {
   await requireUser(request);
   const lang = await getTargetLang();
-  const recent = await listItems({ limit: 5 });
-  // Kartu lanjutan rute (JA saja) — 1 query set + file md lokal, murah.
+  const recentP = listItems({ limit: 5 });
+  // Kartu lanjutan rute (JA saja) — paralel dengan listItems, bukan sesudahnya.
+  // 1 query set + file md lokal (cached), murah.
+  const routeP =
+    lang === "ja"
+      ? import("~/lib/route.progress").then((m) => m.getRouteMap())
+      : Promise.resolve(null);
+  const [recent, map] = await Promise.all([recentP, routeP]);
   let routeCard: { order: number; title: string; segDone: number; segTotal: number; xp: number } | null = null;
-  if (lang === "ja") {
-    try {
-      const { getRouteMap } = await import("~/lib/route.progress");
-      const map = await getRouteMap();
-      if (map.next) {
-        const segSteps = map.steps.filter((s) => s.step.segment === map.next!.step.segment);
-        routeCard = {
-          order: map.next.step.order,
-          title: map.next.step.title_id,
-          segDone: segSteps.filter((s) => s.state === "passed").length,
-          segTotal: segSteps.length,
-          xp: map.xp,
-        };
-      }
-    } catch {
-      /* rute opsional — home tetap jalan */
+  try {
+    if (map?.next) {
+      const segSteps = map.steps.filter((s) => s.step.segment === map.next!.step.segment);
+      routeCard = {
+        order: map.next.step.order,
+        title: map.next.step.title_id,
+        segDone: segSteps.filter((s) => s.state === "passed").length,
+        segTotal: segSteps.length,
+        xp: map.xp,
+      };
     }
+  } catch {
+    /* rute opsional — home tetap jalan */
   }
   return { recent, lang, routeCard };
 }
