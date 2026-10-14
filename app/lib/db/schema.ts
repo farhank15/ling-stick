@@ -142,10 +142,15 @@ export const llmCache = sqliteTable("llm_cache", {
   createdAt: integer("created_at").notNull(),
 });
 
-export const laraUsage = sqliteTable("lara_usage", {
-  month: text("month").primaryKey(), // YYYY-MM
-  chars: integer("chars").notNull().default(0),
-});
+export const laraUsage = sqliteTable(
+  "lara_usage",
+  {
+    month: text("month").notNull(), // YYYY-MM
+    keyIdx: integer("key_idx").notNull().default(0), // 0 = key 1, 1 = key 2
+    chars: integer("chars").notNull().default(0),
+  },
+  (t) => [primaryKey({ columns: [t.month, t.keyIdx] })],
+);
 
 export const sessions = sqliteTable(
   "sessions",

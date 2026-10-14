@@ -71,7 +71,7 @@ type Stats = {
   llm7: { day: string; calls: number }[];
   quiz: { day: string; title: string; total: number; done: number; correct: number; completed: number }[];
   streak: number;
-  lara: { used: number; limit: number; remaining: number };
+  lara: { used: number; limit: number; remaining: number; keys: { used: number; limit: number; remaining: number }[] };
 };
 
 export default function Settings() {
@@ -167,13 +167,26 @@ export default function Settings() {
         <h2 className="label">Lara Translate</h2>
         <Row
           k="Status"
-          v={data.lara.configured ? "terkonfigurasi" : "belum diset (fallback LLM)"}
+          v={
+            data.lara.configured
+              ? `terkonfigurasi (${data.lara.keys.length} key)`
+              : "belum diset (fallback LLM)"
+          }
           ok={data.lara.configured}
         />
         <Row
           k="Kuota bulan ini"
           v={`${data.lara.used.toLocaleString("id-ID")} / ${data.lara.limit.toLocaleString("id-ID")} karakter`}
         />
+        {data.lara.keys.length > 1
+          ? data.lara.keys.map((k, i) => (
+              <Row
+                key={i}
+                k={`Key ${i + 1}`}
+                v={`${k.used.toLocaleString("id-ID")} / ${k.limit.toLocaleString("id-ID")}`}
+              />
+            ))
+          : null}
         <p className="text-[11px] text-zinc-400">
           Kuota reset tiap awal bulan. Halaman Terjemah pakai Lara; translate otomatis di dashboard
           pakai AI biar kuota Lara awet.

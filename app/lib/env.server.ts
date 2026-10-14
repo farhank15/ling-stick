@@ -47,6 +47,9 @@ export const env = {
   POOLSIDE_MODEL: str("POOLSIDE_MODEL"),
   LARA_ACCESS_KEY_ID: str("LARA_ACCESS_KEY_ID"),
   LARA_ACCESS_KEY_SECRET: str("LARA_ACCESS_KEY_SECRET"),
+  // Akun kedua (opsional) — kuota digabung, dipakai bergantian saat key 1 habis.
+  LARA_ACCESS_KEY_ID_2: str("LARA_ACCESS_KEY_ID_2"),
+  LARA_ACCESS_KEY_SECRET_2: str("LARA_ACCESS_KEY_SECRET_2"),
   LARA_MONTHLY_CHAR_LIMIT: int("LARA_MONTHLY_CHAR_LIMIT", 10000),
   NEW_CARDS_PER_DAY: int("NEW_CARDS_PER_DAY", 8),
   DAILY_QUIZ_SIZE: int("DAILY_QUIZ_SIZE", 20),

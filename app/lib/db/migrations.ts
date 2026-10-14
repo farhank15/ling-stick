@@ -103,8 +103,10 @@ export const MIGRATIONS: string[] = [
   );
 
   CREATE TABLE IF NOT EXISTS lara_usage (
-    month TEXT PRIMARY KEY,
-    chars INTEGER NOT NULL DEFAULT 0
+    month TEXT NOT NULL,
+    key_idx INTEGER NOT NULL DEFAULT 0,
+    chars INTEGER NOT NULL DEFAULT 0,
+    PRIMARY KEY (month, key_idx)
   );
 
   CREATE TABLE IF NOT EXISTS sessions (
@@ -372,6 +374,25 @@ export async function runMigrations(client: Client): Promise<void> {
     } catch {
       /* kolom sudah ada — abaikan */
     }
+  }
+
+  // Rebuild lara_usage jika skema lama: PK(month) → PK(month,key_idx).
+  // Pemakaian lama dianggap milik key 1 (key_idx=0).
+  const laraCols = await client.execute("PRAGMA table_info(lara_usage)");
+  const laraNames = new Set(laraCols.rows.map((r) => String(r.name ?? "")));
+  if (!laraNames.has("key_idx")) {
+    await client.executeMultiple(`
+      ALTER TABLE lara_usage RENAME TO lara_usage_legacy;
+      CREATE TABLE lara_usage (
+        month   TEXT NOT NULL,
+        key_idx INTEGER NOT NULL DEFAULT 0,
+        chars   INTEGER NOT NULL DEFAULT 0,
+        PRIMARY KEY (month, key_idx)
+      );
+      INSERT INTO lara_usage (month, key_idx, chars)
+        SELECT month, 0, chars FROM lara_usage_legacy;
+      DROP TABLE lara_usage_legacy;
+    `);
   }
 
   // Rebuild quiz_sets jika skema lama: UNIQUE(day) → UNIQUE(day,mode) → UNIQUE(day,mode,lang).

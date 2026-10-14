@@ -1,52 +1,86 @@
 import { Credentials, Translator } from "@translated/lara";
-import { eq, sql } from "drizzle-orm";
+import { and, eq, sql } from "drizzle-orm";
 import { db } from "./db/client.server";
 import { llmCache, laraUsage } from "./db/schema";
 import { env } from "./env.server";
 import { hashKey, monthStr } from "./utils.shared";
 
 /**
- * Lara Translate — BLUEPRINT F7. Kuota Free kecil (10k karakter/bulan):
- * dipakai on-demand, dihitung per bulan (lara_usage), hasil di-cache (llm_cache
- * dengan prefix "lara:v1"), dan selalu ada fallback ke LLM di route.
+ * Lara Translate — BLUEPRINT F7. Kuota Free kecil (10k karakter/bulan per akun):
+ * dipakai on-demand, dihitung per bulan PER KEY (lara_usage), hasil di-cache
+ * (llm_cache dengan prefix "lara:v1"), dan selalu ada fallback ke LLM di route.
+ * Key 2 opsional (LARA_ACCESS_KEY_ID_2) — dipakai bergantian saat key 1 habis.
  */
 
-let cached: Translator | null = null;
+type LaraKey = { id: string; secret: string };
 
-function client(): Translator {
-  if (!cached) {
-    if (!env.LARA_ACCESS_KEY_ID || !env.LARA_ACCESS_KEY_SECRET) {
-      throw new Error("LARA_ACCESS_KEY_ID / LARA_ACCESS_KEY_SECRET belum diset di .env");
-    }
-    cached = new Translator(
-      new Credentials(env.LARA_ACCESS_KEY_ID, env.LARA_ACCESS_KEY_SECRET),
-    );
+function keys(): LaraKey[] {
+  const list: LaraKey[] = [];
+  if (env.LARA_ACCESS_KEY_ID && env.LARA_ACCESS_KEY_SECRET) {
+    list.push({ id: env.LARA_ACCESS_KEY_ID, secret: env.LARA_ACCESS_KEY_SECRET });
   }
-  return cached;
+  if (env.LARA_ACCESS_KEY_ID_2 && env.LARA_ACCESS_KEY_SECRET_2) {
+    list.push({ id: env.LARA_ACCESS_KEY_ID_2, secret: env.LARA_ACCESS_KEY_SECRET_2 });
+  }
+  return list;
+}
+
+const clients = new Map<number, Translator>();
+
+function client(idx: number): Translator {
+  const k = keys()[idx];
+  if (!k) throw new Error(`Lara key ${idx + 1} belum diset di .env`);
+  let t = clients.get(idx);
+  if (!t) {
+    t = new Translator(new Credentials(k.id, k.secret));
+    clients.set(idx, t);
+  }
+  return t;
 }
 
 export function laraConfigured(): boolean {
-  return Boolean(env.LARA_ACCESS_KEY_ID && env.LARA_ACCESS_KEY_SECRET);
+  return keys().length > 0;
 }
 
-async function usageThisMonth(): Promise<number> {
+/** Jumlah key aktif (1 atau 2) — buat label UI. */
+export function laraKeyCount(): number {
+  return keys().length;
+}
+
+async function usageThisMonth(keyIdx: number): Promise<number> {
   const [row] = await db
     .select()
     .from(laraUsage)
-    .where(eq(laraUsage.month, monthStr()))
+    .where(and(eq(laraUsage.month, monthStr()), eq(laraUsage.keyIdx, keyIdx)))
     .limit(1);
   return row?.chars ?? 0;
 }
+
+export type LaraKeyStatus = { used: number; limit: number; remaining: number };
 
 export async function laraStatus(): Promise<{
   used: number;
   limit: number;
   remaining: number;
   configured: boolean;
+  keys: LaraKeyStatus[];
 }> {
-  const used = await usageThisMonth();
+  const n = keys().length;
   const limit = env.LARA_MONTHLY_CHAR_LIMIT;
-  return { used, limit, remaining: Math.max(0, limit - used), configured: laraConfigured() };
+  const per = await Promise.all(
+    Array.from({ length: n }, async (_, i) => {
+      const used = await usageThisMonth(i);
+      return { used, limit, remaining: Math.max(0, limit - used) };
+    }),
+  );
+  const used = per.reduce((a, k) => a + k.used, 0);
+  return {
+    used,
+    limit: limit * Math.max(1, n),
+    remaining: per.reduce((a, k) => a + k.remaining, 0),
+    configured: n > 0,
+    keys: per,
+  };
 }
 
 export type TranslateResult = {
@@ -64,11 +98,14 @@ export async function translateWithLara(
 ): Promise<TranslateResult> {
   const clean = text.trim();
   if (!clean) throw new Error("Teks kosong");
+  if (keys().length === 0) {
+    throw new Error("LARA_ACCESS_KEY_ID / LARA_ACCESS_KEY_SECRET belum diset di .env");
+  }
 
-  const { remaining } = await laraStatus();
-  if (remaining < clean.length) {
+  const status = await laraStatus();
+  if (status.remaining < clean.length) {
     throw new Error(
-      `Kuota Lara bulan ini tinggal ${remaining} karakter — kurang untuk ${clean.length} karakter.`,
+      `Kuota Lara bulan ini tinggal ${status.remaining} karakter — kurang untuk ${clean.length} karakter.`,
     );
   }
 
@@ -95,21 +132,35 @@ export async function translateWithLara(
   };
   if (tone) options.instructions = [tone];
 
-  const result = await client().translate(clean, from, to, options);
-  const translation = result.translation;
+  // Rotasi key: key yang masih cukup dicoba berurutan; gagal (kuota/error) →
+  // lanjut key berikut. Pemakaian dicatat per key yang berhasil.
+  // matcha: single client = key 2 tak pernah kepakai walau diset.
+  let lastError: unknown = null;
+  for (let i = 0; i < keys().length; i++) {
+    const used = await usageThisMonth(i);
+    if (env.LARA_MONTHLY_CHAR_LIMIT - used < clean.length) continue;
+    try {
+      const result = await client(i).translate(clean, from, to, options);
+      const translation = result.translation;
+      await recordUsage(i, cacheKey, translation, clean.length);
+      return { translation, cached: false, via: "lara" };
+    } catch (e) {
+      lastError = e;
+    }
+  }
+  throw lastError instanceof Error ? lastError : new Error("Semua key Lara gagal/habis");
+}
 
-  const chars = clean.length;
+async function recordUsage(keyIdx: number, cacheKey: string, translation: string, chars: number) {
   await db.transaction(async (tx) => {
     await tx.insert(llmCache)
       .values({ key: cacheKey, response: JSON.stringify({ translation }), createdAt: Date.now() })
       .onConflictDoNothing();
     await tx.insert(laraUsage)
-      .values({ month: monthStr(), chars })
+      .values({ month: monthStr(), keyIdx, chars })
       .onConflictDoUpdate({
-        target: laraUsage.month,
+        target: [laraUsage.month, laraUsage.keyIdx],
         set: { chars: sql`${laraUsage.chars} + ${chars}` },
       });
   });
-
-  return { translation, cached: false, via: "lara" };
 }
