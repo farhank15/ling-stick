@@ -1,4 +1,40 @@
 import type { ReactNode } from "react";
+import { JaText, hasJa } from "./JaText";
+
+/**
+ * Pola tulisan Jepang dari Ling: 漢字（かな）atau 漢字（かな・romaji),
+ * versi ASCII: 漢字(かな) / 漢字(かな, romaji). Lihat CHAT_SYSTEM_JA.
+ * Di-render via JaText: kanji hijau + furigana hiragana + toggle romaji —
+ * format yang sama dengan kartu/flashcard di seluruh app.
+ */
+const JA_RE = /([^\s*`_()（）[\]]+?)[(（]([\u3040-\u30ffー]+)(?:[・,]\s*([a-zāīūēōâîûêô ]+))?[)）]/g;
+
+function jaNodes(text: string, keyPrefix: string): ReactNode[] {
+  if (!hasJa(text)) return [text];
+  const out: ReactNode[] = [];
+  let last = 0;
+  let m: RegExpExecArray | null;
+  let i = 0;
+  JA_RE.lastIndex = 0;
+  while ((m = JA_RE.exec(text)) !== null) {
+    if (m.index > last) out.push(text.slice(last, m.index));
+    const word = m[1]!;
+    const kana = m[2]!;
+    const romaji = (m[3] ?? "").trim();
+    out.push(
+      <JaText
+        key={`${keyPrefix}-ja${i++}`}
+        text={word}
+        reading={romaji ? `${kana} (${romaji})` : kana}
+        kanjiClassName="text-teal-700 dark:text-teal-400"
+        romajiToggle={Boolean(romaji)}
+      />,
+    );
+    last = m.index + m[0].length;
+  }
+  if (last < text.length) out.push(text.slice(last));
+  return out;
+}
 
 /** Parse inline markdown (bold/italic/code) jadi ReactNode[] — aman, tanpa HTML injection. */
 function inline(text: string, keyPrefix: string): ReactNode[] {
@@ -8,17 +44,17 @@ function inline(text: string, keyPrefix: string): ReactNode[] {
   let m: RegExpExecArray | null;
   let i = 0;
   while ((m = re.exec(text)) !== null) {
-    if (m.index > last) out.push(text.slice(last, m.index));
+    if (m.index > last) out.push(...jaNodes(text.slice(last, m.index), `${keyPrefix}-t${i}`));
     if (m[2] !== undefined) {
       out.push(
         <strong key={`${keyPrefix}-${i++}`} className="font-semibold text-zinc-900 dark:text-zinc-100">
-          {m[2]}
+          {jaNodes(m[2], `${keyPrefix}-b${i}`)}
         </strong>,
       );
     } else if (m[4] !== undefined) {
       out.push(
         <em key={`${keyPrefix}-${i++}`} className="italic text-zinc-600 dark:text-zinc-400">
-          {m[4]}
+          {jaNodes(m[4], `${keyPrefix}-e${i}`)}
         </em>,
       );
     } else if (m[6] !== undefined) {
@@ -33,13 +69,14 @@ function inline(text: string, keyPrefix: string): ReactNode[] {
     }
     last = m.index + m[0].length;
   }
-  if (last < text.length) out.push(text.slice(last));
+  if (last < text.length) out.push(...jaNodes(text.slice(last), `${keyPrefix}-t${i}`));
   return out;
 }
 
 /**
  * Markdown mini untuk bubble chat Ling.
- * Support: "### heading", "- " / "* " bullet, "1. " / "2) " numbered, **bold**, *italic*, `code`.
+ * Support: "### heading", "- " / "* " bullet, "1. " / "2) " numbered, **bold**, *italic*, `code`,
+ * plus pola Jepang 漢字（かな）/ 漢字（かな・romaji) → JaText (kanji hijau + furigana + toggle romaji).
  * Struktur dibangun sebagai elemen React (bukan HTML string) → aman & styling konsisten.
  */
 export function MarkdownLite({ text }: { text: string }) {

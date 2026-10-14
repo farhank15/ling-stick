@@ -45,7 +45,7 @@ export default function RuteStep() {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          message: `Konteks: saya belajar pola "${step.pattern}" (${step.title_id}, ${step.level}). Pertanyaan: ${q}. Jawab singkat Bahasa Indonesia + contoh bila perlu.`,
+          message: `Konteks: saya belajar pola "${step.pattern}" (${step.title_id}, ${step.level}). Pertanyaan: ${q}. Jawab singkat Bahasa Indonesia + contoh bila perlu. Tulis kata/kalimat Jepang dengan format 漢字（かな・romaji) saat pertama muncul, lalu 漢字（かな）.`,
         }),
       });
       const d = await r.json();

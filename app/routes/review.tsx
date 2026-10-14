@@ -1125,7 +1125,7 @@ export default function ReviewPage() {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          message: `Jelaskan kata "${c.text}" (${c.meaningId ?? "tanpa arti"}) singkat: arti, kapan dipakai, 1 contoh kalimat + artinya. Bahasa Indonesia.`,
+          message: `Jelaskan kata "${c.text}" (${c.meaningId ?? "tanpa arti"}) singkat: arti, kapan dipakai, 1 contoh kalimat + artinya. Bahasa Indonesia. Tulis kata/kalimat Jepang dengan format 漢字（かな・romaji) saat pertama muncul, lalu 漢字（かな）.`,
         }),
       });
       const d = await safeJson<{ ok?: boolean; reply?: string; error?: string }>(r);
