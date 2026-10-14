@@ -110,6 +110,8 @@ export async function action({ request }: ActionFunctionArgs) {
     pos?: number;
     correct?: boolean;
     action?: string;
+    stepId?: string;
+    segment?: number;
     itemId?: number;
     mode?: string;
     count?: number;
@@ -122,6 +124,20 @@ export async function action({ request }: ActionFunctionArgs) {
     const { markItemKnownFromQuiz } = await import("~/lib/quiz.server");
     await markItemKnownFromQuiz(body.itemId!);
     return Response.json({ ok: true });
+  }
+
+  if (body.action === "route-start" && typeof body.stepId === "string") {
+    const { getOrCreateRouteSet } = await import("~/lib/route.progress");
+    const set = await getOrCreateRouteSet(body.stepId);
+    if (!set) return Response.json({ error: "Step tidak ada" }, { status: 400 });
+    return Response.json({ ok: true, setId: set.id });
+  }
+
+  if (body.action === "route-exam" && Number.isInteger(body.segment)) {
+    const { getOrCreateExamSet } = await import("~/lib/route.progress");
+    const set = await getOrCreateExamSet(Number(body.segment));
+    if (!set) return Response.json({ error: "Belum ada materi untuk ujian ini" }, { status: 400 });
+    return Response.json({ ok: true, setId: set.id });
   }
 
   if (body.action === "create") {

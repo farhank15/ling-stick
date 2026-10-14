@@ -18,6 +18,8 @@ export default [
     route("aksara", "routes/aksara.tsx"),
     route("reading", "routes/reading.tsx"),
     route("chat", "routes/chat.tsx"),
+    route("rute", "routes/rute.tsx"),
+    route("rute/:stepId", "routes/rute.$stepId.tsx"),
     route("settings", "routes/settings.tsx"),
   ]),
 

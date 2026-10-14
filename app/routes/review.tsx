@@ -116,7 +116,7 @@ type Periodic = {
   bulanan: { month: string; available: boolean; exists: boolean; setId: number | null; done: number; completed: boolean };
 };
 
-type Mode = "daily" | "typing" | "intens" | "audio" | "scramble" | "mix" | "dikte" | "shadow" | "pola" | "salah";
+type Mode = "daily" | "typing" | "intens" | "audio" | "scramble" | "mix" | "dikte" | "shadow" | "pola" | "salah" | "route";
 
 const MODES: {
   id: Mode | "flash" | "match";
@@ -564,7 +564,7 @@ export default function ReviewPage() {
     urlMode === "flash" ? "flash" : urlMode === "match" ? "match" : urlMode ? "quiz" : "pick",
   );
   const [mode, setMode] = useState<Mode>(
-    urlMode && ["daily", "typing", "intens", "audio", "scramble", "mix", "dikte", "shadow", "pola", "salah"].includes(urlMode)
+    urlMode && ["daily", "typing", "intens", "audio", "scramble", "mix", "dikte", "shadow", "pola", "salah", "route"].includes(urlMode)
       ? (urlMode as Mode)
       : "daily",
   );
@@ -720,6 +720,16 @@ export default function ReviewPage() {
     if (["daily", "typing", "intens", "audio", "scramble", "mix", "dikte", "shadow", "pola", "salah"].includes(urlMode)) {
       load(urlMode as Mode);
       return;
+    }
+    // Rute belajar: ?mode=route&setId=N — set spesifik (lesson/exam), bukan mode harian.
+    // matcha: set rute dimainkan lewat player quiz yang sama (tanpa player kedua).
+    if (urlMode === "route") {
+      const sid = Number(params.get("setId"));
+      if (Number.isInteger(sid) && sid > 0) {
+        setMode("route");
+        loadSetById(sid);
+        return;
+      }
     }
     if (urlMode === "toefl" || urlMode === "bulanan") return; // ditangani efek periodik
     // Param asing — bersihkan & balik picker.
@@ -1782,9 +1792,15 @@ export default function ReviewPage() {
           Soal yang salah tadi udah dicatat FSRS — bakal muncul lagi di latihan berikutnya.
         </p>
         <div className="mt-6 flex justify-center gap-2">
-          <button className="btn-primary" onClick={() => backToPick()}>
-            Metode lain
-          </button>
+          {mode === "route" ? (
+            <Link to="/rute" className="btn-primary">
+              Kembali ke Rute
+            </Link>
+          ) : (
+            <button className="btn-primary" onClick={() => backToPick()}>
+              Metode lain
+            </button>
+          )}
           <Link to="/library" className="btn-secondary">
             Buka Library
           </Link>

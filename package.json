@@ -10,7 +10,8 @@
     "dev": "react-router dev",
     "build": "react-router build",
     "start": "react-router-serve ./build/server/index.js",
-    "typecheck": "react-router typegen && tsc --noEmit"
+    "typecheck": "react-router typegen && tsc --noEmit",
+    "route:validate": "tsx scripts/route-validate.ts"
   },
   "dependencies": {
     "@libsql/client": "^0.18.0",
@@ -35,6 +36,7 @@
     "@types/react-dom": "^19.3.0",
     "react-router-devtools": "^6.2.3",
     "sharp": "^0.35.5",
+    "tsx": "^4.23.15",
     "typescript": "^5.9.3",
     "vite": "^7.3.6",
     "vite-tsconfig-paths": "^6.1.1"
