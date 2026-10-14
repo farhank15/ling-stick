@@ -2,6 +2,7 @@ import type { LoaderFunctionArgs, UIMatch } from "react-router";
 import {
   Link,
   Outlet,
+  useFetcher,
   useLoaderData,
   useLocation,
   useMatches,
@@ -38,6 +39,45 @@ const NAV: { to: string; label: string; icon: LucideIcon }[] = [
   { to: "/explore", label: "Explore", icon: Compass },
 ];
 
+/** Opsi bahasa di popover header — EN/JA + centang yang aktif. */
+function LangOptions({ lang, onPick }: { lang: string; onPick: (l: "en" | "ja") => void }) {
+  return <LangOptList lang={lang} onPick={onPick} />;
+}
+
+function LangOptList({ lang, onPick }: { lang: string; onPick: (l: "en" | "ja") => void }) {
+  const opts = [
+    { id: "en", label: "English", desc: "CEFR · TTS en-US" },
+    { id: "ja", label: "日本語", desc: "JLPT · TTS ja-JP" },
+  ] as const;
+  return (
+    <>
+      {opts.map((l) => (
+        <LangOptRow key={l.id} id={l.id} label={l.label} desc={l.desc} active={lang === l.id} onPick={onPick} />
+      ))}
+    </>
+  );
+}
+
+function LangOptRow({ id, label, desc, active, onPick }: { id: "en" | "ja"; label: string; desc: string; active: boolean; onPick: (l: "en" | "ja") => void }) {
+  return (
+    <button
+      className="flex w-full items-center gap-2.5 px-4 py-2.5 text-left hover:bg-zinc-50 dark:hover:bg-zinc-800"
+      onClick={() => onPick(id)}
+    >
+      <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-lg bg-zinc-100 text-xs font-bold dark:bg-zinc-800">
+        {id === "ja" ? "あ" : "EN"}
+      </span>
+      <span className="min-w-0 text-sm">
+        <span className="block font-medium">{label}</span>
+        <span className="block text-[11px] text-zinc-400">{desc}</span>
+      </span>
+      {active ? (
+        <CheckCircle2 className="ml-auto h-4 w-4 shrink-0 text-teal-600 dark:text-teal-400" />
+      ) : null}
+    </button>
+  );
+}
+
 export default function AppLayout() {
   const location = useLocation();
   const nav = useNavigation();
@@ -56,6 +96,31 @@ export default function AppLayout() {
   const [notifOpen, setNotifOpen] = useState(false);
   const [history, setHistory] = useState<{ day: string; title: string; total: number; done: number; correct: number; completed: number }[]>([]);
   const notifRef = useRef<HTMLDivElement | null>(null);
+
+  // Toggle bahasa cepat (EN/JA) — popover di header biar gak perlu buka
+  // Settings. POST ke action /settings lalu reload 1x (semua data lang-scoped).
+  // matcha: ganti bahasa cuma ada di Settings = 3 tap + nunggu halaman.
+  const [langOpen, setLangOpen] = useState(false);
+  const langRef = useRef<HTMLDivElement | null>(null);
+  const langFetcher = useFetcher();
+  const switchingLang = langFetcher.state !== "idle";
+  const switchLang = (next: "en" | "ja") => {
+    if (next === lang || switchingLang) {
+      setLangOpen(false);
+      return;
+    }
+    setLangOpen(false);
+    langFetcher.submit(
+      { lang: next },
+      { method: "post", action: "/settings", encType: "application/json" },
+    );
+  };
+  useEffect(() => {
+    if (langFetcher.state === "idle" && langFetcher.data) {
+      window.location.reload();
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [langFetcher.state]);
 
   // Throttle: status bel cuma refresh kalau terakhir >60 dtk lalu. Pindah page
   // itu EventBus-nya navigasi — fetch tiap pathname bikin server Turso remote
@@ -100,13 +165,14 @@ export default function AppLayout() {
   }, []);
 
   useEffect(() => {
-    if (!notifOpen) return;
+    if (!notifOpen && !langOpen) return;
     const onDown = (e: MouseEvent) => {
       if (notifRef.current && !notifRef.current.contains(e.target as Node)) setNotifOpen(false);
+      if (langRef.current && !langRef.current.contains(e.target as Node)) setLangOpen(false);
     };
     document.addEventListener("mousedown", onDown);
     return () => document.removeEventListener("mousedown", onDown);
-  }, [notifOpen]);
+  }, [notifOpen, langOpen]);
 
   const isActive = (to: string) =>
     to === "/" ? location.pathname === "/" : location.pathname.startsWith(to);
@@ -238,6 +304,32 @@ export default function AppLayout() {
                     </ul>
                   </div>
                 ) : null}
+              </div>
+            ) : null}
+          </div>
+          <div className="relative" ref={langRef}>
+            <button
+              className="flex h-[34px] min-w-11 items-center justify-center rounded-lg px-2 text-xs font-bold text-zinc-500 hover:bg-zinc-100 hover:text-zinc-700 dark:text-zinc-400 dark:hover:bg-zinc-900 dark:hover:text-zinc-200"
+              title={isJa ? "Bahasa: Jepang — ketuk buat ganti" : "Bahasa: Inggris — ketuk buat ganti"}
+              aria-label="Ganti bahasa target"
+              aria-expanded={langOpen}
+              onClick={() => setLangOpen((o) => !o)}
+            >
+              {switchingLang ? (
+                <span className="h-4 w-4 animate-spin rounded-full border-2 border-zinc-300 border-t-teal-600" />
+              ) : isJa ? (
+                "あ"
+              ) : (
+                "EN"
+              )}
+            </button>
+            {langOpen ? (
+              <div className="absolute right-0 z-40 mt-1 w-52 overflow-hidden rounded-xl border border-zinc-200 bg-white shadow-xl dark:border-zinc-800 dark:bg-zinc-900">
+                <p className="label px-4 pt-2.5">Bahasa target</p>
+                <LangOptions lang={lang} onPick={switchLang} />
+                <p className="border-t border-zinc-100 px-4 py-2 text-[11px] text-zinc-400 dark:border-zinc-800">
+                  Data per bahasa tersimpan aman.
+                </p>
               </div>
             ) : null}
           </div>
