@@ -17,8 +17,13 @@ Lengkap: detail & arsitektur ada di [BLUEPRINT.md](./BLUEPRINT.md).
   "udah tahu", expression of the day, generate lebih banyak.
 - **Mode nonton** — tempel subtitle/chat/artikel → AI ekstrak idiom/slang/reaksi, centang
   yang mau disimpan (kalimat asli otomatis jadi konteks).
-- **Terjemah** — Lara Translate (Natural/Literal/Kreatif + nada) dengan penghitung kuota
-  bulanan + fallback ke LLM; hasil bisa disimpan sebagai item.
+- **Terjemah** — Lara Translate (rotasi 2 key, kuota gabungan) dengan penghitung
+  kuota bulanan + fallback ke LLM; hasil bisa disimpan sebagai item.
+- **Rute Jepang (N5→)** — 300 step berpeta (materi + contoh formal/kasual + cloze),
+  unlock ≥80%, checkpoint per segmen, XP. Lihat [docs/ROUTE.md](./docs/ROUTE.md).
+- **Kanji** — referensi kanonis N5 (bacaan, goresan KanjiVG, komponen, contoh kata)
+  + flashcard 3 mode (Kenali/Ingat/Baca). Lihat [docs/KANJI.md](./docs/KANJI.md).
+- **Lanjut besok?** Baca [docs/CONTINUE.md](./docs/CONTINUE.md).
 - **Export backup JSON** di halaman Pengaturan.
 
 ## Stack
