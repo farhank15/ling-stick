@@ -726,6 +726,7 @@ export async function answerQuestionById(
   index: number, correct: boolean,
   typedText?: string,
   pos?: number,
+  counted = true,
 ) {
   const [set] = await db.select().from(quizSets).where(eq(quizSets.id, setId)).limit(1);
   if (!set) return { ok: false as const, error: "Set tidak ada" };
@@ -760,7 +761,7 @@ export async function answerQuestionById(
     }
   }
 
-  return applyAnswer(set, questions, index, isCorrect, pos);
+  return applyAnswer(set, questions, index, isCorrect, pos, counted);
 }
 
 /** Kompatibilitas: jawab by day (mode daily). */
@@ -781,11 +782,21 @@ async function applyAnswer(
   index: number,
   correct: boolean,
   pos?: number,
+  counted = true,
 ) {
   if (set.completed) return { ok: false as const, error: "Set sudah selesai" };
   const order = JSON.parse(set.order) as number[];
 
   await db.transaction(async (tx) => {
+    // Partisipasi (shadow/latihan-bebas/lewati): majukan progres TANPA skor —
+    // tak tambah correct, tak catat jawaban, tak requeue, tak sentuh FSRS.
+    // matcha: answer(true) untuk partisipasi menggelembungkan akurasi + streak.
+    if (!counted) {
+      await tx.update(quizSets)
+        .set({ done: set.done + 1 })
+        .where(eq(quizSets.id, set.id));
+      return;
+    }
     await tx.insert(quizAnswers)
       .values({ setId: set.id, day: set.day, questionIndex: index, itemId: questions[index]?.itemId ?? 0, correct: correct ? 1 : 0, answeredAt: Date.now() })
       .onConflictDoNothing();
@@ -811,9 +822,9 @@ async function applyAnswer(
     }
   });
 
-  // FSRS tetap dicatat per item.
+  // FSRS tetap dicatat per item (kecuali partisipasi).
   const itemId = questions[index]?.itemId;
-  if (itemId) {
+  if (counted && itemId) {
     const { applyRating } = await import("~/lib/fsrs.server");
     const { getItemDetail, applyReview } = await import("~/lib/items.server");
     const detail = await getItemDetail(itemId);

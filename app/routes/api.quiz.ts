@@ -109,6 +109,7 @@ export async function action({ request }: ActionFunctionArgs) {
     index?: number;
     pos?: number;
     correct?: boolean;
+    counted?: boolean;
     action?: string;
     stepId?: string;
     segment?: number;
@@ -157,7 +158,8 @@ export async function action({ request }: ActionFunctionArgs) {
   }
 
   if (Number.isInteger(body.setId)) {
-    const result = await answerQuestionById(body.setId!, body.index!, body.correct, body.typed, body.pos);
+    const counted = body.counted !== false;
+    const result = await answerQuestionById(body.setId!, body.index!, body.correct, body.typed, body.pos, counted);
     if (!result.ok) return Response.json({ error: result.error }, { status: 400 });
     // Progres rute langsung segar (bukan nunggu TTL 30 dtk).
     if (result.set.mode === "route" || result.set.mode === "route_exam") {

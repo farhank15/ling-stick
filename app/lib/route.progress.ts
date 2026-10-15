@@ -118,7 +118,35 @@ export async function getOrCreateExamSet(segment: number) {
     .from(quizSets)
     .where(and(eq(quizSets.day, day), eq(quizSets.mode, "route_exam"), eq(quizSets.lang, lang)))
     .limit(1);
-  if (existing) return existing;
+  if (existing && !existing.completed) return existing; // lanjutkan percobaan berjalan
+  if (existing && existing.completed) {
+    // Percobaan ulang = set FRESH + urutan acak + soal diacak ulang.
+    // matcha: set permanen = lulus dengan hafal urutan, bukan pola.
+    const { loadAllSteps: load } = await import("./route.server");
+    const { quizAnswers } = await import("~/lib/db/schema");
+    const segSteps = load()
+      .map(({ step }) => step)
+      .filter((s) => s.segment === segment);
+    const pool = shuffle(segSteps.flatMap((s) => stepToQuestions(s))).slice(0, 15);
+    if (pool.length >= 5) {
+      await db.delete(quizAnswers).where(eq(quizAnswers.setId, existing.id));
+      const order = shuffle(pool.map((_, i) => i));
+      const [reset] = await db
+        .update(quizSets)
+        .set({
+          questions: JSON.stringify(pool),
+          order: JSON.stringify(order),
+          total: pool.length,
+          done: 0,
+          correct: 0,
+          completed: 0,
+        })
+        .where(eq(quizSets.id, existing.id))
+        .returning();
+      if (reset) return reset;
+    }
+    return existing;
+  }
 
   const { loadAllSteps: load } = await import("./route.server");
   const segSteps = load()

@@ -1113,6 +1113,7 @@ function KanjiFlash({ level }: { level: string }) {
     setBusy(true);
     setReveal(false);
     setFull(null);
+    requeues.current.clear();
     try {
       const r = await fetch(`/api/kanji?mode=${m}`);
       const d = await r.json();
@@ -1127,6 +1128,24 @@ function KanjiFlash({ level }: { level: string }) {
   };
 
   const card = cards[idx];
+  // Requeue sesi ala flashcard umum: Lupa/Susah balik ±5 posisi (maks 2x per
+  // kartu) — tapi hormati due FSRS (masih cooldown = ditahan, lanjut lain).
+  // matcha: kartu gagal hilang sampai besok.
+  const requeues = useRef(new Map<string, number>());
+  const requeue = (kanji: string, due?: number) => {
+    if (due && due > Date.now() + 90_000) return;
+    const n = requeues.current.get(kanji) ?? 0;
+    if (n >= 2) return;
+    requeues.current.set(kanji, n + 1);
+    setCards((list) => {
+      const at = Math.min(list.length, idx + 1 + 4 + Math.floor(Math.random() * 3));
+      const target = list[idx];
+      if (!target) return list;
+      const next = [...list];
+      next.splice(at, 0, target);
+      return next;
+    });
+  };
   useEffect(() => {
     if (!started || !card) return;
     setFull(null);
@@ -1146,11 +1165,13 @@ function KanjiFlash({ level }: { level: string }) {
     setIdx((i) => i + 1);
     setReveal(false);
     try {
-      await fetch("/api/kanji", {
+      const r = await fetch("/api/kanji", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ kanji: card.kanji, mode, rating }),
       });
+      const d = await r.json().catch(() => ({}));
+      if (rating === 1 || rating === 2) requeue(card.kanji, d.due);
     } catch {
       /* tetap lanjut */
     }

@@ -669,6 +669,8 @@ export default function ReviewPage() {
   // Match
   const [matchRounds, setMatchRounds] = useState<MatchPair[][]>([]);
   const [matchRound, setMatchRound] = useState(0);
+  const [bonusRound, setBonusRound] = useState(false);
+  const [bonusWrong, setBonusWrong] = useState<Record<number, number>>({});
   const [enOrder, setEnOrder] = useState<number[]>([]);
   const [idOrder, setIdOrder] = useState<number[]>([]);
   const [selectedEn, setSelectedEn] = useState<number | null>(null);
@@ -956,15 +958,17 @@ export default function ReviewPage() {
     return () => clearTimeout(t);
   }, [timeLeft, timeUp, finished]);
 
-  const answer = (correct: boolean) => {
+  // counted=false = partisipasi murni (shadow/latihan, tombol lewati):
+  // progres maju, skor TIDAK nambah. matcha: partisipasi dihitung benar.
+  const answer = (correct: boolean, counted = true) => {
     setAnswered((n) => n + 1);
-    if (correct) setCorrectHere((n) => n + 1);
+    if (correct && counted) setCorrectHere((n) => n + 1);
     if (!q || !set) return;
     const typedText = mode === "typing" || mode === "scramble" ? typed : undefined;
     void fetch("/api/quiz", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ setId: set.id, index: currentIndex, pos, correct, typed: typedText }),
+      body: JSON.stringify({ setId: set.id, index: currentIndex, pos, correct, counted, typed: typedText }),
     })
       .then((r) => safeJson<{ done?: number; correct?: number; order?: number[] }>(r))
       .then(applyProgress)
@@ -1246,6 +1250,12 @@ export default function ReviewPage() {
       });
     } catch {
       /* progres FSRS gak kritis */
+    }
+    // Bonus round: kalau ronde terakhir selesai dan ada pasangan salah,
+    // tunjukkan ronde bonus fokus pada pasangan yang salah.
+    if (matchRound + 1 >= matchRounds.length && Object.keys(matchWrong.current).length > 0) {
+      setBonusWrong(matchWrong.current);
+      setBonusRound(true);
     }
   };
 
@@ -1718,6 +1728,107 @@ export default function ReviewPage() {
     );
   }
 
+  /* ── Bonus Round Match ── */
+  if (bonusRound && Object.keys(bonusWrong).length > 0) {
+    const bonusUnique = [
+      ...new Set(
+        matchRounds.flat().filter((p) => bonusWrong[p.itemId]).map((p) => p.itemId),
+      ),
+    ];
+
+    const tileBase =
+      "flex min-h-12 cursor-pointer select-none items-start justify-between gap-1.5 rounded-xl border px-3.5 py-2.5 text-left transition-colors";
+
+    return (
+      <div className="mx-auto w-full max-w-xl space-y-4">
+        <div className="flex items-center justify-between text-xs text-zinc-500">
+          <span>
+            Bonus Round / {bonusUnique.length} pasangan yang salah
+          </span>
+          <button
+            className="btn-ghost inline-flex items-center gap-1 text-xs"
+            onClick={() => setBonusRound(false)}
+          >
+            ✕ Tutup
+          </button>
+        </div>
+        <div className="h-1.5 overflow-hidden rounded-full bg-zinc-200 dark:bg-zinc-800">
+          <div
+            className="h-full bg-orange-500 transition-all dark:bg-orange-400"
+            style={{
+              width: `${(bonusUnique.length / Math.max(1, bonusUnique.length)) * 100}%`,
+            }}
+          />
+        </div>
+
+        <div className="grid gap-2 md:grid-cols-2">
+          <div className="grid grid-cols-2 gap-2">
+            {bonusUnique.map((itemId) => {
+              const pair = matchRounds.flat().find((p) => p.itemId === itemId);
+              if (!pair) return null;
+              return (
+                <div
+                  key={itemId}
+                  className={tileBase + " border-zinc-200 bg-white dark:border-zinc-800 dark:bg-zinc-900"}
+                  onClick={() => navigator.vibrate?.(10)}
+                >
+                  <span className="min-w-0 flex-1 wrap-break-words text-sm font-medium">
+                    {pair.word}
+                  </span>
+                  <button
+                    className="shrink-0 rounded-lg p-1 text-zinc-400 hover:text-teal-600 dark:hover:text-teal-300"
+                    title="Dengarkan"
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      speak(pair.word);
+                    }}
+                  >
+                    <Volume2 className="h-3.5 w-3.5" />
+                  </button>
+                </div>
+              );
+            })}
+          </div>
+          <div className="h-px bg-zinc-100 dark:bg-zinc-800/60" />
+          <div className="grid grid-cols-2 gap-2">
+            {bonusUnique.map((itemId) => {
+              const pair = matchRounds.flat().find((p) => p.itemId === itemId);
+              if (!pair) return null;
+              return (
+                <div key={itemId} className="p-2 text-xs text-zinc-500 dark:text-zinc-300">
+                  {pair.meaning}
+                </div>
+              );
+            })}
+          </div>
+        </div>
+        <p className="text-center text-xs text-zinc-400">
+          Tap pasangan kata-arti di atas — ini dari ronde yang salah tadi
+        </p>
+        <div className="grid grid-cols-3 gap-2 mt-4">
+          <button
+            className="btn-secondary flex-col gap-1 py-2.5 text-xs"
+            onClick={() => setBonusRound(false)}
+          >
+            <XCircle className="h-4 w-4 text-red-500" /> Keras
+          </button>
+          <button
+            className="btn-secondary flex-col gap-1 py-2.5 text-xs"
+            onClick={() => setBonusRound(false)}
+          >
+            <RotateCcw className="h-4 w-4 text-amber-500" /> Susah
+          </button>
+          <button
+            className="btn-secondary flex-col gap-1 py-2.5 text-xs"
+            onClick={() => setBonusRound(false)}
+          >
+            <CheckCircle2 className="h-4 w-4 text-teal-600" /> Baik
+          </button>
+        </div>
+      </div>
+    );
+  }
+
   /* ── Kuis ── */
   if (loadError) {
     return (
@@ -2080,7 +2191,7 @@ export default function ReviewPage() {
                 className="btn-primary flex-1"
                 onClick={() => {
                   setMicResult(null);
-                  answer(true);
+                  answer(true, false);
                   next();
                 }}
               >
@@ -2214,7 +2325,7 @@ export default function ReviewPage() {
         <button
           className="btn-ghost mx-auto flex w-full text-xs"
           onClick={() => {
-            answer(true);
+            answer(true, false);
             next();
           }}
         >
