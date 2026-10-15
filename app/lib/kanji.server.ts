@@ -10,8 +10,8 @@ import { applyRating, type CardRow } from "~/lib/fsrs.server";
  * (fungsi murni CardRow) — tanpa engine SRS kedua.
  */
 
-export type KanjiMode = "recognition" | "recall" | "reading";
-export const KANJI_MODES: KanjiMode[] = ["recognition", "recall", "reading"];
+export type KanjiMode = "recognition" | "recall" | "reading" | "production";
+export const KANJI_MODES: KanjiMode[] = ["recognition", "recall", "reading", "production"];
 
 export type KanjiDetail = {
   char: string;

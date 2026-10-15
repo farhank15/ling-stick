@@ -7,7 +7,7 @@ import { getKanjiCardDetail, getKanjiDetail, getKanjiQueue, rateKanjiCard, type 
  * GET /api/kanji?detail=食 → detail 1 kartu
  * POST { kanji, mode, rating 1..4 } → nilai FSRS
  */
-const MODES = ["recognition", "recall", "reading"] as const;
+const MODES = ["recognition", "recall", "reading", "production"] as const;
 
 export async function loader({ request }: LoaderFunctionArgs) {
   await requireUser(request);

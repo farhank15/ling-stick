@@ -584,6 +584,7 @@ function KanaDrillQuiz({ script }: { script: string }) {
       {dir === "ketik" ? (
         <>
           <input
+            key={qi}
             className="input-area mt-4 text-center text-lg"
             placeholder={q.askIsKana ? "Ketik romaji…" : "Ketik kana…"}
             value={typed}
@@ -591,24 +592,46 @@ function KanaDrillQuiz({ script }: { script: string }) {
             disabled={typedResult !== null}
             onChange={(e) => setTyped(e.target.value)}
             onKeyDown={(e) => {
-              if (e.key === "Enter" && typed.trim()) {
-                const ok = q.askIsKana
-                  ? typed.trim().toLowerCase() === q.answer.toLowerCase()
-                  : typed.trim() === q.answer;
-                setTypedResult({ ok, answer: q.answer });
-                if (ok) setScore((s) => s + 1);
-                else speak(q.askIsKana ? q.ask : q.answer, "ja-JP");
+              if (e.key === "Enter") {
+                if (typedResult !== null) {
+                  setQi((i) => i + 1);
+                  setPicked(null);
+                  setTyped("");
+                  setTypedResult(null);
+                } else if (typed.trim()) {
+                  const ok = q.askIsKana
+                    ? typed.trim().toLowerCase() === q.answer.toLowerCase()
+                    : typed.trim() === q.answer;
+                  setTypedResult({ ok, answer: q.answer });
+                  if (ok) setScore((s) => s + 1);
+                  else speak(q.askIsKana ? q.ask : q.answer, "ja-JP");
+                }
               }
             }}
           />
           {typedResult ? (
             <p
-              className={`mt-2 text-center text-sm font-medium ${
-                typedResult.ok ? "text-teal-700 dark:text-teal-300" : "text-amber-700 dark:text-amber-300"
+              className={`mt-2 rounded-xl px-3 py-2 text-center text-sm font-medium ${
+                typedResult.ok
+                  ? "bg-teal-50 text-teal-700 dark:bg-teal-950 dark:text-teal-300"
+                  : "bg-amber-50 text-amber-700 dark:bg-amber-950 dark:text-amber-300"
               }`}
             >
-              {typedResult.ok ? "Tepat!" : `Jawaban: ${typedResult.answer}`}
+              {typedResult.ok ? "✓ Tepat!" : `✗ Jawaban: ${typedResult.answer}`}
             </p>
+          ) : null}
+          {typedResult !== null ? (
+            <button
+              className="btn-primary mt-3 w-full"
+              onClick={() => {
+                setQi((i) => i + 1);
+                setPicked(null);
+                setTyped("");
+                setTypedResult(null);
+              }}
+            >
+              Lanjut →
+            </button>
           ) : (
             <button
               className="btn-primary mt-3 w-full"
@@ -655,7 +678,7 @@ function KanaDrillQuiz({ script }: { script: string }) {
           })}
         </div>
       )}
-      {(picked !== null || typedResult !== null) ? (
+      {picked !== null && dir !== "ketik" ? (
         <button
           className="btn-primary w-full"
           onClick={() => {
@@ -1173,6 +1196,15 @@ function KanjiFlash({ level }: { level: string }) {
   const [full, setFull] = useState<KanjiDetail | null>(null);
   const [typed, setTyped] = useState("");
   const [typedResult, setTypedResult] = useState<{ ok: boolean; answer: string } | null>(null);
+  const inputRef = useRef<HTMLInputElement>(null);
+
+  // Autofocus keyboard tiap kartu baru (mobile langsung kebuka).
+  useEffect(() => {
+    if (started && mode === "production" && card) {
+      const t = setTimeout(() => inputRef.current?.focus(), 100);
+      return () => clearTimeout(t);
+    }
+  }, [started, idx, mode]);
 
   const start = async (m: KMode) => {
     setMode(m);
@@ -1249,16 +1281,27 @@ function KanjiFlash({ level }: { level: string }) {
 
   if (!started) {
     return (
-      <div className="card space-y-2 p-4">
-        <p className="font-semibold">Flashcard kanji {level}</p>
-        <p className="text-xs text-zinc-500">4 mode terpisah (1 fakta per kartu) + jadwal FSRS.</p>
-        <div className="grid grid-cols-4 gap-1.5">
-          {K_MODE_META.map((m) => (
-            <button key={m.id} className="btn-secondary flex-col gap-0.5 py-2.5 text-xs" disabled={busy} onClick={() => void start(m.id)}>
-              <span className="font-semibold">{m.label}</span>
-              <span className="text-[10px] font-normal text-zinc-400">{m.desc}</span>
-            </button>
-          ))}
+      <div className="card space-y-3 p-4">
+        <div>
+          <p className="font-semibold">Drill Kanji {level}</p>
+          <p className="text-xs text-zinc-500">Flashcard + ketik — 1 fakta per kartu + jadwal FSRS.</p>
+        </div>
+        <div>
+          <p className="label mb-1.5">Mode</p>
+          <div className="flex flex-wrap gap-1.5">
+            {K_MODE_META.map((m) => (
+              <button
+                key={m.id}
+                className={`chip min-h-8 px-2.5 text-[11px] ${mode === m.id ? "chip-active" : ""}`}
+                disabled={busy}
+                onClick={() => void start(m.id)}
+                title={m.desc}
+                aria-pressed={mode === m.id}
+              >
+                {m.label}
+              </button>
+            ))}
+          </div>
         </div>
       </div>
     );
@@ -1281,10 +1324,25 @@ function KanjiFlash({ level }: { level: string }) {
   }
 
   return (
-    <div className="card space-y-3 p-4 text-center">
-      <p className="text-[11px] uppercase tracking-wide text-zinc-400">
-        {K_MODE_META.find((m) => m.id === mode)?.label} · {idx + 1}/{cards.length}
-      </p>
+    <div className="space-y-3">
+      <div className="card space-y-2 p-3">
+        <p className="label">Drill Kanji {level} · {idx + 1}/{cards.length}</p>
+        <div className="flex flex-wrap gap-1.5">
+          {K_MODE_META.map((m) => (
+            <button
+              key={m.id}
+              className={`chip min-h-8 px-2.5 text-[11px] ${mode === m.id ? "chip-active" : ""}`}
+              disabled={busy}
+              onClick={() => void start(m.id)}
+              title={m.desc}
+              aria-pressed={mode === m.id}
+            >
+              {m.label}
+            </button>
+          ))}
+        </div>
+      </div>
+      <div className="card space-y-3 p-4 text-center">
       {mode === "recognition" ? (
         <>
           <p className="text-6xl font-bold">{card.kanji}</p>
@@ -1340,10 +1398,10 @@ function KanjiFlash({ level }: { level: string }) {
           ) : null}
           <p className="text-xs text-zinc-400">Ketik kanjinya (free-response, bukan pilihan ganda)</p>
           <input
+            ref={inputRef}
             className="input-area mt-2 text-center text-3xl"
             placeholder="Ketik kanji…"
             value={typed}
-            autoFocus
             disabled={typedResult !== null}
             onChange={(e) => setTyped(e.target.value)}
             onKeyDown={(e) => {
@@ -1375,7 +1433,7 @@ function KanjiFlash({ level }: { level: string }) {
         </>
       )}
       {reveal ? (
-        <div className="grid grid-cols-4 gap-1.5">
+        <div className="grid grid-cols-1 gap-1.5 sm:grid-cols-4">
           {(
             [
               [1, "Lupa"],
@@ -1384,7 +1442,7 @@ function KanjiFlash({ level }: { level: string }) {
               [4, "Gampang"],
             ] as const
           ).map(([v, label]) => (
-            <button key={v} className="btn-secondary flex-col gap-0.5 py-2 text-xs" onClick={() => void rate(v)}>
+            <button key={v} className="btn-secondary justify-center gap-0.5 py-2.5 text-sm" onClick={() => void rate(v)}>
               {label}
             </button>
           ))}
@@ -1393,6 +1451,7 @@ function KanjiFlash({ level }: { level: string }) {
       <button className="btn-ghost mx-auto text-xs" onClick={() => setStarted(false)}>
         Berhenti
       </button>
+      </div>
     </div>
   );
 }
