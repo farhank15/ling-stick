@@ -419,7 +419,7 @@ function KanaTrapQuiz({ script, groups }: { script: string; groups: TrapGroup[] 
 /* ── Drill acak kana: dua arah (kana⇄romaji) + filter baris per script.
  * matcha: belum ada review kana sama sekali — tabel doang tanpa drill. */
 type DrillFilter = "gojuon" | "dakuten" | "yoon";
-type DrillDir = "kana-romaji" | "romaji-kana" | "campur";
+type DrillDir = "kana-romaji" | "romaji-kana" | "campur" | "ketik";
 type DrillQ = { ask: string; askIsKana: boolean; answer: string; options: string[] };
 
 function drillPool(script: "hiragana" | "katakana", filters: DrillFilter[]): [string, string][] {
@@ -476,6 +476,7 @@ const DRILL_DIRS: { id: DrillDir; label: string }[] = [
   { id: "kana-romaji", label: "Kana → Romaji" },
   { id: "romaji-kana", label: "Romaji → Kana" },
   { id: "campur", label: "Campur" },
+  { id: "ketik", label: "Ketik (Free-response)" },
 ];
 
 function KanaDrillQuiz({ script }: { script: string }) {
@@ -485,6 +486,8 @@ function KanaDrillQuiz({ script }: { script: string }) {
   const [qi, setQi] = useState(0);
   const [picked, setPicked] = useState<string | null>(null);
   const [score, setScore] = useState(0);
+  const [typed, setTyped] = useState("");
+  const [typedResult, setTypedResult] = useState<{ ok: boolean; answer: string } | null>(null);
 
   if (script !== "hiragana" && script !== "katakana") return null;
   const toggleFilter = (f: DrillFilter) =>
@@ -495,6 +498,8 @@ function KanaDrillQuiz({ script }: { script: string }) {
     setQi(0);
     setPicked(null);
     setScore(0);
+    setTyped("");
+    setTypedResult(null);
   };
 
   if (qs.length === 0) {
@@ -567,39 +572,97 @@ function KanaDrillQuiz({ script }: { script: string }) {
         Soal {qi + 1}/{qs.length} · benar {score}
       </p>
       <p className={q.askIsKana ? "text-5xl font-bold" : "text-3xl font-bold"}>{q.ask}</p>
-      <p className="text-xs text-zinc-400">{q.askIsKana ? "Bacanya yang mana?" : "Kananya yang mana?"}</p>
-      <div className="grid grid-cols-2 gap-1.5">
-        {q.options.map((opt) => {
-          const isAnswer = opt === q.answer;
-          const isPicked = picked === opt;
-          let cls = "btn-secondary justify-center";
-          if (picked !== null) {
-            if (isAnswer) cls += " !border-teal-500 !bg-teal-50 !text-teal-800 dark:!bg-teal-950 dark:!text-teal-300";
-            else if (isPicked) cls += " !border-red-300 !bg-red-50 !text-red-700 dark:!bg-red-950 dark:!text-red-300";
-            else cls += " opacity-50";
-          }
-          return (
-            <button
-              key={opt}
-              className={`${cls} ${q.askIsKana ? "" : "text-2xl"}`}
-              disabled={picked !== null}
-              onClick={() => {
-                setPicked(opt);
-                if (isAnswer) setScore((s) => s + 1);
-                else speak(q.askIsKana ? q.ask : opt, "ja-JP");
-              }}
+      <p className="text-xs text-zinc-400">
+        {dir === "ketik"
+          ? q.askIsKana
+            ? "Ketik bacanya (romaji)"
+            : "Ketik kananya"
+          : q.askIsKana
+            ? "Bacanya yang mana?"
+            : "Kananya yang mana?"}
+      </p>
+      {dir === "ketik" ? (
+        <>
+          <input
+            className="input-area mt-4 text-center text-lg"
+            placeholder={q.askIsKana ? "Ketik romaji…" : "Ketik kana…"}
+            value={typed}
+            autoFocus
+            disabled={typedResult !== null}
+            onChange={(e) => setTyped(e.target.value)}
+            onKeyDown={(e) => {
+              if (e.key === "Enter" && typed.trim()) {
+                const ok = q.askIsKana
+                  ? typed.trim().toLowerCase() === q.answer.toLowerCase()
+                  : typed.trim() === q.answer;
+                setTypedResult({ ok, answer: q.answer });
+                if (ok) setScore((s) => s + 1);
+                else speak(q.askIsKana ? q.ask : q.answer, "ja-JP");
+              }
+            }}
+          />
+          {typedResult ? (
+            <p
+              className={`mt-2 text-center text-sm font-medium ${
+                typedResult.ok ? "text-teal-700 dark:text-teal-300" : "text-amber-700 dark:text-amber-300"
+              }`}
             >
-              {opt}
+              {typedResult.ok ? "Tepat!" : `Jawaban: ${typedResult.answer}`}
+            </p>
+          ) : (
+            <button
+              className="btn-primary mt-3 w-full"
+              onClick={() => {
+                if (!typed.trim()) return;
+                const ok = q.askIsKana
+                  ? typed.trim().toLowerCase() === q.answer.toLowerCase()
+                  : typed.trim() === q.answer;
+                setTypedResult({ ok, answer: q.answer });
+                if (ok) setScore((s) => s + 1);
+                else speak(q.askIsKana ? q.ask : q.answer, "ja-JP");
+              }}
+              disabled={!typed.trim()}
+            >
+              Periksa
             </button>
-          );
-        })}
-      </div>
-      {picked !== null ? (
+          )}
+        </>
+      ) : (
+        <div className="grid grid-cols-2 gap-1.5">
+          {q.options.map((opt) => {
+            const isAnswer = opt === q.answer;
+            const isPicked = picked === opt;
+            let cls = "btn-secondary justify-center";
+            if (picked !== null) {
+              if (isAnswer) cls += " !border-teal-500 !bg-teal-50 !text-teal-800 dark:!bg-teal-950 dark:!text-teal-300";
+              else if (isPicked) cls += " !border-red-300 !bg-red-50 !text-red-700 dark:!bg-red-950 dark:!text-red-300";
+              else cls += " opacity-50";
+            }
+            return (
+              <button
+                key={opt}
+                className={`${cls} ${q.askIsKana ? "" : "text-2xl"}`}
+                disabled={picked !== null}
+                onClick={() => {
+                  setPicked(opt);
+                  if (isAnswer) setScore((s) => s + 1);
+                  else speak(q.askIsKana ? q.ask : opt, "ja-JP");
+                }}
+              >
+                {opt}
+              </button>
+            );
+          })}
+        </div>
+      )}
+      {(picked !== null || typedResult !== null) ? (
         <button
           className="btn-primary w-full"
           onClick={() => {
             setQi((i) => i + 1);
             setPicked(null);
+            setTyped("");
+            setTypedResult(null);
           }}
         >
           Lanjut
@@ -1089,14 +1152,15 @@ function KanjiDetailView({ detail }: { detail: KanjiDetail }) {
   );
 }
 
-/* ── Flashcard khusus kanji: 3 mode (kenali / ingat / baca) ── */
-type KMode = "recognition" | "recall" | "reading";
+/* ── Flashcard khusus kanji: 4 mode (kenali / ingat / baca / produksi) ── */
+type KMode = "recognition" | "recall" | "reading" | "production";
 type KCard = { kanji: string; meaningId: string; strokes: number; due?: number; reps?: number | null };
 
 const K_MODE_META: { id: KMode; label: string; desc: string }[] = [
   { id: "recognition", label: "Kenali", desc: "kanji → arti + bacaan" },
   { id: "recall", label: "Ingat", desc: "arti → tulis/bayangkan kanji" },
   { id: "reading", label: "Baca", desc: "kata → bacaan" },
+  { id: "production", label: "Produksi", desc: "arti + bacaan → ketik kanji" },
 ];
 
 function KanjiFlash({ level }: { level: string }) {
@@ -1107,6 +1171,8 @@ function KanjiFlash({ level }: { level: string }) {
   const [busy, setBusy] = useState(false);
   const [started, setStarted] = useState(false);
   const [full, setFull] = useState<KanjiDetail | null>(null);
+  const [typed, setTyped] = useState("");
+  const [typedResult, setTypedResult] = useState<{ ok: boolean; answer: string } | null>(null);
 
   const start = async (m: KMode) => {
     setMode(m);
@@ -1114,6 +1180,8 @@ function KanjiFlash({ level }: { level: string }) {
     setReveal(false);
     setFull(null);
     requeues.current.clear();
+    setTyped("");
+    setTypedResult(null);
     try {
       const r = await fetch(`/api/kanji?mode=${m}`);
       const d = await r.json();
@@ -1164,6 +1232,8 @@ function KanjiFlash({ level }: { level: string }) {
     if (!card) return;
     setIdx((i) => i + 1);
     setReveal(false);
+    setTyped("");
+    setTypedResult(null);
     try {
       const r = await fetch("/api/kanji", {
         method: "POST",
@@ -1181,8 +1251,8 @@ function KanjiFlash({ level }: { level: string }) {
     return (
       <div className="card space-y-2 p-4">
         <p className="font-semibold">Flashcard kanji {level}</p>
-        <p className="text-xs text-zinc-500">3 mode terpisah (1 fakta per kartu) + jadwal FSRS.</p>
-        <div className="grid grid-cols-3 gap-1.5">
+        <p className="text-xs text-zinc-500">4 mode terpisah (1 fakta per kartu) + jadwal FSRS.</p>
+        <div className="grid grid-cols-4 gap-1.5">
           {K_MODE_META.map((m) => (
             <button key={m.id} className="btn-secondary flex-col gap-0.5 py-2.5 text-xs" disabled={busy} onClick={() => void start(m.id)}>
               <span className="font-semibold">{m.label}</span>
@@ -1245,7 +1315,7 @@ function KanjiFlash({ level }: { level: string }) {
             </div>
           )}
         </>
-      ) : (
+      ) : mode === "reading" ? (
         <>
           <p className="text-2xl font-bold">{full?.vocab[0]?.word ?? card.meaningId}</p>
           <p className="text-xs text-zinc-400">Bagaimana bacanya?</p>
@@ -1258,6 +1328,49 @@ function KanjiFlash({ level }: { level: string }) {
               <p className="text-lg font-semibold text-teal-700 dark:text-teal-300">{full?.vocab[0]?.reading ?? "—"}</p>
               <p className="text-xs text-zinc-500">{full?.vocab[0]?.gloss ?? ""}</p>
             </div>
+          )}
+        </>
+      ) : (
+        <>
+          <p className="text-lg font-semibold">{card.meaningId}</p>
+          {full ? (
+            <p className="text-xs text-zinc-500">
+              on: {full.on.slice(0, 2).map((r) => r.text).join("・") || "—"} · kun: {full.kun.slice(0, 2).map((r) => r.text).join("・") || "—"}
+            </p>
+          ) : null}
+          <p className="text-xs text-zinc-400">Ketik kanjinya (free-response, bukan pilihan ganda)</p>
+          <input
+            className="input-area mt-2 text-center text-3xl"
+            placeholder="Ketik kanji…"
+            value={typed}
+            autoFocus
+            disabled={typedResult !== null}
+            onChange={(e) => setTyped(e.target.value)}
+            onKeyDown={(e) => {
+              if (e.key === "Enter" && typed.trim()) {
+                const ok = typed.trim() === card.kanji;
+                setTypedResult({ ok, answer: card.kanji });
+                setReveal(true);
+              }
+            }}
+          />
+          {typedResult ? (
+            <p className={`mt-2 text-center text-sm font-medium ${typedResult.ok ? "text-teal-700 dark:text-teal-300" : "text-amber-700 dark:text-amber-300"}`}>
+              {typedResult.ok ? "Tepat!" : `Jawaban: ${typedResult.answer}`}
+            </p>
+          ) : (
+            <button
+              className="btn-primary mt-2 w-full"
+              onClick={() => {
+                if (!typed.trim()) return;
+                const ok = typed.trim() === card.kanji;
+                setTypedResult({ ok, answer: card.kanji });
+                setReveal(true);
+              }}
+              disabled={!typed.trim()}
+            >
+              Periksa
+            </button>
           )}
         </>
       )}

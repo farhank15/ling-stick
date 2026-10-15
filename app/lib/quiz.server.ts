@@ -149,7 +149,7 @@ export function localDayStr(): string {
     .slice(0, 10);
 }
 
-type BuildOpts = { sources?: ("library" | "bank")[]; bankLevel?: string; scrambleTokens?: boolean; grammarCloze?: boolean; shuffledTypes?: boolean; shufflePool?: boolean; itemIds?: number[]; typeMix?: QuizQuestion["type"][]; recallKnown?: boolean };
+type BuildOpts = { sources?: ("library" | "bank")[]; bankLevel?: string; scrambleTokens?: boolean; grammarCloze?: boolean; shuffledTypes?: boolean; shufflePool?: boolean; itemIds?: number[]; typeMix?: QuizQuestion["type"][]; recallKnown?: boolean; staged?: boolean };
 
 /**
  * Segmentasi kalimat Jepang jadi token per-kata via AI (partikel selalu token
@@ -279,6 +279,20 @@ async function buildQuestions(
     ).map((r) => r.itemId),
   );
 
+  // Staged logic: tipe soal berdasarkan reps item.
+  // 0 reps → MCQ (recognition), 1-2 reps → cloze (cued recall), 3+ reps → typing (free-response).
+  // matcha: riset testing effect + generation effect — free-response > MCQ untuk retensi jangka panjang.
+  const repsMap = new Map<number, number>();
+  if (opts.staged) {
+    const repsRows = await db
+      .select({ itemId: cards.itemId, reps: cards.reps })
+      .from(cards)
+      .innerJoin(items, eq(items.id, cards.itemId))
+      .where(eq(items.lang, await getTargetLang()))
+      .limit(500);
+    for (const r of repsRows) repsMap.set(r.itemId, r.reps);
+  }
+
   const pool: ItemRow[] = [...allRows]
     .filter((r) => r.meaningId)
     .sort((a, b) => {
@@ -321,7 +335,15 @@ async function buildQuestions(
 
   for (let i = 0; questions.length < limit; i++) {
     const item = usePool[i % usePool.length];
-    const type = types[questions.length % types.length];
+    // Staged: pilih tipe berdasarkan reps item (0=MCQ, 1-2=cloze, 3+=typing).
+    // matcha: riset testing effect — free-response > MCQ untuk retensi jangka panjang.
+    let type: QuizQuestion["type"];
+    if (opts.staged) {
+      const reps = repsMap.get(item.id) ?? 0;
+      type = reps === 0 ? "mcq_en_id" : reps <= 2 ? "cloze" : "typing";
+    } else {
+      type = types[questions.length % types.length];
+    }
     const others = allRows.filter((o) => o.id !== item.id && o.meaningId);
     const distractors = shuffle(others).slice(0, 3);
     // MCQ/listen: jawaban sama (teks/arti identik lintas sumber) → lewati.
@@ -620,12 +642,14 @@ export async function getSetForDay(mode: QuizMode, day: string, limit: number, o
 
   // Daily = sistematis: due-first + SEMUA skill incl. ketik, urutan rapi.
   // Campur = acak bebas: pool + urutan tipe diacak, tanpa jadwal.
+  // Staged: tipe soal berdasarkan reps item (0=MCQ, 1-2=cloze, 3+=typing).
+  // matcha: riset testing effect — free-response > MCQ untuk retensi jangka panjang.
   const ALL_FIVE: QuizQuestion["type"][] = ["mcq_en_id", "mcq_id_en", "cloze", "listen", "typing"];
   const modeOpts: BuildOpts =
     mode === "daily" || mode === "intens" || mode === "salah"
-      ? { typeMix: ALL_FIVE }
+      ? { typeMix: ALL_FIVE, staged: true }
       : mode === "mix"
-        ? { typeMix: ALL_FIVE, shuffledTypes: true, shufflePool: true }
+        ? { typeMix: ALL_FIVE, shuffledTypes: true, shufflePool: true, staged: true }
         : {};
   // Ulas Salah: khusus item yang pernah salah (library saja); kosong → pool normal.
   const wrongIds = mode === "salah" ? await recentWrongItemIds() : [];
