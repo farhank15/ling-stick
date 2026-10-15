@@ -656,12 +656,40 @@ export default function AksaraPage() {
 
 /* ── Referensi kanji kanonis (seed dataset, bukan generate) ── */
 type KanjiRow = { char: string; meaningId: string; strokes: number; jlpt: number | null; freq: number | null; components: string[] };
+type KanjiReading = { text: string; primary: boolean };
 type KanjiDetail = {
   char: string; meaningId: string; strokes: number; grade: number | null;
   freq: number | null; jlpt: number | null; svg: string | null;
-  on: string[]; kun: string[]; components: string[];
+  on: KanjiReading[]; kun: KanjiReading[]; components: string[];
   vocab: { word: string; reading: string; gloss: string }[];
 };
+
+/** Deretan bacaan jadi chip: on (katakana) vs kun (hiragana) beda warna,
+ *  bacaan inti tebal + titik. matcha: teks ・・・ susah di-scan. */
+function ReadingChips({ kind, items }: { kind: "on" | "kun"; items: KanjiReading[] }) {
+  if (items.length === 0) return null;
+  const chip =
+    kind === "on"
+      ? "bg-sky-100 text-sky-800 dark:bg-sky-950/70 dark:text-sky-200"
+      : "bg-violet-100 text-violet-800 dark:bg-violet-950/70 dark:text-violet-200";
+  return (
+    <div className="flex flex-wrap items-center gap-1.5">
+      <span className="label w-7 shrink-0">{kind === "on" ? "On" : "Kun"}</span>
+      {items.map((r) => (
+        <span
+          key={r.text}
+          title={r.primary ? "Bacaan inti — hafalkan ini dulu" : undefined}
+          className={`inline-flex items-center gap-1 rounded-lg px-2 py-1 text-[13px] ${chip} ${
+            r.primary ? "font-bold ring-1 ring-current" : "opacity-80"
+          }`}
+        >
+          {r.primary ? <span className="h-1.5 w-1.5 rounded-full bg-current" aria-hidden /> : null}
+          {r.text}
+        </span>
+      ))}
+    </div>
+  );
+}
 
 function KanjiRef({
   list, components, progress, level,
@@ -836,13 +864,9 @@ function KanjiDetailView({ detail }: { detail: KanjiDetail }) {
         </div>
       </div>
       {(detail.on.length > 0 || detail.kun.length > 0) ? (
-        <div className="space-y-1 text-sm">
-          {detail.on.length > 0 ? (
-            <p><span className="label mr-2">On</span>{detail.on.join("・")}</p>
-          ) : null}
-          {detail.kun.length > 0 ? (
-            <p><span className="label mr-2">Kun</span>{detail.kun.join("・")}</p>
-          ) : null}
+        <div className="space-y-1.5">
+          <ReadingChips kind="on" items={detail.on} />
+          <ReadingChips kind="kun" items={detail.kun} />
         </div>
       ) : null}
       {detail.components.length > 0 ? (
@@ -1000,7 +1024,7 @@ function KanjiFlash({ level }: { level: string }) {
               <p className="text-6xl font-bold text-teal-700 dark:text-teal-300">{card.kanji}</p>
               {full ? (
                 <p className="text-xs text-zinc-500">
-                  on: {full.on.slice(0, 2).join("・") || "—"} · kun: {full.kun.slice(0, 2).join("・") || "—"}
+                  on: {full.on.slice(0, 2).map((r) => r.text).join("・") || "—"} · kun: {full.kun.slice(0, 2).map((r) => r.text).join("・") || "—"}
                 </p>
               ) : null}
             </div>

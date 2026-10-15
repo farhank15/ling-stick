@@ -100,8 +100,8 @@ export async function getKanjiDetail(char: string): Promise<KanjiDetail | null> 
     freq: k.freq,
     jlpt: k.jlpt,
     svg: cleanSvg(k.svg),
-    on: readings.filter((r) => r.type === "on").map((r) => r.reading),
-    kun: readings.filter((r) => r.type === "kun").map((r) => r.reading),
+    on: readings.filter((r) => r.type === "on").map((r) => ({ text: r.reading, primary: r.primaryPick === 1 })),
+    kun: readings.filter((r) => r.type === "kun").map((r) => ({ text: r.reading, primary: r.primaryPick === 1 })),
     components: comps.map((c) => c.component),
     vocab: vocab.map((v) => ({ word: v.word, reading: v.reading, gloss: v.gloss })),
   };
@@ -160,8 +160,8 @@ export async function getKanjiCardDetail(char: string) {
     char: d.char,
     meaningId: d.meaningId,
     strokes: d.strokes,
-    on: d.on.slice(0, 2),
-    kun: d.kun.slice(0, 2),
+    on: d.on.slice(0, 2).map((r) => r.text),
+    kun: d.kun.slice(0, 2).map((r) => r.text),
     vocab: d.vocab.slice(0, 1),
   };
 }
