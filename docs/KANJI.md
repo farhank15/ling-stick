@@ -12,9 +12,27 @@ anti-asal (strokes>0, ada bacaan, vocab mengandung kanjinya, SVG ada).
 - Komponen: cjkvi-ids.
 - Diagram goresan: KanjiVG © Ulrich Apel (CC BY-SA 3.0).
 - Contoh kata: JMdict/Tatoeba via Jisho API (hanya kata umum).
-- Level JLPT: **patokan komunitas Waller/Kanshudo (tak resmi sejak 2010)** —
-  selalu tampilkan disclaimer ini di UI.
+- Level JLPT: **rekonstruksi terdokumentasi, bukan daftar resmi** (JLPT tak
+  menerbitkan daftar sejak 2010). Basis: OpenJLPT (evanclan, CC-BY-SA-4.0,
+  per-level disjoint) silang lineage klasik-103 (old-4級) + tanos/Waller +
+  Kanshudo. Lihat `data/kanji-levels.json` (sumber kebenaran level + provenance).
 - Arti Indonesia: kurasi manual di seed script.
+
+## Penetapan level (by-riset, 2026-10-15)
+
+| Level | Jumlah | Rumus |
+|---|---|---|
+| N5 | 111 | OpenJLPT-N5 (84) + buffer lineage klasik ber-justifikasi kosakata inti (30: 飲買帰曜週族社駅雪花海空肉牛魚鳥病院銀近明新古安字家言店強物) + 9 inti yang kurang (本白大小今入出半誰). Tiap butir buffer ada `why` (kosakata N5-nya). Disengaja dikecualikan: 丈貼無 (bukan kosakata N5 inti). Tier: `core` (84) / `buffer` (39). |
+| N4 | 142 | OpenJLPT-N4 (169) + 5 boundary (田文道寒暑) − overlap N5 (32). Boundary = batas N5/N4, diajarkan di N4, bertanda `tier: boundary`. |
+| N3 | 385 | OpenJLPT-N3 − overlap (寒雪 ikut N4/N5). |
+| N2 | 398 | OpenJLPT-N2 (kumulatif ≈ 1036). |
+| N1 | 1344 | OpenJLPT-N1 sisa (total unik 2380 + 3 dikecualikan = 2383). |
+
+Aturan tie-break (bila sumber konflik): old-4級 > tanos > Kanshudo > uji kosakata-inti;
+sisa tak terputus = varian batas (tidak jadi penentu lulus/gagal).
+File: `data/kanji-levels.json` (`counts`, `levels.n5/n4/n3` + tier/why/ojl_level,
+`levels.n2/n1` daftar karakter). `kanji:import` membaca file ini sebagai level
+final (seed per-kanji hanya fallback).
 
 ## Tabel DB (`app/lib/db/schema.ts` + migrasi `IF NOT EXISTS`)
 

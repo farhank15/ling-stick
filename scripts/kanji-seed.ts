@@ -35,6 +35,8 @@ const GLOSSES: Record<string, string> = {
   西: "barat", 南: "selatan", 北: "utara", 高: "tinggi; mahal", 安: "murah; aman",
   新: "baru", 古: "tua; kuno", 長: "panjang; pemimpin", 明: "terang",
   近: "dekat", 強: "kuat", 暑: "panas (cuaca)", 寒: "dingin (cuaca)",
+  本: "buku; asal", 白: "putih", 大: "besar", 小: "kecil", 今: "sekarang",
+  入: "masuk", 出: "keluar", 半: "setengah", 誰: "siapa",
 };
 
 const N5 = Object.keys(GLOSSES);

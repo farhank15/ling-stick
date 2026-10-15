@@ -19,13 +19,14 @@ Detail per fitur: [ROUTE.md](./ROUTE.md), [KANJI.md](./KANJI.md).
 - Lara rotasi 2 key (env `_2`, tracking per-key, failover).
 - **Rute N5 batch 1**: skema + validate + 20 step (order 1–20) + peta + unlock +
   checkpoint + kartu home + XP + varian register + Ask Ling + catatan per step.
-- **Kanji N5**: 107 kanji kanonis di DB + 3 mode flash + UI Aksara.
+- **Kanji N5**: 111 kanji kanonis di DB + 3 mode flash + UI Aksara.
+  Level N5–N1 final by-riset di `data/kanji-levels.json` (N5 111 / N4 142 / N3 385 / N2 398 / N1 1344).
 
 ## Sisa (urut prioritas saran)
 
 1. **Rute N5 batch 2–3** (order 21–60 + exam segmen 3–6) — lihat ROUTE.md §Cara lanjut.
 2. **Rute N4** (~110 pola) lalu N3 — pola kerja sama, tanpa kerja engine.
-3. **Kanji N4** (~170) — lihat KANJI.md §Cara lanjut.
+3. **Kanji N4** (142, daftar final siap) — seed dengan pola yang sama, lihat KANJI.md §Cara lanjut.
 4. **Animasi goresan KanjiVG** (SVG sudah di DB).
 5. **Mnemonik AI kanji** (terpisah + label AI).
 6. Audit label level AI bank (kata yang levelnya ngaco) — manual sesekali.

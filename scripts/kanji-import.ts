@@ -55,15 +55,31 @@ async function main() {
   }
 
   // ── Tulis (idempotent, upsert per char) ──
+  // Level final ikut data/kanji-levels.json bila ada (rekonsiliasi by-riset);
+  // jlpt seed per-kanji hanya fallback.
+  let levelOf: Record<string, number> = {};
+  try {
+    const levels = JSON.parse(readFileSync("data/kanji-levels.json", "utf8")) as {
+      levels: Record<string, { char: string }[]>;
+    };
+    for (const [lv, arr] of Object.entries(levels.levels ?? {})) {
+      const n = Number(lv.slice(1));
+      if (!Number.isInteger(n)) continue;
+      for (const e of arr ?? []) levelOf[e.char] = n;
+    }
+  } catch {
+    /* belum ada — pakai jlpt seed */
+  }
   for (const k of raw.kanji) {
+    const finalJlpt = levelOf[k.char] ?? k.jlpt ?? 5;
     await db.insert(kanji).values({
       char: k.char, meaningId: k.meaning_id, strokes: k.strokes,
-      grade: k.grade, freq: k.freq, jlpt: k.jlpt ?? 5, svg: k.svg,
+      grade: k.grade, freq: k.freq, jlpt: finalJlpt, svg: k.svg,
     }).onConflictDoUpdate({
       target: kanji.char,
       set: {
         meaningId: k.meaning_id, strokes: k.strokes, grade: k.grade,
-        freq: k.freq, jlpt: k.jlpt ?? 5, svg: k.svg,
+        freq: k.freq, jlpt: finalJlpt, svg: k.svg,
       },
     });
     await db.delete(kanjiReadings).where(sql`${kanjiReadings.kanji} = ${k.char}`);
