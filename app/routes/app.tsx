@@ -205,7 +205,7 @@ export default function AppLayout() {
               ) : null}
             </button>
             {notifOpen ? (
-              <div className="absolute right-0 z-40 mt-1 w-72 overflow-hidden rounded-xl border border-zinc-200 bg-white shadow-xl dark:border-zinc-800 dark:bg-zinc-900">
+              <div className="fixed top-16 right-4 z-40 max-h-[70dvh] w-[calc(100vw-2rem)] max-w-72 overflow-y-auto rounded-xl border border-zinc-200 bg-white shadow-xl sm:absolute sm:top-auto sm:right-0 sm:mt-1 sm:max-h-none dark:border-zinc-800 dark:bg-zinc-900">
                 <div className="border-b border-zinc-100 px-4 py-2.5 dark:border-zinc-800">
                   <p className="text-sm font-semibold">Notifikasi</p>
                 </div>
@@ -324,7 +324,7 @@ export default function AppLayout() {
               )}
             </button>
             {langOpen ? (
-              <div className="absolute right-0 z-40 mt-1 w-52 overflow-hidden rounded-xl border border-zinc-200 bg-white shadow-xl dark:border-zinc-800 dark:bg-zinc-900">
+              <div className="fixed top-16 right-4 z-40 w-[calc(100vw-2rem)] max-w-52 overflow-hidden rounded-xl border border-zinc-200 bg-white shadow-xl sm:absolute sm:top-auto sm:right-0 sm:mt-1 sm:w-52 dark:border-zinc-800 dark:bg-zinc-900">
                 <p className="label px-4 pt-2.5">Bahasa target</p>
                 <LangOptions lang={lang} onPick={switchLang} />
                 <p className="border-t border-zinc-100 px-4 py-2 text-[11px] text-zinc-400 dark:border-zinc-800">

@@ -88,7 +88,14 @@ async function main() {
       }
       const svgUrl = `https://raw.githubusercontent.com/KanjiVG/kanjivg/master/kanji/${hexOf(ch)}.svg`;
       const svgRes = await fetch(svgUrl, { headers: { "User-Agent": "LingStick-seed/1.0" } });
-      const svg = svgRes.ok ? await svgRes.text() : "";
+      const svgRaw = svgRes.ok ? await svgRes.text() : "";
+      // Bersihkan prolog XML + DOCTYPE di sumber (defense in depth — render
+      // juga membersihkan via cleanSvg, tapi DB sebaiknya sudah bersih).
+      const svg = svgRaw
+        .replace(/<\?xml[\s\S]*?\?>/g, "")
+        .replace(/<!--[\s\S]*?-->/g, "")
+        .replace(/<!DOCTYPE[\s\S]*?\]>/g, "")
+        .trim();
       if (!svg.includes("<svg")) throw new Error("SVG KanjiVG gagal");
       const idsLine = idsByChar.get(ch) ?? "";
       const components = componentsOf(idsLine, ch);

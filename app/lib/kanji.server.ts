@@ -99,12 +99,27 @@ export async function getKanjiDetail(char: string): Promise<KanjiDetail | null> 
     grade: k.grade,
     freq: k.freq,
     jlpt: k.jlpt,
-    svg: k.svg,
+    svg: cleanSvg(k.svg),
     on: readings.filter((r) => r.type === "on").map((r) => r.reading),
     kun: readings.filter((r) => r.type === "kun").map((r) => r.reading),
     components: comps.map((c) => c.component),
     vocab: vocab.map((v) => ({ word: v.word, reading: v.reading, gloss: v.gloss })),
   };
+}
+
+/**
+ * Buang prolog XML + komentar + DOCTYPE KanjiVG (termasuk internal subset
+ * [...]) — parser HTML innerHTML memenggal DOCTYPE di `>` pertama sehingga
+ * sisa `]>` bocor jadi teks di atas diagram.
+ * matcha: artefak "]>" di sheet cara penulisan.
+ */
+export function cleanSvg(svg: string | null): string | null {
+  if (!svg) return null;
+  return svg
+    .replace(/<\?xml[\s\S]*?\?>/g, "")
+    .replace(/<!--[\s\S]*?-->/g, "")
+    .replace(/<!DOCTYPE[\s\S]*?\]>/g, "")
+    .trim();
 }
 
 /** Antrean flashcard kanji: due dulu + baru (reps=0), per mode. */

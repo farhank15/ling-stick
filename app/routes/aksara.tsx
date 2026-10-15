@@ -504,7 +504,10 @@ function KanjiRef({
               setDetail(null);
             }}
           />
-          <div className="absolute inset-x-0 bottom-0 mx-auto max-h-[85dvh] w-full max-w-lg overflow-y-auto rounded-t-3xl bg-white p-4 pb-[calc(env(safe-area-inset-bottom)+16px)] shadow-2xl sm:inset-0 sm:m-auto sm:h-fit sm:max-h-[85dvh] sm:max-w-lg sm:rounded-3xl dark:bg-zinc-900">
+          {/* Sheet: selalu nempel bawah (mobile + desktop) — panel melayang
+              tengah menyisakan backdrop di bawah yang kelihatan seperti gap.
+              matcha: sm:rounded-3xl + m-auto = celah backdrop di bawah sheet. */}
+          <div className="absolute inset-x-0 bottom-0 mx-auto max-h-[85dvh] w-full overflow-y-auto rounded-t-3xl bg-white p-4 pb-[max(1rem,env(safe-area-inset-bottom))] shadow-2xl sm:max-w-2xl dark:bg-zinc-900">
             <div className="mx-auto mb-3 h-1 w-10 rounded-full bg-zinc-300 sm:hidden dark:bg-zinc-700" />
             <div className="mb-2 flex items-center justify-between">
               <p className="text-2xl font-bold">{openChar}</p>
