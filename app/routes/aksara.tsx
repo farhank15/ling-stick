@@ -11,6 +11,15 @@ import { requireUser } from "~/lib/auth.server";
 import { getTargetLang } from "~/lib/lang.server";
 import { ttsLang } from "~/lib/utils.shared";
 import { SpeakButton } from "~/components/SpeakButton";
+import kanaConfusables from "../../data/kana-confusables.json";
+
+type ConfusableGroup = {
+  id: string;
+  script: string;
+  members: string[];
+  rule: string;
+  mnemonic: string;
+};
 
 export const meta: MetaFunction = () => [{ title: "Aksara Jepang — LingStick" }];
 export const handle = { title: "Aksara Jepang" };
@@ -178,21 +187,12 @@ export async function loader({ request }: LoaderFunctionArgs) {
     ]);
   }
 
-  // Kelompok kana mirip (highlight + kuis jebakan) — file statis kecil.
-  let confusables: { id: string; script: string; members: string[]; rule: string; mnemonic: string }[] = [];
-  if (script !== "kanji") {
-    try {
-      const { readFileSync, existsSync } = await import("node:fs");
-      const { join } = await import("node:path");
-      const p = join(process.cwd(), "data", "kana-confusables.json");
-      if (existsSync(p)) {
-        const j = JSON.parse(readFileSync(p, "utf8")) as { groups: typeof confusables };
-        confusables = (j.groups ?? []).filter((g) => g.script === script);
-      }
-    } catch {
-      /* opsional — tabel tetap jalan */
-    }
-  }
+  // Kelompok kana mirip — import JSON langsung (masuk bundle server).
+  // matcha: baca via join(process.cwd(),"data",...) tak terlacak Vercel NFT
+  // → file tak ikut deploy → confusables kosong di produksi.
+  const confusables: ConfusableGroup[] = (
+    (kanaConfusables as { groups?: ConfusableGroup[] }).groups ?? []
+  ).filter((g) => g.script === script && Array.isArray(g.members));
 
   return {
     script,
