@@ -178,12 +178,29 @@ export async function loader({ request }: LoaderFunctionArgs) {
     ]);
   }
 
+  // Kelompok kana mirip (highlight + kuis jebakan) — file statis kecil.
+  let confusables: { id: string; script: string; members: string[]; rule: string; mnemonic: string }[] = [];
+  if (script !== "kanji") {
+    try {
+      const { readFileSync, existsSync } = await import("node:fs");
+      const { join } = await import("node:path");
+      const p = join(process.cwd(), "data", "kana-confusables.json");
+      if (existsSync(p)) {
+        const j = JSON.parse(readFileSync(p, "utf8")) as { groups: typeof confusables };
+        confusables = (j.groups ?? []).filter((g) => g.script === script);
+      }
+    } catch {
+      /* opsional — tabel tetap jalan */
+    }
+  }
+
   return {
     script,
     level,
     kanjiList,
     kanjiComponents,
     kanjiProgress,
+    confusables,
   };
 }
 
@@ -193,12 +210,27 @@ export async function loader({ request }: LoaderFunctionArgs) {
  * matcha: dua sistem kanji paralel = user bingung + data dobel. */
 
 /** Sel grid kana: klik = bunyi. Saat bunyi, romaji keganti spinner (anti-spam + feedback). */
-function KanaCell({ kana, romaji }: { kana: string; romaji: string }) {
+function KanaCell({
+  kana,
+  romaji,
+  glow,
+  onSelect,
+}: {
+  kana: string;
+  romaji: string;
+  glow?: boolean;
+  onSelect?: () => void;
+}) {
   const [busy, setBusy] = useState(false);
   const timer = useRef<ReturnType<typeof setTimeout> | null>(null);
   useEffect(() => () => { if (timer.current) clearTimeout(timer.current); }, []);
 
   const click = () => {
+    // Mode mirip: tap = pilih grup (info + highlight), suara via tombol di kartu info.
+    if (onSelect) {
+      onSelect();
+      return;
+    }
     if (busy) return;
     if (typeof window === "undefined" || !window.speechSynthesis) return;
     const u = new SpeechSynthesisUtterance(kana);
@@ -222,7 +254,11 @@ function KanaCell({ kana, romaji }: { kana: string; romaji: string }) {
     <button
       onClick={click}
       aria-busy={busy}
-      className="flex flex-col items-center gap-0.5 rounded-xl border border-zinc-200 bg-white py-2.5 transition-colors hover:border-teal-300 active:bg-teal-50 dark:border-zinc-800 dark:bg-zinc-900 dark:hover:border-teal-800 dark:active:bg-teal-950/60"
+      className={`flex flex-col items-center gap-0.5 rounded-xl border py-2.5 transition-colors ${
+        glow
+          ? "border-amber-400 bg-amber-50 text-amber-900 dark:border-amber-600 dark:bg-amber-950/50 dark:text-amber-100"
+          : "border-zinc-200 bg-white hover:border-teal-300 active:bg-teal-50 dark:border-zinc-800 dark:bg-zinc-900 dark:hover:border-teal-800 dark:active:bg-teal-950/60"
+      }`}
     >
       <span className="text-xl font-semibold">{kana}</span>
       {busy ? (
@@ -234,8 +270,150 @@ function KanaCell({ kana, romaji }: { kana: string; romaji: string }) {
   );
 }
 
+/* ── Kuis jebakan mirip: distraktor SELALU segrup (minimal pairs drilling).
+ * matcha: distraktor acak bikin soal terlalu gampang — diskriminasi tak terlatih. */
+type TrapGroup = { id: string; script: string; members: string[]; rule: string; mnemonic: string };
+
+function romajiMapFor(script: "hiragana" | "katakana"): Map<string, string> {
+  const m = new Map<string, string>();
+  const put = (pairs: ([string, string] | null)[]) => {
+    for (const p of pairs) {
+      if (p && p[0] && p[1] && !m.has(p[0])) m.set(p[0], p[1]);
+    }
+  };
+  for (const row of KANA_TABLES[script]) put([...row]);
+  for (const row of (script === "hiragana" ? YOON_HIRA : YOON_KATA) as [string, string][][]) put(row);
+  if (script === "katakana") put(GAIRAIGO as [string, string][]);
+  return m;
+}
+
+type TrapQ = { kana: string; answer: string; options: string[] };
+
+function buildTrapQuiz(
+  groups: TrapGroup[],
+  romaji: Map<string, string>,
+  n = 10,
+): TrapQ[] {
+  const allKana = [...romaji.keys()];
+  const qs: TrapQ[] = [];
+  for (let i = 0; i < n; i++) {
+    const g = groups[Math.floor(Math.random() * groups.length)]!;
+    const kana = g.members[Math.floor(Math.random() * g.members.length)]!;
+    const answer = romaji.get(kana) ?? kana;
+    const opts = [...g.members];
+    // Grup kecil (<4) dilengkapi kana acak se-script — jawaban tetap segrup.
+    const filler = [...allKana].sort(() => Math.random() - 0.5);
+    for (const f of filler) {
+      if (opts.length >= 4) break;
+      if (!opts.includes(f) && romaji.get(f)) opts.push(f);
+    }
+    const options = opts
+      .slice(0, 4)
+      .map((k) => romaji.get(k) ?? k)
+      .sort(() => Math.random() - 0.5);
+    qs.push({ kana, answer, options });
+  }
+  return qs;
+}
+
+function KanaTrapQuiz({ script, groups }: { script: string; groups: TrapGroup[] }) {
+  const [qs, setQs] = useState<TrapQ[]>([]);
+  const [qi, setQi] = useState(0);
+  const [picked, setPicked] = useState<string | null>(null);
+  const [score, setScore] = useState(0);
+
+  if (script === "kanji" || groups.length === 0) return null;
+  const start = () => {
+    setQs(buildTrapQuiz(groups, romajiMapFor(script as "hiragana" | "katakana")));
+    setQi(0);
+    setPicked(null);
+    setScore(0);
+  };
+
+  if (qs.length === 0) {
+    return (
+      <div className="card flex items-center gap-3 p-4">
+        <div className="min-w-0 flex-1">
+          <p className="font-semibold">Latihan Jebakan Mirip</p>
+          <p className="text-xs text-zinc-500">10 soal — pilihan selalu dari grup yang sama. Berani?</p>
+        </div>
+        <button className="btn-primary shrink-0 text-sm" onClick={start}>
+          Mulai
+        </button>
+      </div>
+    );
+  }
+
+  const q = qs[qi];
+  const done = qi >= qs.length;
+  if (!q || done) {
+    return (
+      <div className="card space-y-2 p-4 text-center">
+        <p className="font-bold">Skor {score}/{qs.length}</p>
+        <p className="text-xs text-zinc-500">
+          {score === qs.length ? "Sempurna — grup mirip takluk!" : "Ulangi sampai sempurna, lalu lepas mnemoniknya."}
+        </p>
+        <div className="flex justify-center gap-2">
+          <button className="btn-secondary text-sm" onClick={() => setQs([])}>
+            Selesai
+          </button>
+          <button className="btn-primary text-sm" onClick={start}>
+            Ulangi
+          </button>
+        </div>
+      </div>
+    );
+  }
+
+  return (
+    <div className="card space-y-3 p-4 text-center">
+      <p className="text-[11px] uppercase tracking-wide text-zinc-400">
+        Soal {qi + 1}/{qs.length} · benar {score}
+      </p>
+      <p className="text-5xl font-bold">{q.kana}</p>
+      <p className="text-xs text-zinc-400">Bacanya yang mana?</p>
+      <div className="grid grid-cols-2 gap-1.5">
+        {q.options.map((opt) => {
+          const isAnswer = opt === q.answer;
+          const isPicked = picked === opt;
+          let cls = "btn-secondary justify-center";
+          if (picked !== null) {
+            if (isAnswer) cls += " !border-teal-500 !bg-teal-50 !text-teal-800 dark:!bg-teal-950 dark:!text-teal-300";
+            else if (isPicked) cls += " !border-red-300 !bg-red-50 !text-red-700 dark:!bg-red-950 dark:!text-red-300";
+            else cls += " opacity-50";
+          }
+          return (
+            <button
+              key={opt}
+              className={cls}
+              disabled={picked !== null}
+              onClick={() => {
+                setPicked(opt);
+                if (isAnswer) setScore((s) => s + 1);
+              }}
+            >
+              {opt}
+            </button>
+          );
+        })}
+      </div>
+      {picked !== null ? (
+        <button
+          className="btn-primary w-full"
+          onClick={() => {
+            setQi((i) => i + 1);
+            setPicked(null);
+          }}
+        >
+          Lanjut
+        </button>
+      ) : null}
+    </div>
+  );
+}
+
 export default function AksaraPage() {
-  const { script, level, kanjiList, kanjiComponents, kanjiProgress } =
+  const { script, level, kanjiList, kanjiComponents, kanjiProgress, confusables } =
     useLoaderData<typeof loader>();
   const [params, setParams] = useSearchParams();
 
@@ -245,6 +423,17 @@ export default function AksaraPage() {
     if (next.level) p.set("level", next.level);
     setParams(p, { preventScrollReset: true });
   };
+
+  // Mode mirip: tap kana = grupnya nyala + kartu rule/mnemonik. Tanpa ini tap = bunyi.
+  const [similarOn, setSimilarOn] = useState(false);
+  const [selKana, setSelKana] = useState<string | null>(null);
+  const selGroup = similarOn && selKana
+    ? (confusables ?? []).find((g) => g.members.includes(selKana)) ?? null
+    : null;
+  const glowFor = (kana: string) =>
+    similarOn && selGroup ? selGroup.members.includes(kana) : false;
+  const selectFor = (kana: string) =>
+    similarOn ? () => setSelKana((s) => (s === kana ? null : kana)) : undefined;
 
   // Tabel kana: batas 2xl biar sel ga jadi raksasa di desktop.
   return (
@@ -272,6 +461,44 @@ export default function AksaraPage() {
             Tap karakternya buat dengar cara bacanya — belajar 5 kolom per baris (gojūon), lanjut
             dakuten/handakuten di bawah.
           </p>
+          {(confusables ?? []).length > 0 ? (
+            <div className="flex items-center justify-between gap-2">
+              <p className="text-xs text-zinc-500">
+                Yang mirip-mirip ({(confusables ?? []).length} grup jebakan)
+              </p>
+              <button
+                className={`chip min-h-8 px-2.5 text-[11px] ${similarOn ? "chip-active" : ""}`}
+                onClick={() => {
+                  setSimilarOn((v) => !v);
+                  setSelKana(null);
+                }}
+                aria-pressed={similarOn}
+              >
+                {similarOn ? "Mode mirip: ON" : "Mode mirip: OFF"}
+              </button>
+            </div>
+          ) : null}
+          {selGroup ? (
+            <div className="card space-y-1 border-amber-200 p-3 dark:border-amber-900">
+              <p className="text-sm font-bold tracking-wide">
+                {selGroup.members.join(" ・ ")}
+              </p>
+              <p className="text-xs font-medium text-amber-800 dark:text-amber-200">{selGroup.rule}</p>
+              <p className="text-xs text-zinc-500 dark:text-zinc-400">{selGroup.mnemonic}</p>
+              <button
+                className="btn-ghost inline-flex items-center gap-1 text-xs"
+                onClick={() => {
+                  const u = new SpeechSynthesisUtterance(selGroup.members.join("、"));
+                  u.lang = "ja-JP";
+                  window.speechSynthesis.cancel();
+                  window.speechSynthesis.speak(u);
+                }}
+              >
+                <Volume2 className="h-3.5 w-3.5" /> Dengarkan semuanya
+              </button>
+            </div>
+          ) : null}
+          <KanaTrapQuiz script={script} groups={confusables ?? []} />
           {KANA_SECTIONS.map((sec, si) => {
             const rows = KANA_TABLES[script].slice(sec.slice[0], sec.slice[1]);
             if (rows.length === 0) return null;
@@ -284,7 +511,13 @@ export default function AksaraPage() {
                     <div key={ri} className="grid grid-cols-5 gap-1.5">
                       {row.map((cell, ci) =>
                         cell ? (
-                          <KanaCell key={cell[0]} kana={cell[0]} romaji={cell[1]} />
+                          <KanaCell
+                            key={cell[0]}
+                            kana={cell[0]}
+                            romaji={cell[1]}
+                            glow={glowFor(cell[0])}
+                            onSelect={selectFor(cell[0])}
+                          />
                         ) : (
                           <div
                             key={`empty-${ci}`}
@@ -311,7 +544,13 @@ export default function AksaraPage() {
               {(script === "hiragana" ? YOON_HIRA : YOON_KATA).map((row, ri) => (
                 <div key={ri} className="grid grid-cols-3 gap-1.5">
                   {row.map(([kana, romaji]) => (
-                    <KanaCell key={kana} kana={kana} romaji={romaji} />
+                    <KanaCell
+                      key={kana}
+                      kana={kana}
+                      romaji={romaji}
+                      glow={glowFor(kana)}
+                      onSelect={selectFor(kana)}
+                    />
                   ))}
                 </div>
               ))}
@@ -327,7 +566,13 @@ export default function AksaraPage() {
               </p>
               <div className="grid grid-cols-3 gap-1.5">
                 {GAIRAIGO.map(([kana, romaji]) => (
-                  <KanaCell key={kana} kana={kana} romaji={romaji} />
+                  <KanaCell
+                    key={kana}
+                    kana={kana}
+                    romaji={romaji}
+                    glow={glowFor(kana)}
+                    onSelect={selectFor(kana)}
+                  />
                 ))}
               </div>
             </div>
