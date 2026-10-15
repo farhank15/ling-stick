@@ -445,10 +445,13 @@ function buildDrill(
   dir: DrillDir,
   n = 10,
 ): DrillQ[] {
-  const pick = <T,>(arr: T[]): T => arr[Math.floor(Math.random() * arr.length)]!;
+  // Acak tanpa pengulangan dalam 1 ronde: pool di-shuffle dulu, soal diambil
+  // berurutan (putar lagi kalau pool < n). matcha: pick() dengan replacement
+  // bikin kana sama muncul 2-3x dalam 10 soal — makin parah kalau filter sempit.
+  const order = [...pool].sort(() => Math.random() - 0.5);
   const qs: DrillQ[] = [];
   for (let i = 0; i < n; i++) {
-    const [kana, romaji] = pick(pool);
+    const [kana, romaji] = order[i % order.length]!;
     const askIsKana = dir === "kana-romaji" ? true : dir === "romaji-kana" ? false : Math.random() < 0.5;
     const answer = askIsKana ? romaji : kana;
     const opts = new Set<string>([answer]);
