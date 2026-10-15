@@ -106,6 +106,6 @@
       "members": ["ル", "レ"],
       "rule": "ル 2 gores bersimpul (rute muter); レ 1 ayunan tebal polos.",
       "mnemonic": "Yang ada simpul = ル; yang polos = レ."
-    },
+    }
   ]
 }
