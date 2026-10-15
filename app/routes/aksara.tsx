@@ -480,7 +480,7 @@ const DRILL_DIRS: { id: DrillDir; label: string }[] = [
 ];
 
 function KanaDrillQuiz({ script }: { script: string }) {
-  const [filters, setFilters] = useState<DrillFilter[]>(["gojuon"]);
+  const [filters, setFilters] = useState<DrillFilter[]>(["gojuon", "dakuten", "yoon"]);
   const [dir, setDir] = useState<DrillDir>("campur");
   const [qs, setQs] = useState<DrillQ[]>([]);
   const [qi, setQi] = useState(0);
@@ -493,7 +493,7 @@ function KanaDrillQuiz({ script }: { script: string }) {
   const toggleFilter = (f: DrillFilter) =>
     setFilters((s) => (s.includes(f) ? s.filter((x) => x !== f) : [...s, f]));
   const start = () => {
-    const pool = drillPool(script, filters.length ? filters : ["gojuon"]);
+    const pool = drillPool(script, filters.length ? filters : ["gojuon", "dakuten", "yoon"]);
     setQs(buildDrill(pool, dir));
     setQi(0);
     setPicked(null);
