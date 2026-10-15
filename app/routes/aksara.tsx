@@ -416,6 +416,199 @@ function KanaTrapQuiz({ script, groups }: { script: string; groups: TrapGroup[] 
   );
 }
 
+/* ── Drill acak kana: dua arah (kana⇄romaji) + filter baris per script.
+ * matcha: belum ada review kana sama sekali — tabel doang tanpa drill. */
+type DrillFilter = "gojuon" | "dakuten" | "yoon";
+type DrillDir = "kana-romaji" | "romaji-kana" | "campur";
+type DrillQ = { ask: string; askIsKana: boolean; answer: string; options: string[] };
+
+function drillPool(script: "hiragana" | "katakana", filters: DrillFilter[]): [string, string][] {
+  const pool: [string, string][] = [];
+  const push = (pairs: ([string, string] | null)[]) => {
+    for (const p of pairs) if (p && p[0] && p[1]) pool.push([p[0], p[1]]);
+  };
+  if (filters.includes("gojuon")) {
+    for (const row of KANA_TABLES[script].slice(0, 11)) push([...row]);
+  }
+  if (filters.includes("dakuten")) {
+    for (const row of KANA_TABLES[script].slice(11, 16)) push([...row]);
+  }
+  if (filters.includes("yoon")) {
+    for (const row of (script === "hiragana" ? YOON_HIRA : YOON_KATA) as [string, string][][]) push(row);
+    if (script === "katakana") push(GAIRAIGO as [string, string][]);
+  }
+  return pool;
+}
+
+function buildDrill(
+  pool: [string, string][],
+  dir: DrillDir,
+  n = 10,
+): DrillQ[] {
+  const pick = <T,>(arr: T[]): T => arr[Math.floor(Math.random() * arr.length)]!;
+  const qs: DrillQ[] = [];
+  for (let i = 0; i < n; i++) {
+    const [kana, romaji] = pick(pool);
+    const askIsKana = dir === "kana-romaji" ? true : dir === "romaji-kana" ? false : Math.random() < 0.5;
+    const answer = askIsKana ? romaji : kana;
+    const opts = new Set<string>([answer]);
+    const bag = [...pool].sort(() => Math.random() - 0.5);
+    for (const [k, r] of bag) {
+      if (opts.size >= 4) break;
+      opts.add(askIsKana ? r : k);
+    }
+    qs.push({
+      ask: askIsKana ? kana : romaji,
+      askIsKana,
+      answer,
+      options: [...opts].sort(() => Math.random() - 0.5),
+    });
+  }
+  return qs;
+}
+
+const DRILL_FILTERS: { id: DrillFilter; label: string }[] = [
+  { id: "gojuon", label: "Gojūon" },
+  { id: "dakuten", label: "Dakuten" },
+  { id: "yoon", label: "Yōon" },
+];
+const DRILL_DIRS: { id: DrillDir; label: string }[] = [
+  { id: "kana-romaji", label: "Kana → Romaji" },
+  { id: "romaji-kana", label: "Romaji → Kana" },
+  { id: "campur", label: "Campur" },
+];
+
+function KanaDrillQuiz({ script }: { script: string }) {
+  const [filters, setFilters] = useState<DrillFilter[]>(["gojuon"]);
+  const [dir, setDir] = useState<DrillDir>("campur");
+  const [qs, setQs] = useState<DrillQ[]>([]);
+  const [qi, setQi] = useState(0);
+  const [picked, setPicked] = useState<string | null>(null);
+  const [score, setScore] = useState(0);
+
+  if (script !== "hiragana" && script !== "katakana") return null;
+  const toggleFilter = (f: DrillFilter) =>
+    setFilters((s) => (s.includes(f) ? s.filter((x) => x !== f) : [...s, f]));
+  const start = () => {
+    const pool = drillPool(script, filters.length ? filters : ["gojuon"]);
+    setQs(buildDrill(pool, dir));
+    setQi(0);
+    setPicked(null);
+    setScore(0);
+  };
+
+  if (qs.length === 0) {
+    return (
+      <div className="card space-y-3 p-4">
+        <div>
+          <p className="font-semibold">Drill Acak {script === "hiragana" ? "Hiragana" : "Katakana"}</p>
+          <p className="text-xs text-zinc-500">10 soal acak — dua arah, baris bisa dikombinasi.</p>
+        </div>
+        <div>
+          <p className="label mb-1.5">Baris</p>
+          <div className="flex flex-wrap gap-1.5">
+            {DRILL_FILTERS.map((f) => (
+              <button
+                key={f.id}
+                className={`chip min-h-8 px-2.5 text-[11px] ${filters.includes(f.id) ? "chip-active" : ""}`}
+                onClick={() => toggleFilter(f.id)}
+                aria-pressed={filters.includes(f.id)}
+              >
+                {f.label}
+              </button>
+            ))}
+          </div>
+        </div>
+        <div>
+          <p className="label mb-1.5">Arah</p>
+          <div className="flex flex-wrap gap-1.5">
+            {DRILL_DIRS.map((d) => (
+              <button
+                key={d.id}
+                className={`chip min-h-8 px-2.5 text-[11px] ${dir === d.id ? "chip-active" : ""}`}
+                onClick={() => setDir(d.id)}
+              >
+                {d.label}
+              </button>
+            ))}
+          </div>
+        </div>
+        <button className="btn-primary w-full" onClick={start}>
+          Mulai drill
+        </button>
+      </div>
+    );
+  }
+
+  const q = qs[qi];
+  const done = qi >= qs.length;
+  if (!q || done) {
+    return (
+      <div className="card space-y-2 p-4 text-center">
+        <p className="font-bold">Skor {score}/{qs.length}</p>
+        <p className="text-xs text-zinc-500">
+          {score === qs.length ? "Sempurna!" : "Yang salah tandain — masuk mode mirip kalau ketuker."}
+        </p>
+        <div className="flex justify-center gap-2">
+          <button className="btn-secondary text-sm" onClick={() => setQs([])}>
+            Ganti setelan
+          </button>
+          <button className="btn-primary text-sm" onClick={start}>
+            Acak lagi
+          </button>
+        </div>
+      </div>
+    );
+  }
+
+  return (
+    <div className="card space-y-3 p-4 text-center">
+      <p className="text-[11px] uppercase tracking-wide text-zinc-400">
+        Soal {qi + 1}/{qs.length} · benar {score}
+      </p>
+      <p className={q.askIsKana ? "text-5xl font-bold" : "text-3xl font-bold"}>{q.ask}</p>
+      <p className="text-xs text-zinc-400">{q.askIsKana ? "Bacanya yang mana?" : "Kananya yang mana?"}</p>
+      <div className="grid grid-cols-2 gap-1.5">
+        {q.options.map((opt) => {
+          const isAnswer = opt === q.answer;
+          const isPicked = picked === opt;
+          let cls = "btn-secondary justify-center";
+          if (picked !== null) {
+            if (isAnswer) cls += " !border-teal-500 !bg-teal-50 !text-teal-800 dark:!bg-teal-950 dark:!text-teal-300";
+            else if (isPicked) cls += " !border-red-300 !bg-red-50 !text-red-700 dark:!bg-red-950 dark:!text-red-300";
+            else cls += " opacity-50";
+          }
+          return (
+            <button
+              key={opt}
+              className={`${cls} ${q.askIsKana ? "" : "text-2xl"}`}
+              disabled={picked !== null}
+              onClick={() => {
+                setPicked(opt);
+                if (isAnswer) setScore((s) => s + 1);
+                else speak(q.askIsKana ? q.ask : opt, "ja-JP");
+              }}
+            >
+              {opt}
+            </button>
+          );
+        })}
+      </div>
+      {picked !== null ? (
+        <button
+          className="btn-primary w-full"
+          onClick={() => {
+            setQi((i) => i + 1);
+            setPicked(null);
+          }}
+        >
+          Lanjut
+        </button>
+      ) : null}
+    </div>
+  );
+}
+
 export default function AksaraPage() {
   const { script, level, kanjiList, kanjiComponents, kanjiProgress, confusables } =
     useLoaderData<typeof loader>();
@@ -504,6 +697,7 @@ export default function AksaraPage() {
             </div>
           ) : null}
           <KanaTrapQuiz script={script} groups={confusables ?? []} />
+          <KanaDrillQuiz script={script} />
           {KANA_SECTIONS.map((sec, si) => {
             const rows = KANA_TABLES[script].slice(sec.slice[0], sec.slice[1]);
             if (rows.length === 0) return null;
