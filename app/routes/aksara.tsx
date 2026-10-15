@@ -496,7 +496,7 @@ function KanjiRef({
       {/* Sheet detail: bottom-sheet di HP, panel tengah di desktop.
           matcha: detail inline di bawah grid = scroll jauh + konteks grid hilang. */}
       {openChar ? (
-        <div className="fixed inset-0 z-40" role="dialog" aria-modal="true" aria-label={`Detail ${openChar}`}>
+        <div className="fixed inset-x-0 top-0 z-40 h-[100dvh]" role="dialog" aria-modal="true" aria-label={`Detail ${openChar}`}>
           <div
             className="absolute inset-0 bg-black/40 dark:bg-black/60"
             onClick={() => {
