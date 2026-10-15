@@ -1293,8 +1293,7 @@ function KanjiFlash({ level }: { level: string }) {
               <button
                 key={m.id}
                 className={`chip min-h-8 px-2.5 text-[11px] ${mode === m.id ? "chip-active" : ""}`}
-                disabled={busy}
-                onClick={() => void start(m.id)}
+                onClick={() => setMode(m.id)}
                 title={m.desc}
                 aria-pressed={mode === m.id}
               >
@@ -1302,7 +1301,13 @@ function KanjiFlash({ level }: { level: string }) {
               </button>
             ))}
           </div>
+          <p className="mt-1.5 text-[11px] text-zinc-400">
+            {K_MODE_META.find((m) => m.id === mode)?.desc}
+          </p>
         </div>
+        <button className="btn-primary w-full" onClick={() => void start(mode)} disabled={busy}>
+          Mulai drill
+        </button>
       </div>
     );
   }
