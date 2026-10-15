@@ -65,17 +65,22 @@ export default function App() {
 
 /** Banner offline global — di semua page. Mutasi butuh internet; baca lokal tetap jalan. */
 function OfflineBanner() {
-  const [online, setOnline] = useState(() =>
-    typeof navigator === "undefined" ? true : navigator.onLine,
-  );
+  // Mulai online + grace 1.5 dtk: navigator.onLine kadang false sesaat saat
+  // refresh (race browser), yang bikin banner oranye kedip padahal online.
+  // matcha: baca onLine saat mount = flicker tiap refresh.
+  const [online, setOnline] = useState(true);
   useEffect(() => {
     const on = () => setOnline(true);
     const off = () => setOnline(false);
     window.addEventListener("online", on);
     window.addEventListener("offline", off);
+    const t = setTimeout(() => {
+      if (typeof navigator !== "undefined" && !navigator.onLine) setOnline(false);
+    }, 1500);
     return () => {
       window.removeEventListener("online", on);
       window.removeEventListener("offline", off);
+      clearTimeout(t);
     };
   }, []);
   if (online) return null;
