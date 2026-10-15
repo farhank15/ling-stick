@@ -3,6 +3,20 @@
   "_license": "Kurasi sendiri untuk LingStick. Metode terinspirasi panduan Tofugu (tofugu.com/japanese/learn-hiragana, /learn-katakana).",
   "groups": [
     {
+      "id": "hira-te-so",
+      "script": "hiragana",
+      "members": ["て", "そ"],
+      "rule": "Dua-duanya zigzag kayak Z; そ muter membulat, て tajam bersudut.",
+      "mnemonic": "そ senyum muter, て petir menyambar."
+    },
+    {
+      "id": "hira-ha-ho-ke-ni-ma",
+      "script": "hiragana",
+      "members": ["は", "ほ", "け", "に", "ま"],
+      "rule": "Keluarga tiang-silang, bedakan kanan: silang=は, tegak=ほ, kait=け, tiang ganda=に, palang=ま.",
+      "mnemonic": "は silang tawon, ほ tiang telepon, け kait pancing, に dua tiang, ま palang pintu."
+    },
+    {
       "id": "hira-a-o",
       "script": "hiragana",
       "members": ["あ", "お"],
