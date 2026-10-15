@@ -305,15 +305,14 @@ function buildTrapQuiz(
     const g = groups[Math.floor(Math.random() * groups.length)]!;
     const kana = g.members[Math.floor(Math.random() * g.members.length)]!;
     const answer = romaji.get(kana) ?? kana;
-    const opts = [...g.members];
-    // Grup kecil (<4) dilengkapi kana acak se-script — jawaban tetap segrup.
+    // Jawaban selalu ikut; 3 distraktor dari grup yang sama (atau acak se-script bila grup kecil).
+    const others = g.members.filter((m) => m !== kana);
     const filler = [...allKana].sort(() => Math.random() - 0.5);
     for (const f of filler) {
-      if (opts.length >= 4) break;
-      if (!opts.includes(f) && romaji.get(f)) opts.push(f);
+      if (others.length >= 3) break;
+      if (f !== kana && !others.includes(f) && romaji.get(f)) others.push(f);
     }
-    const options = opts
-      .slice(0, 4)
+    const options = [kana, ...others.slice(0, 3)]
       .map((k) => romaji.get(k) ?? k)
       .sort(() => Math.random() - 0.5);
     qs.push({ kana, answer, options });

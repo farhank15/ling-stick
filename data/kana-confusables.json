@@ -59,11 +59,11 @@
       "mnemonic": "シ senyum rebah, ツ dua jarum jahit, ソ satu jarum, ン satu mata."
     },
     {
-      "id": "kata-u-fu-nu-wa",
+      "id": "kata-u-fu-nu-wa-ra",
       "script": "katakana",
-      "members": ["ウ", "フ", "ヌ", "ワ"],
-      "rule": "ウ beratap; フ polos 1 ayunan; ヌ ada tusukan diagonal; ワ ada tiang kanan.",
-      "mnemonic": "ウ berkepala (atap), フ bendera polos, ヌ disumpit mie, ワ tanda tanya bertiang."
+      "members": ["ウ", "フ", "ヌ", "ワ", "ラ"],
+      "rule": "Rangka sama melengkung; bedakan tambahannya: atap=ウ, polos=フ, tusukan diagonal=ヌ, tiang kanan=ワ, kait bawah=ラ.",
+      "mnemonic": "ウ berkepala, フ bendera polos, ヌ disumpit mie, ワ tanda tanya bertiang, ラ berkait raptor."
     },
     {
       "id": "kata-ku-ke-ta",
@@ -108,12 +108,6 @@
       "mnemonic": "ル dua rute bersimpul, レ rambut panjang, ノ hidung mancung."
     },
     {
-      "id": "kata-ra-u-fu",
-      "script": "katakana",
-      "members": ["ラ", "ウ", "フ"],
-      "rule": "ラ ada kait kecil di ujung bawah; ウ/フ polos.",
-      "mnemonic": "ラ berkacamata (kait raptor), sisanya polos."
-    },
     {
       "id": "kata-wo-yo-ko",
       "script": "katakana",
