@@ -1,0 +1,125 @@
+{
+  "_note": "Kelompok kana mirip-membingungkan. Mnemonik ditulis-ulang sendiri (terinspirasi metode Tofugu — JANGAN copy kalimat/ilustrasi mereka). rule <= 140 char tampil di tabel; mnemonic <= 200 char.",
+  "_license": "Kurasi sendiri untuk LingStick. Metode terinspirasi panduan Tofugu (tofugu.com/japanese/learn-hiragana, /learn-katakana).",
+  "groups": [
+    {
+      "id": "hira-a-o",
+      "script": "hiragana",
+      "members": ["あ", "お"],
+      "rule": "あ ada silang tegas di tengah; お mulus melingkar tanpa silang.",
+      "mnemonic": "Cari huruf A Latin yang nyempil di あ; yang nggak ada A-nya berarti お."
+    },
+    {
+      "id": "hira-u-tsu",
+      "script": "hiragana",
+      "members": ["う", "つ"],
+      "rule": "う ada lengkung kecil di atas; つ polos seperti gelombang.",
+      "mnemonic": "う pakai topi, つ ombak tsunami polos tanpa topi."
+    },
+    {
+      "id": "hira-sa-ki-chi",
+      "script": "hiragana",
+      "members": ["さ", "き", "ち"],
+      "rule": "さ gores bawah nyambung kanan; き melengkung kiri; ち cuma 2 goresan.",
+      "mnemonic": "さ ngaduk salsa, き gagang kunci, ち senyum dipaksa dua tarikan."
+    },
+    {
+      "id": "hira-nu-me",
+      "script": "hiragana",
+      "members": ["ぬ", "め"],
+      "rule": "ぬ semua tikungan membulat + simpul; め ada siku tajam di kiri atas.",
+      "mnemonic": "ぬ mie lembek serba bulat; め mata — yang bersiku tajam (eyeliner) berarti mata."
+    },
+    {
+      "id": "hira-ne-re-wa",
+      "script": "hiragana",
+      "members": ["ね", "れ", "わ"],
+      "rule": "Cek ujung kanan: melengkung naik = ね; turun lurus = れ; vertikal tajam = わ.",
+      "mnemonic": "ね ekor kucing naik, れ orang berlutut (turun), わ sengat tawon (tegak tajam)."
+    },
+    {
+      "id": "hira-ru-ro",
+      "script": "hiragana",
+      "members": ["る", "ろ"],
+      "rule": "る ada simpul/loop di ujung; ろ polos tanpa loop.",
+      "mnemonic": "Yang ada loop = rute muter (る); yang polos = jalan lurus (ろ)."
+    },
+    {
+      "id": "hira-na-ta",
+      "script": "hiragana",
+      "members": ["な", "た"],
+      "rule": "な gores vertikal tembus ke atas; た pendek ketahan di dalam.",
+      "mnemonic": "な tiang salib tembus; た garpu nancep taco (pendek)."
+    },
+    {
+      "id": "kata-shi-tsu-so-n",
+      "script": "katakana",
+      "members": ["シ", "ツ", "ソ", "ン"],
+      "rule": "Goresan landai = wajah (シ), tegak = jarum (ツ); versi 1-gores: ソ landai, ン curam.",
+      "mnemonic": "シ senyum rebah, ツ dua jarum jahit, ソ satu jarum, ン satu mata."
+    },
+    {
+      "id": "kata-u-fu-nu-wa",
+      "script": "katakana",
+      "members": ["ウ", "フ", "ヌ", "ワ"],
+      "rule": "ウ beratap; フ polos 1 ayunan; ヌ ada tusukan diagonal; ワ ada tiang kanan.",
+      "mnemonic": "ウ berkepala (atap), フ bendera polos, ヌ disumpit mie, ワ tanda tanya bertiang."
+    },
+    {
+      "id": "kata-ku-ke-ta",
+      "script": "katakana",
+      "members": ["ク", "ケ", "タ"],
+      "rule": "ク 1 sudut tumpul; ケ ada gores horizontal nyilang; タ ada titik kiri atas.",
+      "mnemonic": "ク topi koki, ケ huruf K, タ layangan taco bertitik."
+    },
+    {
+      "id": "kata-mo-ma-na",
+      "script": "katakana",
+      "members": ["モ", "マ", "ナ"],
+      "rule": "Hitung garis tidur: 3 = モ, 2 = マ, silang sederhana = ナ.",
+      "mnemonic": "モ rapi tiga garis, マ penggaris dua garis, ナ silang narwhal."
+    },
+    {
+      "id": "kata-ya-yu-yo",
+      "script": "katakana",
+      "members": ["ヤ", "ユ", "ヨ"],
+      "rule": "ヤ gores kedua nempel pertama; ユ kait tunggal; ヨ kotak.",
+      "mnemonic": "ヤ perahu layar, ユ kail pancing, ヨ pose yoga kotak."
+    },
+    {
+      "id": "kata-te-chi-to",
+      "script": "katakana",
+      "members": ["テ", "チ", "ト"],
+      "rule": "テ 3 gores melengkung; チ 2 gores lengkung dalam; ト 2 gores lurus kaku.",
+      "mnemonic": "テ tiang telepon, チ cheerleader, ト tiang totem."
+    },
+    {
+      "id": "kata-ko-yu-ro",
+      "script": "katakana",
+      "members": ["コ", "ユ", "ロ"],
+      "rule": "コ 2 siku terbuka; ユ 1 kait; ロ kotak tertutup penuh.",
+      "mnemonic": "コ dua siku, ユ kail, ロ jalan muter tertutup."
+    },
+    {
+      "id": "kata-ru-re-no",
+      "script": "katakana",
+      "members": ["ル", "レ", "ノ"],
+      "rule": "ル 2 gores bersimpul; レ 1 ayunan tebal; ノ 1 ayunan tipis pendek.",
+      "mnemonic": "ル dua rute bersimpul, レ rambut panjang, ノ hidung mancung."
+    },
+    {
+      "id": "kata-ra-u-fu",
+      "script": "katakana",
+      "members": ["ラ", "ウ", "フ"],
+      "rule": "ラ ada kait kecil di ujung bawah; ウ/フ polos.",
+      "mnemonic": "ラ berkacamata (kait raptor), sisanya polos."
+    },
+    {
+      "id": "kata-wo-yo-ko",
+      "script": "katakana",
+      "members": ["ヲ", "ヨ", "コ"],
+      "rule": "ヲ ada lidah menjulur; ヨ kotak; コ siku terbuka.",
+      "mnemonic": "ヲ anjing menggonggong (lidah keluar), sisanya bentuk dasar."
+    }
+  ]
+}
