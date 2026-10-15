@@ -38,11 +38,11 @@
       "mnemonic": "さ ngaduk salsa, き gagang kunci, ち senyum dipaksa dua tarikan."
     },
     {
-      "id": "hira-nu-me",
+      "id": "hira-nu-me-no",
       "script": "hiragana",
-      "members": ["ぬ", "め"],
-      "rule": "ぬ semua tikungan membulat + simpul; め ada siku tajam di kiri atas.",
-      "mnemonic": "ぬ mie lembek serba bulat; め mata — yang bersiku tajam (eyeliner) berarti mata."
+      "members": ["ぬ", "め", "の"],
+      "rule": "Simpul bulat = ぬ; siku tajam = め; polos tanpa apa-apa = の.",
+      "mnemonic": "ぬ mie bersimpul, め mata ber-eyeliner, の donat polos."
     },
     {
       "id": "hira-ne-re-wa",
