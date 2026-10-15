@@ -21,8 +21,8 @@ export type KanjiDetail = {
   freq: number | null;
   jlpt: number | null;
   svg: string | null;
-  on: string[];
-  kun: string[];
+  on: { text: string; primary: boolean }[];
+  kun: { text: string; primary: boolean }[];
   components: string[];
   vocab: { word: string; reading: string; gloss: string }[];
 };
