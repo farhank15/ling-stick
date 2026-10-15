@@ -225,13 +225,7 @@ function KanaCell({
   const timer = useRef<ReturnType<typeof setTimeout> | null>(null);
   useEffect(() => () => { if (timer.current) clearTimeout(timer.current); }, []);
 
-  const click = () => {
-    // Mode mirip: tap = pilih grup (info + highlight), suara via tombol di kartu info.
-    if (onSelect) {
-      onSelect();
-      return;
-    }
-    if (busy) return;
+  const speakNow = () => {
     if (typeof window === "undefined" || !window.speechSynthesis) return;
     const u = new SpeechSynthesisUtterance(kana);
     u.lang = "ja-JP";
@@ -248,6 +242,17 @@ function KanaCell({
     window.speechSynthesis.cancel();
     window.speechSynthesis.speak(u);
     setBusy(true);
+  };
+
+  const click = () => {
+    // Mode mirip: tap = pilih grup + tetap bunyi (biar kerasa hidup).
+    if (onSelect) {
+      onSelect();
+      if (!busy) speakNow();
+      return;
+    }
+    if (busy) return;
+    speakNow();
   };
 
   return (
@@ -458,8 +463,9 @@ export default function AksaraPage() {
       {script !== "kanji" ? (
         <div className="space-y-2">
           <p className="text-xs text-zinc-500">
-            Tap karakternya buat dengar cara bacanya — belajar 5 kolom per baris (gojūon), lanjut
-            dakuten/handakuten di bawah.
+            {similarOn
+              ? "Tap kana — yang mirip ikut nyala kuning + ada penjelasannya di bawah."
+              : "Tap karakternya buat dengar cara bacanya — belajar 5 kolom per baris (gojūon), lanjut dakuten/handakuten di bawah."}
           </p>
           {(confusables ?? []).length > 0 ? (
             <div className="flex items-center justify-between gap-2">
