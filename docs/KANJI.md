@@ -48,6 +48,7 @@ final (seed per-kanji hanya fallback).
 
 ```bash
 npm run kanji:seed    # dataset → data/kanji-n5.json (butuh GROQ_API_KEY di env untuk glos; IDS=/tmp/ids.txt)
+npm run kanji:audit   # silang: on/kun+strokes vs OpenJLPT, komponen CJK, tiap vocab dicek Jisho
 npm run kanji:import  # validasi total → upsert DB (butuh DB reachable)
 ```
 

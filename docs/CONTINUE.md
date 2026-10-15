@@ -37,6 +37,7 @@ Detail per fitur: [ROUTE.md](./ROUTE.md), [KANJI.md](./KANJI.md).
 npm run dev                  # lokal :3000
 npm run route:validate       # validasi materi rute (wajib sebelum merge md)
 npm run kanji:seed           # seed kanji (butuh GROQ_API_KEY + IDS di env)
+npm run kanji:audit          # audit silang on/kun/strokes/komponen/vocab (Jisho)
 npm run kanji:import         # validasi + tulis kanji ke DB
 npm run typecheck            # wajib hijau sebelum commit
 npm run build && <restart>   # produksi :3000 baca build — restart setelah build!
