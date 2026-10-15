@@ -52,18 +52,18 @@
       "mnemonic": "な tiang salib tembus; た garpu nancep taco (pendek)."
     },
     {
-      "id": "kata-shi-tsu-so-n",
+      "id": "kata-shi-tsu-so-n-no",
       "script": "katakana",
-      "members": ["シ", "ツ", "ソ", "ン"],
-      "rule": "Goresan landai = wajah (シ), tegak = jarum (ツ); versi 1-gores: ソ landai, ン curam.",
-      "mnemonic": "シ senyum rebah, ツ dua jarum jahit, ソ satu jarum, ン satu mata."
+      "members": ["シ", "ツ", "ソ", "ン", "ノ"],
+      "rule": "Goresan landai = wajah (シ), tegak = jarum (ツ); versi 1-gores: ソ landai panjang, ン melengkung, ノ pendek curam.",
+      "mnemonic": "シ senyum rebah, ツ dua jarum jahit, ソ satu jarum, ン satu mata, ノ hidung mancung pendek."
     },
     {
-      "id": "kata-u-fu-nu-wa-ra",
+      "id": "kata-wa-row",
       "script": "katakana",
-      "members": ["ウ", "フ", "ヌ", "ワ", "ラ"],
-      "rule": "Rangka sama melengkung; bedakan tambahannya: atap=ウ, polos=フ, tusukan diagonal=ヌ, tiang kanan=ワ, kait bawah=ラ.",
-      "mnemonic": "ウ berkepala, フ bendera polos, ヌ disumpit mie, ワ tanda tanya bertiang, ラ berkait raptor."
+      "members": ["ウ", "フ", "ヌ", "ワ", "ラ", "ヲ"],
+      "rule": "Rangka sama melengkung; bedakan tambahannya: atap=ウ, polos=フ, tusukan diagonal=ヌ, tiang kanan=ワ, kait bawah=ラ, lidah=ヲ.",
+      "mnemonic": "ウ berkepala, フ bendera polos, ヌ disumpit mie, ワ tanda tanya bertiang, ラ berkait raptor, ヲ menggonggong."
     },
     {
       "id": "kata-ku-ke-ta",
@@ -87,11 +87,11 @@
       "mnemonic": "ヤ perahu layar, ユ kail pancing, ヨ pose yoga kotak."
     },
     {
-      "id": "kata-te-chi-to",
+      "id": "kata-te-chi",
       "script": "katakana",
-      "members": ["テ", "チ", "ト"],
-      "rule": "テ 3 gores melengkung; チ 2 gores lengkung dalam; ト 2 gores lurus kaku.",
-      "mnemonic": "テ tiang telepon, チ cheerleader, ト tiang totem."
+      "members": ["テ", "チ"],
+      "rule": "テ 3 gores melengkung; チ 2 gores lengkung dalam. (ト lurus kaku — sudah beda sendiri.)",
+      "mnemonic": "テ tiang telepon, チ cheerleader."
     },
     {
       "id": "kata-ko-yu-ro",
@@ -101,18 +101,11 @@
       "mnemonic": "コ dua siku, ユ kail, ロ jalan muter tertutup."
     },
     {
-      "id": "kata-ru-re-no",
+      "id": "kata-ru-re",
       "script": "katakana",
-      "members": ["ル", "レ", "ノ"],
-      "rule": "ル 2 gores bersimpul; レ 1 ayunan tebal; ノ 1 ayunan tipis pendek.",
-      "mnemonic": "ル dua rute bersimpul, レ rambut panjang, ノ hidung mancung."
+      "members": ["ル", "レ"],
+      "rule": "ル 2 gores bersimpul (rute muter); レ 1 ayunan tebal polos.",
+      "mnemonic": "Yang ada simpul = ル; yang polos = レ."
     },
-    {
-      "id": "kata-wo-yo-ko",
-      "script": "katakana",
-      "members": ["ヲ", "ヨ", "コ"],
-      "rule": "ヲ ada lidah menjulur; ヨ kotak; コ siku terbuka.",
-      "mnemonic": "ヲ anjing menggonggong (lidah keluar), sisanya bentuk dasar."
-    }
   ]
 }
