@@ -14,7 +14,8 @@
     "route:validate": "tsx scripts/route-validate.ts",
     "kanji:seed": "tsx scripts/kanji-seed.ts",
     "kanji:audit": "tsx scripts/kanji-audit.ts",
-    "kanji:import": "tsx scripts/kanji-import.ts"
+    "kanji:import": "tsx scripts/kanji-import.ts",
+    "deck:openjlpt-n5": "tsx scripts/deck-import-openjlpt.ts"
   },
   "dependencies": {
     "@libsql/client": "^0.18.0",

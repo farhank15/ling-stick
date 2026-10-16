@@ -50,6 +50,7 @@ export type ImportRow = {
   type?: string;
   level?: string;
   extra?: Record<string, string>;
+  examples?: { en: string; id: string; kana?: string }[];
 };
 
 const stripHtml = (s: string) => s.replace(/<[^>]*>/g, "").replace(/&nbsp;/g, " ").trim();
@@ -126,6 +127,19 @@ export async function importDeck(
         }
         const card = newCardRow(item.id);
         await tx.insert(cards).values(card).onConflictDoNothing();
+        // Contoh kalimat (kalau ada) — ikut terhapus via cascade saat deck dihapus.
+        if (r.examples && r.examples.length > 0) {
+          await tx.insert(examples).values(
+            r.examples.slice(0, 3).map((e) => ({
+              itemId: item.id,
+              register: "neutral",
+              en: stripHtml(e.en).slice(0, 500) || "—",
+              idText: stripHtml(e.id).slice(0, 500) || "—",
+              isContext: 0,
+              kana: e.kana ? stripHtml(e.kana).slice(0, 500) : null,
+            })),
+          );
+        }
         imported++;
       }
     });
