@@ -20,11 +20,11 @@ pitfalls_id:
   - "う verbs: あう→あわない (bukan あうない), かう→かわない."
   - "ある negatifnya ない (bukan あらない)."
 cloze_items:
-  - { front: "肉を ___。(たべる)", answer: "たべない", distractors: ["たべるない", "たべますない", "たべなかった"], kana_hint: "", explain_id: "Kelompok 2: る→ない." }
-  - { front: "お酒を ___。(のむ)", answer: "のまない", distractors: ["のむない", "のみない", "のまないない"], kana_hint: "のまない", explain_id: "Kelompok 1: のむ→のまない." }
-  - { front: "テレビを ___。(みる)", answer: "見ません", distractors: ["見ないます", "見ますない", "見ないです"], kana_hint: "みません", explain_id: "Negatif sopan → ません." }
-  - { front: "明日 ___。(くる)", answer: "こない", distractors: ["きますない", "こるない", "きない"], kana_hint: "", explain_id: "Tak beraturan: くる→こない." }
-  - { front: "ここにトイレは ___。(ある)", answer: "ない", distractors: ["あらない", "ありませんない", "ないない"], kana_hint: "", explain_id: "ある→ない (spesial)." }
+  - { front: "肉を ___。(たべる)", answer: "たべない", distractors: ["たべるない", "たべますない", "たべなかった"], kana_hint: "", explain_id: "Kelompok 2: る→ない.", kana: "にくを ___。(たべる)", romaji: "niku o ___." }
+  - { front: "お酒を ___。(のむ)", answer: "のまない", distractors: ["のむない", "のみない", "のまないない"], kana_hint: "のまない", explain_id: "Kelompok 1: のむ→のまない.", kana: "おさけを ___。(のむ)", romaji: "osake o ___." }
+  - { front: "テレビを ___。(みる)", answer: "見ません", distractors: ["見ないます", "見ますない", "見ないです"], kana_hint: "みません", explain_id: "Negatif sopan → ません.", kana: "テレビを ___。(みる)", romaji: "terebi o ___." }
+  - { front: "明日 ___。(くる)", answer: "こない", distractors: ["きますない", "こるない", "きない"], kana_hint: "", explain_id: "Tak beraturan: くる→こない.", kana: "あした ___。(くる)", romaji: "ashita ___." }
+  - { front: "ここにトイレは ___。(ある)", answer: "ない", distractors: ["あらない", "ありませんない", "ないない"], kana_hint: "", explain_id: "ある→ない (spesial).", kana: "ここにトイレは ___。(ある)", romaji: "koko ni toire wa ___." }
 refs:
   - { label: "Tae Kim — Negative verbs", url: "https://www.guidetojapanese.org/learn/grammar/negverb" }
 passing: { min_items: 8, grade_pct: 80 }

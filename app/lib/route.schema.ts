@@ -24,6 +24,10 @@ const clozeItemSchema = z.object({
   distractors: z.array(z.string().min(1)).min(2).max(4),
   kana_hint: z.string().default(""),
   explain_id: z.string().default(""),
+  // Bacaan kalimat penuh (___ dipertahankan di posisi sama) + romaji — untuk
+  // furigana & toggle romaji di soal latihan. matcha: kanji tanpa hiragana.
+  kana: z.string().default(""),
+  romaji: z.string().default(""),
 });
 
 const refSchema = z.object({

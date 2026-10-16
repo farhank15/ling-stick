@@ -20,11 +20,11 @@ pitfalls_id:
   - "で→だ: のんだ・およいだ (bukan のんた)."
   - "ことがある selalu lampau (×行くことがある untuk pengalaman)."
 cloze_items:
-  - { front: "昨日パンを ___。(たべる, kasual lampau)", answer: "たべた", distractors: ["たべて", "たべるた", "たべった"], kana_hint: "", explain_id: "Te→Ta: たべて→たべた." }
-  - { front: "水を ___。(のむ, kasual lampau)", answer: "のんだ", distractors: ["のんた", "のみた", "のむた"], kana_hint: "のんだ", explain_id: "で→だ: のんで→のんだ." }
-  - { front: "京都に ___ ことがある。(いく, pernah)", answer: "行った", distractors: ["行きて", "行って", "行くた"], kana_hint: "いった", explain_id: "Pengalaman: Ta + ことがある." }
-  - { front: "すしを食べた ___。(belum pernah)", answer: "ことがない", distractors: ["ことかない", "ことがないですた", "こたがない"], kana_hint: "ことがない", explain_id: "Belum pernah → ことがない." }
-  - { front: "宿題を ___。(する, kasual lampau)", answer: "した", distractors: ["すた", "してた", "するた"], kana_hint: "", explain_id: "して→した." }
+  - { front: "昨日パンを ___。(たべる, kasual lampau)", answer: "たべた", distractors: ["たべて", "たべるた", "たべった"], kana_hint: "", explain_id: "Te→Ta: たべて→たべた.", kana: "きのうパンを ___。", romaji: "kinou pan o ___." }
+  - { front: "水を ___。(のむ, kasual lampau)", answer: "のんだ", distractors: ["のんた", "のみた", "のむた"], kana_hint: "のんだ", explain_id: "で→だ: のんで→のんだ.", kana: "みずを ___。", romaji: "mizu o ___." }
+  - { front: "京都に ___ ことがある。(いく, pernah)", answer: "行った", distractors: ["行きて", "行って", "行くた"], kana_hint: "いった", explain_id: "Pengalaman: Ta + ことがある.", kana: "きょうとに ___ ことがある。", romaji: "kyouto ni ___ koto ga aru." }
+  - { front: "すしを食べた ___。(belum pernah)", answer: "ことがない", distractors: ["ことかない", "ことがないですた", "こたがない"], kana_hint: "ことがない", explain_id: "Belum pernah → ことがない.", kana: "すしをたべた ___。", romaji: "sushi o tabeta ___." }
+  - { front: "宿題を ___。(する, kasual lampau)", answer: "した", distractors: ["すた", "してた", "するた"], kana_hint: "", explain_id: "して→した.", kana: "しゅくだいを ___。", romaji: "shukudai o ___." }
 refs:
   - { label: "Tae Kim — Past tense casual", url: "https://www.guidetojapanese.org/learn/grammar/past" }
 passing: { min_items: 8, grade_pct: 80 }

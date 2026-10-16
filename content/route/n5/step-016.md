@@ -20,11 +20,11 @@ pitfalls_id:
   - "ましょうか = bertanya ke lawan (jangan untuk ajak diri sendiri)."
   - "Balasan ajakan: ええ、そうしましょう (oke!) / すみません、今日はちょっと... (tolak halus)."
 cloze_items:
-  - { front: "一緒に ___。(たべる, ayo makan)", answer: "食べましょう", distractors: ["食べますしょう", "食べるましょう", "食べましょうかよ"], kana_hint: "たべましょう", explain_id: "Ajakan → ましょう." }
-  - { front: "手伝い ___。(する, mau saya bantu?)", answer: "ましょうか", distractors: ["ましょう", "ますょうか", "しましょうよ"], kana_hint: "手伝いましょうか", explain_id: "Tawaran → ましょうか." }
-  - { front: "明日 ___。(いく, ayo pergi)", answer: "行きましょう", distractors: ["行くましょう", "行きますしょう", "行こうましょう"], kana_hint: "いきましょう", explain_id: "いきます→行きましょう." }
-  - { front: "ここで ___。(やすむ, ayo istirahat)", answer: "休みましょう", distractors: ["休むましょう", "休みますしょう", "休もうましょう"], kana_hint: "やすみましょう", explain_id: "やすみます→休みましょう." }
-  - { front: "タクシーを ___ か。(よぶ, panggilkan?)", answer: "呼びましょう", distractors: ["呼ぶましょう", "呼びますしょうか", "呼びましょうよか"], kana_hint: "よびましょう", explain_id: "Tawaran → 呼びましょうか." }
+  - { front: "一緒に ___。(たべる, ayo makan)", answer: "食べましょう", distractors: ["食べますしょう", "食べるましょう", "食べましょうかよ"], kana_hint: "たべましょう", explain_id: "Ajakan → ましょう.", kana: "いっしょに ___。", romaji: "isshoni ___." }
+  - { front: "手伝い ___。(する, mau saya bantu?)", answer: "ましょうか", distractors: ["ましょう", "ますょうか", "しましょうよ"], kana_hint: "手伝いましょうか", explain_id: "Tawaran → ましょうか.", kana: "てつだい ___。", romaji: "tetsudai ___." }
+  - { front: "明日 ___。(いく, ayo pergi)", answer: "行きましょう", distractors: ["行くましょう", "行きますしょう", "行こうましょう"], kana_hint: "いきましょう", explain_id: "いきます→行きましょう.", kana: "あした ___。", romaji: "ashita ___." }
+  - { front: "ここで ___。(やすむ, ayo istirahat)", answer: "休みましょう", distractors: ["休むましょう", "休みますしょう", "休もうましょう"], kana_hint: "やすみましょう", explain_id: "やすみます→休みましょう.", kana: "ここで ___。", romaji: "koko de ___." }
+  - { front: "タクシーを ___ か。(よぶ, panggilkan?)", answer: "呼びましょう", distractors: ["呼ぶましょう", "呼びますしょうか", "呼びましょうよか"], kana_hint: "よびましょう", explain_id: "Tawaran → 呼びましょうか.", kana: "タクシーを ___ か。", romaji: "takushii wo ___ ka." }
 refs:
   - { label: "Tae Kim — Volitional", url: "https://www.guidetojapanese.org/learn/grammar/volitional" }
 passing: { min_items: 8, grade_pct: 80 }

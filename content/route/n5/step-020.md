@@ -20,11 +20,11 @@ pitfalls_id:
   - "今日・明日・毎日・毎週・先週 tanpa に (×明日に)."
   - "月 (bulan) pakai に: 3月に. 週 juga: 来週に."
 cloze_items:
-  - { front: "___ 映画を見ました。(kemarin)", answer: "昨日", distractors: ["今日", "明日", "毎日"], kana_hint: "きのう", explain_id: "Kemarin → 昨日." }
-  - { front: "月曜日 ___ 試験があります。", answer: "に", distractors: ["を", "が", "も"], kana_hint: "", explain_id: "Hari spesifik → に." }
-  - { front: "___ 日本に行きます。(tahun depan)", answer: "来年", distractors: ["去年", "今年", "毎日"], kana_hint: "らいねん", explain_id: "Tahun depan → 来年 (tanpa に)." }
-  - { front: "___ 休みます。(setiap hari Minggu)", answer: "毎週日曜日", distractors: ["毎日曜日", "毎週日曜日にち", "毎曜日"], kana_hint: "まいしゅうにちようび", explain_id: "Setiap Minggu → 毎週日曜日." }
-  - { front: "3月 ___ 卒業します。", answer: "に", distractors: ["を", "が", "も"], kana_hint: "", explain_id: "Bulan spesifik → に." }
+  - { front: "___ 映画を見ました。(kemarin)", answer: "昨日", distractors: ["今日", "明日", "毎日"], kana_hint: "きのう", explain_id: "Kemarin → 昨日.", kana: "___ えいがをみました。(kemarin)", romaji: "___ eiga o mimashita." }
+  - { front: "月曜日 ___ 試験があります。", answer: "に", distractors: ["を", "が", "も"], kana_hint: "", explain_id: "Hari spesifik → に.", kana: "げつようび ___ しけんがあります。", romaji: "getsuyoubi ___ shiken ga arimasu." }
+  - { front: "___ 日本に行きます。(tahun depan)", answer: "来年", distractors: ["去年", "今年", "毎日"], kana_hint: "らいねん", explain_id: "Tahun depan → 来年 (tanpa に).", kana: "___ にほんにいきます。(tahun depan)", romaji: "___ nihon ni ikimasu." }
+  - { front: "___ 休みます。(setiap hari Minggu)", answer: "毎週日曜日", distractors: ["毎日曜日", "毎週日曜日にち", "毎曜日"], kana_hint: "まいしゅうにちようび", explain_id: "Setiap Minggu → 毎週日曜日.", kana: "___ やすみます。(setiap hari Minggu)", romaji: "___ yasumimasu." }
+  - { front: "3月 ___ 卒業します。", answer: "に", distractors: ["を", "が", "も"], kana_hint: "", explain_id: "Bulan spesifik → に.", kana: "3がつ ___ そつぎょうします。", romaji: "3gatsu ___ sotsugyou shimasu." }
 refs:
   - { label: "Tae Kim — Time", url: "https://www.guidetojapanese.org/learn/grammar/time" }
 passing: { min_items: 8, grade_pct: 80 }

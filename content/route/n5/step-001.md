@@ -21,11 +21,11 @@ pitfalls_id:
   - "Jangan baca は sebagai は (ha) — sebagai partikel dibaca わ (wa)."
   - "Jangan pakai は untuk kata tanya (×だれは) — kata tanya selalu が."
 cloze_items:
-  - { front: "わたし ___ 学生です。(topik: saya)", answer: "は", distractors: ["が", "を", "に"], kana_hint: "わ", explain_id: "Topik pembicaraan → は." }
-  - { front: "ねこ ___ すきです。(fokus: kucing)", answer: "が", distractors: ["は", "を", "に"], kana_hint: "", explain_id: "Suka X — X subjek fokus → が." }
-  - { front: "だれ ___ 先生ですか。", answer: "が", distractors: ["は", "を", "に"], kana_hint: "", explain_id: "Kata tanya selalu が." }
-  - { front: "田中さん ___ 日本人です。", answer: "は", distractors: ["が", "を", "へ"], kana_hint: "わ", explain_id: "Menyatakan identitas Tanaka → topik は." }
-  - { front: "つくえの上にほん ___ あります。", answer: "が", distractors: ["は", "を", "に"], kana_hint: "", explain_id: "Keberadaan (あります) → subjek が." }
+  - { front: "わたし ___ 学生です。(topik: saya)", answer: "は", distractors: ["が", "を", "に"], kana_hint: "わ", explain_id: "Topik pembicaraan → は.", kana: "わたし ___ がくせいです。(topik: saya)", romaji: "watashi ___ gakusei desu." }
+  - { front: "ねこ ___ すきです。(fokus: kucing)", answer: "が", distractors: ["は", "を", "に"], kana_hint: "", explain_id: "Suka X — X subjek fokus → が.", kana: "ねこ ___ すきです。(fokus: kucing)", romaji: "neko ___ suki desu." }
+  - { front: "だれ ___ 先生ですか。", answer: "が", distractors: ["は", "を", "に"], kana_hint: "", explain_id: "Kata tanya selalu が.", kana: "だれ ___ せんせいですか。", romaji: "dare ___ sensei desu ka." }
+  - { front: "田中さん ___ 日本人です。", answer: "は", distractors: ["が", "を", "へ"], kana_hint: "わ", explain_id: "Menyatakan identitas Tanaka → topik は.", kana: "たなかさん ___ にほんじんです。", romaji: "tanaka-san ___ nihonjin desu." }
+  - { front: "つくえの上にほん ___ あります。", answer: "が", distractors: ["は", "を", "に"], kana_hint: "", explain_id: "Keberadaan (あります) → subjek が.", kana: "つくえのうえにほん ___ あります。", romaji: "tsukue no ue ni hon ___ arimasu." }
 refs:
   - { label: "Tae Kim — は vs が", url: "https://www.guidetojapanese.org/learn/grammar/topicparticles" }
 passing: { min_items: 8, grade_pct: 80 }

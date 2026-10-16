@@ -21,11 +21,11 @@ pitfalls_id:
   - "すき pakai が (×すきは/を) — kecuali kontras: すしはすき (sushi sih suka)."
   - "上手 pakai が; orangnya pakai は (彼は歌が上手)."
 cloze_items:
-  - { front: "ねこ ___ すきです。", answer: "が", distractors: ["は", "を", "に"], kana_hint: "", explain_id: "Suka X → Xがすき." }
-  - { front: "彼はテニス ___ 上手です。", answer: "が", distractors: ["は", "を", "に"], kana_hint: "", explain_id: "Penilaian fokus → が." }
-  - { front: "ピーマンは ___ きらいです。(tidak begitu)", answer: "あまり", distractors: ["とても", "全然", "ずっと"], kana_hint: "", explain_id: "Tidak begitu → あまり〜ない." }
-  - { front: "彼女は歌 ___ 下手です。(sama sekali)", answer: "が全然", distractors: ["がとても", "はあまり", "を全然"], kana_hint: "がぜんぜん", explain_id: "Sama sekali payah → が全然〜ない." }
-  - { front: "すし ___ 好きです。(sushi sih)", answer: "は", distractors: ["が", "を", "も"], kana_hint: "は", explain_id: "Kontras topik → は." }
+  - { front: "ねこ ___ すきです。", answer: "が", distractors: ["は", "を", "に"], kana_hint: "", explain_id: "Suka X → Xがすき.", kana: "ねこ ___ すきです。", romaji: "neko ___ suki desu." }
+  - { front: "彼はテニス ___ 上手です。", answer: "が", distractors: ["は", "を", "に"], kana_hint: "", explain_id: "Penilaian fokus → が.", kana: "かれはテニス ___ じょうずです。", romaji: "kare wa tenisu ___ jouzu desu." }
+  - { front: "ピーマンは ___ きらいです。(tidak begitu)", answer: "あまり", distractors: ["とても", "全然", "ずっと"], kana_hint: "", explain_id: "Tidak begitu → あまり〜ない.", kana: "ピーマンは ___ きらいです。(tidak begitu)", romaji: "piiman wa ___ kirai desu." }
+  - { front: "彼女は歌 ___ 下手です。(sama sekali)", answer: "が全然", distractors: ["がとても", "はあまり", "を全然"], kana_hint: "がぜんぜん", explain_id: "Sama sekali payah → が全然〜ない.", kana: "かのじょはうた ___ へたです。(sama sekali)", romaji: "kanojo wa uta ___ heta desu." }
+  - { front: "すし ___ 好きです。(sushi sih)", answer: "は", distractors: ["が", "を", "も"], kana_hint: "は", explain_id: "Kontras topik → は.", kana: "すし ___ すきです。(sushi sih)", romaji: "sushi ___ suki desu." }
 refs:
   - { label: "Tae Kim — Sukidesu", url: "https://www.guidetojapanese.org/learn/grammar/sukidesu" }
 passing: { min_items: 8, grade_pct: 80 }

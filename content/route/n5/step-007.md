@@ -21,11 +21,11 @@ pitfalls_id:
   - "を tidak dipakai untuk tujuan (×学校をいきます)."
   - "に waktu: jam/hari tertentu pakai に, tapi 今日・明日・毎日 **tanpa** に."
 cloze_items:
-  - { front: "ごはん ___ 食べます。", answer: "を", distractors: ["に", "へ", "が"], kana_hint: "", explain_id: "Objek aksi → を." }
-  - { front: "東京 ___ 行きます。", answer: "に", distractors: ["を", "が", "で"], kana_hint: "", explain_id: "Tujuan tiba → に (へ juga benar, tapi opsi ini に)." }
-  - { front: "うち ___ 帰ります。", answer: "へ", distractors: ["を", "が", "も"], kana_hint: "え", explain_id: "Arah pulang → へ (dibaca え)." }
-  - { front: "6時 ___ 晩ごはんを食べます。", answer: "に", distractors: ["を", "へ", "も"], kana_hint: "", explain_id: "Waktu spesifik → に." }
-  - { front: "ともだち ___ 会います。", answer: "に", distractors: ["を", "へ", "で"], kana_hint: "", explain_id: "Bertemu seseorang → 対象に." }
+  - { front: "ごはん ___ 食べます。", answer: "を", distractors: ["に", "へ", "が"], kana_hint: "", explain_id: "Objek aksi → を.", kana: "ごはん ___ たべます。", romaji: "gohan ___ tabemasu." }
+  - { front: "東京 ___ 行きます。", answer: "に", distractors: ["を", "が", "で"], kana_hint: "", explain_id: "Tujuan tiba → に (へ juga benar, tapi opsi ini に).", kana: "とうきょう ___ いきます。", romaji: "toukyou ___ ikimasu." }
+  - { front: "うち ___ 帰ります。", answer: "へ", distractors: ["を", "が", "も"], kana_hint: "え", explain_id: "Arah pulang → へ (dibaca え).", kana: "うち ___ かえります。", romaji: "uchi ___ kaerimasu." }
+  - { front: "6時 ___ 晩ごはんを食べます。", answer: "に", distractors: ["を", "へ", "も"], kana_hint: "", explain_id: "Waktu spesifik → に.", kana: "6じ ___ ばんごはんをたべます。", romaji: "6ji ___ bangohan o tabemasu." }
+  - { front: "ともだち ___ 会います。", answer: "に", distractors: ["を", "へ", "で"], kana_hint: "", explain_id: "Bertemu seseorang → 対象に.", kana: "ともだち ___ あいます。", romaji: "tomodachi ___ aimasu." }
 refs:
   - { label: "Tae Kim — Particles に/へ", url: "https://www.guidetojapanese.org/learn/grammar/nihe" }
 passing: { min_items: 8, grade_pct: 80 }

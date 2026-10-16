@@ -20,11 +20,11 @@ pitfalls_id:
   - "たい menempel ke stem ます (×たべるたい)."
   - "Untuk orang lain jangan たい langsung (dia ingin = たがっている — materi N4)."
 cloze_items:
-  - { front: "水が ___。(のみます → ingin)", answer: "飲みたいです", distractors: ["飲むたいです", "飲みたいます", "飲みたです"], kana_hint: "のみたいです", explain_id: "Stem のみ + たいです." }
-  - { front: "映画を ___。(みます → ingin)", answer: "見たいです", distractors: ["見るたいです", "見たいたいです", "見たいます"], kana_hint: "みたいです", explain_id: "Stem み + たいです." }
-  - { front: "今日はどこへも ___。(いきます → tidak ingin)", answer: "行きたくないです", distractors: ["行きなくないです", "行くたくないです", "行きたくないます"], kana_hint: "いきたくないです", explain_id: "Negatif たい → たくないです." }
-  - { front: "寿司が ___。(たべます → ingin dulu)", answer: "食べたかったです", distractors: ["食べたいでした", "食べたかったます", "食べたです"], kana_hint: "たべたかったです", explain_id: "Lampau たい → たかったです." }
-  - { front: "日本語が ___。(はなします → ingin)", answer: "話したいです", distractors: ["話すたいです", "話したいます", "話したいてす"], kana_hint: "はなしたいです", explain_id: "Stem はなし + たいです." }
+  - { front: "水が ___。(のみます → ingin)", answer: "飲みたいです", distractors: ["飲むたいです", "飲みたいます", "飲みたです"], kana_hint: "のみたいです", explain_id: "Stem のみ + たいです.", kana: "みずが ___。", romaji: "mizu ga ___." }
+  - { front: "映画を ___。(みます → ingin)", answer: "見たいです", distractors: ["見るたいです", "見たいたいです", "見たいます"], kana_hint: "みたいです", explain_id: "Stem み + たいです.", kana: "えいがを ___。", romaji: "eiga wo ___." }
+  - { front: "今日はどこへも ___。(いきます → tidak ingin)", answer: "行きたくないです", distractors: ["行きなくないです", "行くたくないです", "行きたくないます"], kana_hint: "いきたくないです", explain_id: "Negatif たい → たくないです.", kana: "きょうはどこへも ___。", romaji: "kyou wa doko e mo ___." }
+  - { front: "寿司が ___。(たべます → ingin dulu)", answer: "食べたかったです", distractors: ["食べたいでした", "食べたかったます", "食べたです"], kana_hint: "たべたかったです", explain_id: "Lampau たい → たかったです.", kana: "すしが ___。", romaji: "sushi ga ___." }
+  - { front: "日本語が ___。(はなします → ingin)", answer: "話したいです", distractors: ["話すたいです", "話したいます", "話したいてす"], kana_hint: "はなしたいです", explain_id: "Stem はなし + たいです.", kana: "にほんごが ___。", romaji: "nihongo ga ___." }
 refs:
   - { label: "Tae Kim — Tai form", url: "https://www.guidetojapanese.org/learn/grammar/desire" }
 passing: { min_items: 8, grade_pct: 80 }

@@ -21,11 +21,11 @@ pitfalls_id:
   - "Jangan pakai bentuk kamus + ください (×食べるください)."
   - "きいてください ambigu (dengar/tanya) — lihat konteks."
 cloze_items:
-  - { front: "ごはんを ___ ください。(たべる)", answer: "食べて", distractors: ["食べる", "食べた", "食べない"], kana_hint: "たべて", explain_id: "Kelompok 2: たべる→たべて." }
-  - { front: "水を ___ ください。(のむ)", answer: "飲んで", distractors: ["飲む", "飲んだ", "飲まない"], kana_hint: "のんで", explain_id: "Kelompok 1 う: のむ→のんで." }
-  - { front: "名前を ___ ください。(かく)", answer: "書いて", distractors: ["書く", "書いた", "書かない"], kana_hint: "かいて", explain_id: "Kelompok 1 く: かく→かいて." }
-  - { front: "ここで ___ ください。(まつ)", answer: "待って", distractors: ["待つ", "待った", "待たない"], kana_hint: "まって", explain_id: "Kelompok 1 つ: まつ→まって." }
-  - { front: "しゅくだいを ___ ください。(する)", answer: "して", distractors: ["する", "した", "しない"], kana_hint: "", explain_id: "Tak beraturan: する→して." }
+  - { front: "ごはんを ___ ください。(たべる)", answer: "食べて", distractors: ["食べる", "食べた", "食べない"], kana_hint: "たべて", explain_id: "Kelompok 2: たべる→たべて.", kana: "ごはんを ___ ください。", romaji: "gohan o ___ kudasai." }
+  - { front: "水を ___ ください。(のむ)", answer: "飲んで", distractors: ["飲む", "飲んだ", "飲まない"], kana_hint: "のんで", explain_id: "Kelompok 1 う: のむ→のんで.", kana: "みずを ___ ください。", romaji: "mizu o ___ kudasai." }
+  - { front: "名前を ___ ください。(かく)", answer: "書いて", distractors: ["書く", "書いた", "書かない"], kana_hint: "かいて", explain_id: "Kelompok 1 く: かく→かいて.", kana: "なまえを ___ ください。", romaji: "namae o ___ kudasai." }
+  - { front: "ここで ___ ください。(まつ)", answer: "待って", distractors: ["待つ", "待った", "待たない"], kana_hint: "まって", explain_id: "Kelompok 1 つ: まつ→まって.", kana: "ここで ___ ください。", romaji: "koko de ___ kudasai." }
+  - { front: "しゅくだいを ___ ください。(する)", answer: "して", distractors: ["する", "した", "しない"], kana_hint: "", explain_id: "Tak beraturan: する→して.", kana: "しゅくだいを ___ ください。", romaji: "shukudai o ___ kudasai." }
 refs:
   - { label: "Tae Kim — Te-form", url: "https://www.guidetojapanese.org/learn/grammar/teform" }
 passing: { min_items: 8, grade_pct: 80 }

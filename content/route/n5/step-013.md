@@ -20,11 +20,11 @@ pitfalls_id:
   - "なければ vs なくては: keduanya benar, なければ lebih umum."
   - "Tidak perlu = なくてもいい (bukan なければならない + ない)."
 cloze_items:
-  - { front: "宿題を ___ なりません。(する, harus)", answer: "しなければ", distractors: ["するければ", "しなくれば", "してければ"], kana_hint: "しなければ", explain_id: "する→しない→しなければ." }
-  - { front: "早く ___ なりません。(ねる, harus tidur)", answer: "寝なければ", distractors: ["寝るければ", "寝なければない", "寝なけれは"], kana_hint: "ねなければ", explain_id: "ねる→ねない→ねなければ." }
-  - { front: "もう ___。(かえる, harus pulang nih - kasual)", answer: "帰らなくちゃ", distractors: ["帰らなきゃは", "帰るなくちゃ", "帰らなくてはよ"], kana_hint: "かえらなくちゃ", explain_id: "Kasual harus → なくちゃ." }
-  - { front: "明日は ___ もいいです。(くる, tidak perlu)", answer: "来なくて", distractors: ["来なけれは", "来なく", "来ないでは"], kana_hint: "こなくて", explain_id: "Tidak perlu → なくてもいい." }
-  - { front: "野菜を ___ いけません。(たべる, harus makan)", answer: "食べないと", distractors: ["食べるとは", "食べないは", "食べるないと"], kana_hint: "たべないと", explain_id: "Versi pendek: ないといけません." }
+  - { front: "宿題を ___ なりません。(する, harus)", answer: "しなければ", distractors: ["するければ", "しなくれば", "してければ"], kana_hint: "しなければ", explain_id: "する→しない→しなければ.", kana: "しゅくだいを ___ なりません。", romaji: "shukudai wo ___ narimasen." }
+  - { front: "早く ___ なりません。(ねる, harus tidur)", answer: "寝なければ", distractors: ["寝るければ", "寝なければない", "寝なけれは"], kana_hint: "ねなければ", explain_id: "ねる→ねない→ねなければ.", kana: "はやく ___ なりません。", romaji: "hayaku ___ narimasen." }
+  - { front: "もう ___。(かえる, harus pulang nih - kasual)", answer: "帰らなくちゃ", distractors: ["帰らなきゃは", "帰るなくちゃ", "帰らなくてはよ"], kana_hint: "かえらなくちゃ", explain_id: "Kasual harus → なくちゃ.", kana: "もう ___。", romaji: "mou ___." }
+  - { front: "明日は ___ もいいです。(くる, tidak perlu)", answer: "来なくて", distractors: ["来なけれは", "来なく", "来ないでは"], kana_hint: "こなくて", explain_id: "Tidak perlu → なくてもいい.", kana: "あしたは ___ もいいです。", romaji: "ashita wa ___ mo ii desu." }
+  - { front: "野菜を ___ いけません。(たべる, harus makan)", answer: "食べないと", distractors: ["食べるとは", "食べないは", "食べるないと"], kana_hint: "たべないと", explain_id: "Versi pendek: ないといけません.", kana: "やさいを ___ いけません。", romaji: "yasai wo ___ ike masen." }
 refs:
   - { label: "Tae Kim — Must", url: "https://www.guidetojapanese.org/learn/grammar/must" }
 passing: { min_items: 8, grade_pct: 80 }

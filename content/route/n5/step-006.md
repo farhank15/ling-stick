@@ -20,11 +20,11 @@ pitfalls_id:
   - "それ vs あれ: kalau benda jauh dari **keduanya** → あれ, bukan それ."
   - "この vs これ: この本 (buku ini) vs これは本です (ini adalah buku) — この selalu diikuti nomina."
 cloze_items:
-  - { front: "___ は私の傘です。(di tanganku)", answer: "これ", distractors: ["それ", "あれ", "どれ"], kana_hint: "", explain_id: "Dekat pembicara → これ." }
-  - { front: "___ はいくらですか。(di tanganmu)", answer: "それ", distractors: ["これ", "あれ", "どれ"], kana_hint: "", explain_id: "Dekat lawan bicara → それ." }
-  - { front: "___ 山は富士山です。(jauh di sana)", answer: "あの", distractors: ["この", "その", "どの"], kana_hint: "あの", explain_id: "Jauh + sebelum nomina → あの." }
-  - { front: "___ があなたのですか。(pilih salah satu)", answer: "どれ", distractors: ["これ", "それ", "あれ"], kana_hint: "", explain_id: "Kata tanya pilih → どれ." }
-  - { front: "___ 本は難しいです。(buku ini)", answer: "この", distractors: ["これ", "ここ", "こんな"], kana_hint: "この", explain_id: "Sebelum nomina → この." }
+  - { front: "___ は私の傘です。(di tanganku)", answer: "これ", distractors: ["それ", "あれ", "どれ"], kana_hint: "", explain_id: "Dekat pembicara → これ.", kana: "___ はわたしのかさです。(di tanganku)", romaji: "___ wa watashi no kasa desu." }
+  - { front: "___ はいくらですか。(di tanganmu)", answer: "それ", distractors: ["これ", "あれ", "どれ"], kana_hint: "", explain_id: "Dekat lawan bicara → それ.", kana: "___ はいくらですか。(di tanganmu)", romaji: "___ wa ikura desu ka." }
+  - { front: "___ 山は富士山です。(jauh di sana)", answer: "あの", distractors: ["この", "その", "どの"], kana_hint: "あの", explain_id: "Jauh + sebelum nomina → あの.", kana: "___ やまはふじさんです。(jauh di sana)", romaji: "___ yama wa fuji san desu." }
+  - { front: "___ があなたのですか。(pilih salah satu)", answer: "どれ", distractors: ["これ", "それ", "あれ"], kana_hint: "", explain_id: "Kata tanya pilih → どれ.", kana: "___ があなたのですか。(pilih salah satu)", romaji: "___ ga anata no desu ka." }
+  - { front: "___ 本は難しいです。(buku ini)", answer: "この", distractors: ["これ", "ここ", "こんな"], kana_hint: "この", explain_id: "Sebelum nomina → この.", kana: "___ ほんはむずかしいです。(buku ini)", romaji: "___ hon wa muzukashii desu." }
 refs:
   - { label: "Tae Kim — kore/sore/are", url: "https://www.guidetojapanese.org/learn/grammar/kore" }
 passing: { min_items: 8, grade_pct: 80 }

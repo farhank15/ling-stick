@@ -45,6 +45,8 @@ function shuffle<T>(arr: T[]): T[] {
 export function stepToQuestions(step: RouteStep): QuizQuestion[] {
   return step.cloze_items.map((c) => {
     const opts = shuffle([c.answer, ...c.distractors]);
+    // Bacaan kalimat penuh → furigana + toggle romaji di soal (format JaText).
+    const reading = c.kana ? (c.romaji ? `${c.kana} (${c.romaji})` : c.kana) : null;
     return {
       itemId: 0,
       type: "cloze" as const,
@@ -53,7 +55,7 @@ export function stepToQuestions(step: RouteStep): QuizQuestion[] {
       answer: String(opts.indexOf(c.answer)),
       meaningId: c.explain_id || step.title_id,
       exampleEn: c.kana_hint ? `(${c.kana_hint})` : null,
-      reading: null,
+      reading,
     };
   });
 }
@@ -106,6 +108,29 @@ export async function getOrCreateRouteSet(stepId: string) {
     .from(quizSets)
     .where(and(eq(quizSets.day, day), eq(quizSets.mode, "route"), eq(quizSets.lang, lang)))
     .limit(1);
+  if (again) {
+    // Backfill furigana: set lama (dibuat sebelum kana cloze ada) yang BELUM
+    // dikerjakan dibangun ulang soalnya — progres nol jadi aman.
+    // matcha: set basi = soal tanpa bacaan selamanya.
+    try {
+      const oldQs = JSON.parse(again.questions) as { reading?: string | null }[];
+      if (again.done === 0 && oldQs.length > 0 && oldQs.every((q) => !q.reading)) {
+        const fresh = stepToQuestions(found.step);
+        const [rebuilt] = await db
+          .update(quizSets)
+          .set({
+            questions: JSON.stringify(fresh),
+            order: JSON.stringify(fresh.map((_, i) => i)),
+            total: fresh.length,
+          })
+          .where(eq(quizSets.id, again.id))
+          .returning();
+        if (rebuilt) return rebuilt;
+      }
+    } catch {
+      /* JSON rusak → pakai set lama */
+    }
+  }
   return again ?? null;
 }
 

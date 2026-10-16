@@ -20,11 +20,11 @@ pitfalls_id:
   - "Urutan penting: 食べて行く (makan lalu pergi) ≠ 行って食べる (pergi lalu makan)."
   - "ています untuk aksi sesaat (死ぬ→死んでいる = sudah mati, bukan sedang mati)."
 cloze_items:
-  - { front: "手を ___、ごはんを食べます。(あらう)", answer: "洗って", distractors: ["洗うて", "洗いて", "洗ってください"], kana_hint: "あらって", explain_id: "Sambung aksi → Te polos (tanpa ください)." }
-  - { front: "今宿題を ___。(する, sedang)", answer: "しています", distractors: ["しますている", "しているます", "してますた"], kana_hint: "しています", explain_id: "Sedang berlangsung → しています." }
-  - { front: "めがねを ___ います。(かける, memakai)", answer: "かけてい", distractors: ["かけって", "かけい", "かけいって"], kana_hint: "かけてい", explain_id: "Keadaan hasil (memakai) → かけている." }
-  - { front: "テレビを ___、寝ます。(けす)", answer: "消して", distractors: ["消すて", "消してから", "消しって"], kana_hint: "けして", explain_id: "Matikan TV lalu tidur → 消して." }
-  - { front: "朝ごはんを ___ 学校に行った。(たべる, lampau)", answer: "食べて", distractors: ["食べるて", "食べって", "食べたて"], kana_hint: "たべて", explain_id: "Rangkaian lampau: Te tetap, V terakhir yang lampau." }
+  - { front: "手を ___、ごはんを食べます。(あらう)", answer: "洗って", distractors: ["洗うて", "洗いて", "洗ってください"], kana_hint: "あらって", explain_id: "Sambung aksi → Te polos (tanpa ください).", kana: "てを ___、ごはんをたべます。", romaji: "te o ___,gohan o tabemasu." }
+  - { front: "今宿題を ___。(する, sedang)", answer: "しています", distractors: ["しますている", "しているます", "してますた"], kana_hint: "しています", explain_id: "Sedang berlangsung → しています.", kana: "いましゅくだいを ___。", romaji: "ima shukudai o ___." }
+  - { front: "めがねを ___ います。(かける, memakai)", answer: "かけてい", distractors: ["かけって", "かけい", "かけいって"], kana_hint: "かけてい", explain_id: "Keadaan hasil (memakai) → かけている.", kana: "めがねを ___ います。", romaji: "megane o ___ imasu." }
+  - { front: "テレビを ___、寝ます。(けす)", answer: "消して", distractors: ["消すて", "消してから", "消しって"], kana_hint: "けして", explain_id: "Matikan TV lalu tidur → 消して.", kana: "テレビを ___、ねます。", romaji: "terebi o ___,nemasu." }
+  - { front: "朝ごはんを ___ 学校に行った。(たべる, lampau)", answer: "食べて", distractors: ["食べるて", "食べって", "食べたて"], kana_hint: "たべて", explain_id: "Rangkaian lampau: Te tetap, V terakhir yang lampau.", kana: "あさごはんを ___ がっこうにいった。", romaji: "asa gohan o ___ gakkou ni itta." }
 refs:
   - { label: "Tae Kim — Te-form", url: "https://www.guidetojapanese.org/learn/grammar/teform" }
 passing: { min_items: 8, grade_pct: 80 }

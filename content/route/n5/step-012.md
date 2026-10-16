@@ -21,11 +21,11 @@ pitfalls_id:
   - "ては vs ても: tertukar = izin jadi larangan! てもいい (boleh) vs てはいけない (dilarang)."
   - "いけません sopan; kasual: ちゃだめ / てはだめ."
 cloze_items:
-  - { front: "ここで ___ いいですか。(すわる, boleh duduk?)", answer: "座っても", distractors: ["座っては", "座るても", "座ってもは"], kana_hint: "すわっても", explain_id: "Minta izin → てもいい." }
-  - { front: "ここで ___ いけません。(はしる, dilarang lari)", answer: "走っては", distractors: ["走っても", "走るては", "走ってが"], kana_hint: "はしっては", explain_id: "Larangan → てはいけません." }
-  - { front: "辞書を ___ いいですよ。(つかう)", answer: "使っても", distractors: ["使っては", "使うても", "使いても"], kana_hint: "つかっても", explain_id: "Memberi izin → てもいい." }
-  - { front: "プールで ___ はいけません。(およぐ)", answer: "泳いでは", distractors: ["泳いでも", "泳ぐては", "泳いでもは"], kana_hint: "およいでは", explain_id: "Larangan → てはいけません." }
-  - { front: "この部屋に ___ もいいですか。(はいる)", answer: "入って", distractors: ["入りて", "入るって", "入りって"], kana_hint: "はいって", explain_id: "Te dari はいる → はいって + もいい." }
+  - { front: "ここで ___ いいですか。(すわる, boleh duduk?)", answer: "座っても", distractors: ["座っては", "座るても", "座ってもは"], kana_hint: "すわっても", explain_id: "Minta izin → てもいい.", kana: "ここで すわって いいですか。", romaji: "koko de suwatte ii desu ka?" }
+  - { front: "ここで ___ いけません。(はしる, dilarang lari)", answer: "走っては", distractors: ["走っても", "走るては", "走ってが"], kana_hint: "はしっては", explain_id: "Larangan → てはいけません.", kana: "ここで はしって はいけません。", romaji: "koko de hashitte wa ikemasen" }
+  - { front: "辞書を ___ いいですよ。(つかう)", answer: "使っても", distractors: ["使っては", "使うても", "使いても"], kana_hint: "つかっても", explain_id: "Memberi izin → てもいい.", kana: "じしょを つかって いいですよ。", romaji: "jisho wo tsukatte ii desu yo" }
+  - { front: "プールで ___ はいけません。(およぐ)", answer: "泳いでは", distractors: ["泳いでも", "泳ぐては", "泳いでもは"], kana_hint: "およいでは", explain_id: "Larangan → てはいけません.", kana: "プールで およいで はいけません。", romaji: "pu-ru de oyoid e wa ikemasen" }
+  - { front: "この部屋に ___ もいいですか。(はいる)", answer: "入って", distractors: ["入りて", "入るって", "入りって"], kana_hint: "はいって", explain_id: "Te dari はいる → はいって + もいい.", kana: "このへやに はいって もいいですか。", romaji: "kono heya ni hai tte mo ii desu ka?" }
 refs:
   - { label: "Tae Kim — Permission/prohibition", url: "https://www.guidetojapanese.org/learn/grammar/must" }
 passing: { min_items: 8, grade_pct: 80 }

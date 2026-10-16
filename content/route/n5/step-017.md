@@ -20,11 +20,11 @@ pitfalls_id:
   - "まで termasuk titik akhir (sampai jam 5 = masih kerja jam 5)."
   - "てから = urutan tegas; て saja = rangkaian longgar."
 cloze_items:
-  - { front: "9時 ___ 5時まで働きます。", answer: "から", distractors: ["まで", "より", "ほど"], kana_hint: "", explain_id: "Dari → から." }
-  - { front: "手を洗って ___ 食べます。", answer: "から", distractors: ["まで", "より", "のに"], kana_hint: "", explain_id: "Setelah → てから." }
-  - { front: "東京 ___ 大阪まで新幹線で行きます。", answer: "から", distractors: ["まで", "より", "で"], kana_hint: "", explain_id: "Titik awal → から." }
-  - { front: "昼 ___ 晩まで寝ていた。", answer: "から", distractors: ["まで", "より", "ほど"], kana_hint: "", explain_id: "Dari siang → から." }
-  - { front: "宿題をして ___ 遊びます。", answer: "から", distractors: ["まで", "より", "のに"], kana_hint: "", explain_id: "Setelah PR → てから." }
+  - { front: "9時 ___ 5時まで働きます。", answer: "から", distractors: ["まで", "より", "ほど"], kana_hint: "", explain_id: "Dari → から.", kana: "9じ ___ 5じまで はたらきます。", romaji: "9ji ___ 5ji made hatarakimasu." }
+  - { front: "手を洗って ___ 食べます。", answer: "から", distractors: ["まで", "より", "のに"], kana_hint: "", explain_id: "Setelah → てから.", kana: "てを あらって ___ たべます。", romaji: "te wo aratte ___ tabemasu." }
+  - { front: "東京 ___ 大阪まで新幹線で行きます。", answer: "から", distractors: ["まで", "より", "で"], kana_hint: "", explain_id: "Titik awal → から.", kana: "とうきょう ___ おおさかまで しんかんせんで いきます。", romaji: "toukyou ___ oosaka made shinkansen de ikimasu." }
+  - { front: "昼 ___ 晩まで寝ていた。", answer: "から", distractors: ["まで", "より", "ほど"], kana_hint: "", explain_id: "Dari siang → から.", kana: "ひる ___ ばんまで ねていた。", romaji: "hiru ___ ban made nete ita." }
+  - { front: "宿題をして ___ 遊びます。", answer: "から", distractors: ["まで", "より", "のに"], kana_hint: "", explain_id: "Setelah PR → てから.", kana: "しゅくだいを して ___ あそびます。", romaji: "shukudai wo shite ___ asobimasu." }
 refs:
   - { label: "Tae Kim — Kara/made", url: "https://www.guidetojapanese.org/learn/grammar/kara" }
 passing: { min_items: 8, grade_pct: 80 }

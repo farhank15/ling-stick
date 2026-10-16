@@ -21,11 +21,11 @@ pitfalls_id:
   - "ないでください (mohon) vs なくてください (× salah)."
   - "Untuk benda: 静かにしてください (bukan 静かしないで)."
 cloze_items:
-  - { front: "ここで ___ ください。(たべる, tolong jangan makan)", answer: "食べないで", distractors: ["食べなくて", "食べるないで", "食べなで"], kana_hint: "たべないで", explain_id: "Nai + でください." }
-  - { front: "まだ ___ ください。(かえる, tolong jangan pulang)", answer: "帰らないで", distractors: ["帰らなくて", "帰るないで", "帰らないくて"], kana_hint: "かえらないで", explain_id: "かえらない + でください." }
-  - { front: "大きな声で ___ ください。(はなす)", answer: "話さないで", distractors: ["話しなくて", "話すないで", "話さなくては"], kana_hint: "はなさないで", explain_id: "はなさない + でください." }
-  - { front: "シャワーを ___ ください。(あびる)", answer: "浴びないで", distractors: ["浴びるないで", "浴びなくて", "浴びないくて"], kana_hint: "あびないで", explain_id: "あびない + でください." }
-  - { front: "心配 ___。(する, jangan khawatir! - kasual)", answer: "しないで", distractors: ["するないで", "しなくて", "しないくて"], kana_hint: "", explain_id: "Kasual: しないで." }
+  - { front: "ここで ___ ください。(たべる, tolong jangan makan)", answer: "食べないで", distractors: ["食べなくて", "食べるないで", "食べなで"], kana_hint: "たべないで", explain_id: "Nai + でください.", kana: "ここで ___ ください。", romaji: "koko de ___ kudasai." }
+  - { front: "まだ ___ ください。(かえる, tolong jangan pulang)", answer: "帰らないで", distractors: ["帰らなくて", "帰るないで", "帰らないくて"], kana_hint: "かえらないで", explain_id: "かえらない + でください.", kana: "まだ ___ ください。", romaji: "mada ___ kudasai." }
+  - { front: "大きな声で ___ ください。(はなす)", answer: "話さないで", distractors: ["話しなくて", "話すないで", "話さなくては"], kana_hint: "はなさないで", explain_id: "はなさない + でください.", kana: "おおきなこえで ___ ください。", romaji: "ookina koe de ___ kudasai." }
+  - { front: "シャワーを ___ ください。(あびる)", answer: "浴びないで", distractors: ["浴びるないで", "浴びなくて", "浴びないくて"], kana_hint: "あびないで", explain_id: "あびない + でください.", kana: "シャワーを ___ ください。", romaji: "shawaa o ___ kudasai." }
+  - { front: "心配 ___。(する, jangan khawatir! - kasual)", answer: "しないで", distractors: ["するないで", "しなくて", "しないくて"], kana_hint: "", explain_id: "Kasual: しないで.", kana: "しんぱい ___。", romaji: "shinpai ___." }
 refs:
   - { label: "Tae Kim — Request (negative)", url: "https://www.guidetojapanese.org/learn/grammar/request" }
 passing: { min_items: 8, grade_pct: 80 }

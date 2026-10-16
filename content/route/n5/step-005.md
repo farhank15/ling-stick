@@ -20,11 +20,11 @@ pitfalls_id:
   - "きれい, きらい, ゆうめい berakhiran い tapi golongan な."
   - "いい (bagus) tak beraturan: negatif よくない, lampau よかった."
 cloze_items:
-  - { front: "この映画は ___。(おもしろい)", answer: "おもしろいです", distractors: ["おもしろなです", "おもしろいなです", "おもしろです"], kana_hint: "", explain_id: "い-adj langsung + です." }
-  - { front: "___ 花ですね。(きれい)", answer: "きれいな", distractors: ["きれいい", "きれいの", "きれい"], kana_hint: "", explain_id: "な-adj sebelum nomina pakai な." }
-  - { front: "このカレーは辛く ___。(からい, negatif)", answer: "ないです", distractors: ["じゃないです", "ありません", "くない"], kana_hint: "ないです", explain_id: "い-adj negatif: からい→辛くない." }
-  - { front: "昨日は ___。(あつい, lampau)", answer: "暑かったです", distractors: ["暑いでした", "暑かったなです", "暑いかったです"], kana_hint: "あつかったです", explain_id: "い-adj lampau: かった." }
-  - { front: "彼は ___ 人じゃない。(しんせつ)", answer: "親切な", distractors: ["親切い", "親切の", "親切"], kana_hint: "しんせつな", explain_id: "しんせつ = な-adj → + な." }
+  - { front: "この映画は ___。(おもしろい)", answer: "おもしろいです", distractors: ["おもしろなです", "おもしろいなです", "おもしろです"], kana_hint: "", explain_id: "い-adj langsung + です.", kana: "このえいがは ___。(おもしろい)", romaji: "kono eiga wa ___." }
+  - { front: "___ 花ですね。(きれい)", answer: "きれいな", distractors: ["きれいい", "きれいの", "きれい"], kana_hint: "", explain_id: "な-adj sebelum nomina pakai な.", kana: "___ はなですね。(きれい)", romaji: "___ hanadesu ne." }
+  - { front: "このカレーは辛く ___。(からい, negatif)", answer: "ないです", distractors: ["じゃないです", "ありません", "くない"], kana_hint: "ないです", explain_id: "い-adj negatif: からい→辛くない.", kana: "このカレーはからく ___。(からい, negatif)", romaji: "kono karee wa karaku ___." }
+  - { front: "昨日は ___。(あつい, lampau)", answer: "暑かったです", distractors: ["暑いでした", "暑かったなです", "暑いかったです"], kana_hint: "あつかったです", explain_id: "い-adj lampau: かった.", kana: "きのうは ___。(あつい, lampau)", romaji: "kinou wa ___." }
+  - { front: "彼は ___ 人じゃない。(しんせつ)", answer: "親切な", distractors: ["親切い", "親切の", "親切"], kana_hint: "しんせつな", explain_id: "しんせつ = な-adj → + な.", kana: "かれは ___ ひとじゃない。(しんせつ)", romaji: "kare wa ___ hito ja nai." }
 refs:
   - { label: "Tae Kim — Adjectives", url: "https://www.guidetojapanese.org/learn/grammar/adjectives" }
 passing: { min_items: 8, grade_pct: 80 }

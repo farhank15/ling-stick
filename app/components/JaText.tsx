@@ -46,9 +46,12 @@ export function buildRuby(text: string, reading: string | null | undefined): JaS
   if (!KANJI_RE.test(text)) return [{ base: text }];
 
   // Teks dipecah per run kanji / run non-kanji (kana, tanda baca, latin, dsb).
-  const runs: { kind: "kanji" | "other"; text: string }[] = [];
+  // "___" (blank soal) = run BARRIER sendiri: tak konsumsi kana, biar run kana
+  // sebelum & sesudahnya align ke posisinya masing-masing.
+  // matcha: blank menggumpal dengan kana sekitar → pointer kana habis duluan → ruby hilang semua.
+  const runs: { kind: "kanji" | "other" | "blank"; text: string }[] = [];
   for (const ch of text) {
-    const kind = KANJI_RE.test(ch) ? "kanji" : "other";
+    const kind = KANJI_RE.test(ch) ? "kanji" : ch === "_" ? "blank" : "other";
     const last = runs[runs.length - 1];
     if (last && last.kind === kind) last.text += ch;
     else runs.push({ kind, text: ch });
@@ -62,6 +65,11 @@ export function buildRuby(text: string, reading: string | null | undefined): JaS
   let ok = true;
   for (let i = 0; i < runs.length && ok; i++) {
     const run = runs[i]!;
+    if (run.kind === "blank") {
+      // Blank tak makan kana — cuma tampil.
+      segments.push({ base: run.text });
+      continue;
+    }
     if (run.kind === "kanji") {
       // Batas run kanji: kana alignable pertama di reading setelah posisi sekarang.
       let end = kana.length;

@@ -15,6 +15,7 @@
     "kanji:seed": "tsx scripts/kanji-seed.ts",
     "kanji:audit": "tsx scripts/kanji-audit.ts",
     "kanji:import": "tsx scripts/kanji-import.ts",
+    "route:cloze-kana": "tsx scripts/route-cloze-kana.ts",
     "deck:openjlpt-n5": "tsx scripts/deck-import-openjlpt.ts"
   },
   "dependencies": {

@@ -20,11 +20,11 @@ pitfalls_id:
   - "4時=よじ, 7時=しちじ, 9時=くじ — jangan いちよじ/ななじ/きゅうじ."
   - "ひとり・ふたり (1-2 orang) spesial, 3+ pakai にん."
 cloze_items:
-  - { front: "___ に起きます。(jam 7)", answer: "7時", distractors: ["7分", "7人", "7つ"], kana_hint: "しちじ", explain_id: "Jam → 時 (7時=しちじ)." }
-  - { front: "___ に会いましょう。(jam 4)", answer: "4時", distractors: ["4分", "4人", "4つ"], kana_hint: "よじ", explain_id: "Jam 4 = よじ." }
-  - { front: "たまごを ___ 買いました。(3 butir)", answer: "みっつ", distractors: ["みつつ", "さんつ", "みっち"], kana_hint: "", explain_id: "Counter benda 3 = みっつ." }
-  - { front: "きょうだいは ___ です。(2 orang)", answer: "ふたり", distractors: ["ににん", "ふたつ", "にり"], kana_hint: "", explain_id: "2 orang = ふたり." }
-  - { front: "15 ___ かかります。(menit)", answer: "分", distractors: ["時", "人", "つ"], kana_hint: "ふん", explain_id: "Menit → 分 (15分=じゅうごふん)." }
+  - { front: "___ に起きます。(jam 7)", answer: "7時", distractors: ["7分", "7人", "7つ"], kana_hint: "しちじ", explain_id: "Jam → 時 (7時=しちじ).", kana: "___ におきます。(jam 7)", romaji: "___ ni okimasu." }
+  - { front: "___ に会いましょう。(jam 4)", answer: "4時", distractors: ["4分", "4人", "4つ"], kana_hint: "よじ", explain_id: "Jam 4 = よじ.", kana: "___ にあいましょう。(jam 4)", romaji: "___ ni aimashou." }
+  - { front: "たまごを ___ 買いました。(3 butir)", answer: "みっつ", distractors: ["みつつ", "さんつ", "みっち"], kana_hint: "", explain_id: "Counter benda 3 = みっつ.", kana: "たまごを ___ かいました。(3 butir)", romaji: "tamago o ___ kaimashita." }
+  - { front: "きょうだいは ___ です。(2 orang)", answer: "ふたり", distractors: ["ににん", "ふたつ", "にり"], kana_hint: "", explain_id: "2 orang = ふたり.", kana: "きょうだいは ___ です。(2 orang)", romaji: "kyoudai wa ___ desu." }
+  - { front: "15 ___ かかります。(menit)", answer: "分", distractors: ["時", "人", "つ"], kana_hint: "ふん", explain_id: "Menit → 分 (15分=じゅうごふん).", kana: "15 ___ かかります。(menit)", romaji: "15 ___ kakarimasu." }
 refs:
   - { label: "Tae Kim — Numbers and counting", url: "https://www.guidetojapanese.org/learn/grammar/numbers" }
 passing: { min_items: 8, grade_pct: 80 }

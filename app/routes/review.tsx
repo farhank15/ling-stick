@@ -2332,8 +2332,8 @@ export default function ReviewPage() {
               {hasJa(q.prompt) ? (
                 <JaText
                   text={q.prompt}
+                  reading={q.reading ?? undefined}
                   kanjiClassName="text-teal-700 dark:text-teal-400"
-                  romajiToggle={false}
                 />
               ) : (
                 q.prompt
