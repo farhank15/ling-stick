@@ -263,6 +263,9 @@ export default function Translate() {
     abortRef.current?.abort();
     const ctrl = new AbortController();
     abortRef.current = ctrl;
+    // Reset kunci contoh — preset/style baru = fetch ulang, bukan skip.
+    // matcha: usageKey basi → contoh tak pernah muncul lagi setelah ganti preset.
+    usageKey.current = "";
     void doTranslate(t, mySeq, ctrl);
   };
 
