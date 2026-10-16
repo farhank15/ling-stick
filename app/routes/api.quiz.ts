@@ -135,6 +135,7 @@ export async function action({ request }: ActionFunctionArgs) {
     count?: number;
     level?: string;
     topic?: string;
+    deckId?: number;
     typed?: string;
   };
 
@@ -164,7 +165,17 @@ export async function action({ request }: ActionFunctionArgs) {
       : "extra";
     const count = Math.min(30, Math.max(5, Number(body.count) || 10));
     const level = body.level && body.level !== "all" ? body.level : undefined;
-    const set = await createExtraSet(mode, count, { bankLevel: level });
+    // Deck scope: generate dalam mode deck → soal dari deck itu (bahasa ikut deck).
+    let deckOpts: { deckId?: number; lang?: string } = {};
+    if (Number.isInteger(body.deckId) && body.deckId! > 0) {
+      const { getDeck } = await import("~/lib/decks.server");
+      const { getTargetLang } = await import("~/lib/lang.server");
+      const deck = await getDeck(body.deckId!);
+      if (deck && deck.lang === (await getTargetLang())) {
+        deckOpts = { deckId: deck.id, lang: deck.lang };
+      }
+    }
+    const set = await createExtraSet(mode, count, { bankLevel: level, ...deckOpts });
     if (!set) return Response.json({ error: "Tidak ada kosakata untuk dibuat soal" }, { status: 400 });
     return Response.json({ ok: true, setId: set.id });
   }

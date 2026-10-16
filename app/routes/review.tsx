@@ -942,7 +942,12 @@ export default function ReviewPage() {
       const r = await fetch("/api/quiz", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ action: "create", mode: m, count: m === "intens" ? 25 : 15 }),
+        body: JSON.stringify({
+          action: "create",
+          mode: m,
+          count: m === "intens" ? 25 : 15,
+          ...(deckSelRef.current != null ? { deckId: deckSelRef.current } : {}),
+        }),
       });
       const d = await safeJson<{ ok?: boolean; setId?: number; error?: string }>(r);
       if (!r.ok || !d.ok) throw new Error(d.error || "Gagal generate");
@@ -1187,6 +1192,8 @@ export default function ReviewPage() {
   const saveAskToLibrary = async () => {
     const c = cards[cardIdx];
     if (!c || !askReply) return;
+    // PATCH per itemId — deck item tetap deck (hanya notesId yang ditulis).
+    // matcha: sempat dicurigai memindahkan item ke library — tidak, aman.
     try {
       const r = await fetch(`/api/items/${c.itemId}`, {
         method: "PATCH",
@@ -1197,9 +1204,9 @@ export default function ReviewPage() {
       setCards((list) =>
         list.map((k, i) => (i === cardIdx ? { ...k, notesId: askReply.slice(0, 2000) } : k)),
       );
-      toast("Penjelasan Ling tersimpan di Library");
+      toast(deckSelRef.current != null ? "Penjelasan Ling tersimpan di kartu deck" : "Penjelasan Ling tersimpan di Library");
     } catch {
-      toast("Gagal simpan ke Library");
+      toast("Gagal simpan penjelasan");
     }
   };
 
@@ -1236,7 +1243,7 @@ export default function ReviewPage() {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ itemId: c.itemId, action: "known" }),
       });
-      toast("Ditandai udah tahu — cek di Library");
+      toast(deckSelRef.current != null ? "Ditandai udah tahu — keluar dari antrean deck" : "Ditandai udah tahu — cek di Library");
     } catch {
       toast("Gagal menandai — coba lagi nanti");
     }
