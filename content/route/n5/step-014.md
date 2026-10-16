@@ -27,7 +27,7 @@ cloze_items:
   - { front: "宿題を ___。(する, kasual lampau)", answer: "した", distractors: ["すた", "してた", "するた"], kana_hint: "", explain_id: "して→した.", kana: "しゅくだいを ___。", romaji: "shukudai o ___." }
 refs:
   - { label: "Tae Kim — Past tense casual", url: "https://www.guidetojapanese.org/learn/grammar/past" }
-passing: { min_items: 8, grade_pct: 80 }
+passing: { min_items: 5, grade_pct: 80 }
 est_minutes: 10
 version: 1
 ---

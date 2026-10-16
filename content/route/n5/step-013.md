@@ -27,7 +27,7 @@ cloze_items:
   - { front: "野菜を ___ いけません。(たべる, harus makan)", answer: "食べないと", distractors: ["食べるとは", "食べないは", "食べるないと"], kana_hint: "たべないと", explain_id: "Versi pendek: ないといけません.", kana: "やさいを ___ いけません。", romaji: "yasai wo ___ ike masen." }
 refs:
   - { label: "Tae Kim — Must", url: "https://www.guidetojapanese.org/learn/grammar/must" }
-passing: { min_items: 8, grade_pct: 80 }
+passing: { min_items: 5, grade_pct: 80 }
 est_minutes: 10
 version: 1
 ---

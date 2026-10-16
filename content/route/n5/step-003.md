@@ -28,7 +28,7 @@ cloze_items:
   - { front: "しゅくだいを ___ ください。(する)", answer: "して", distractors: ["する", "した", "しない"], kana_hint: "", explain_id: "Tak beraturan: する→して.", kana: "しゅくだいを ___ ください。", romaji: "shukudai o ___ kudasai." }
 refs:
   - { label: "Tae Kim — Te-form", url: "https://www.guidetojapanese.org/learn/grammar/teform" }
-passing: { min_items: 8, grade_pct: 80 }
+passing: { min_items: 5, grade_pct: 80 }
 est_minutes: 12
 version: 1
 ---

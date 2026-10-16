@@ -24,10 +24,10 @@ cloze_items:
   - { front: "電車 ___ 行きます。", answer: "で", distractors: ["に", "を", "と"], kana_hint: "", explain_id: "Alat transportasi → で.", kana: "でんしゃ ___ いきます。", romaji: "densha ___ ikimasu." }
   - { front: "母 ___ 買い物します。", answer: "と", distractors: ["で", "も", "を"], kana_hint: "", explain_id: "Bersama ibu → と.", kana: "はは ___ かいものします。", romaji: "haha ___ kaimono shimasu." }
   - { front: "わたし ___ 学生です。(saya juga)", answer: "も", distractors: ["は", "が", "と"], kana_hint: "", explain_id: "Juga → も.", kana: "わたし ___ がくせいです。(saya juga)", romaji: "watashi ___ gakusei desu." }
-  - { front: "いすの上にねこが ___。(ada juga)", answer: "もいます", distractors: ["もです", "もいますた", "もいるます"], kana_hint: "もいます", explain_id: "Keberadaan makhluk + juga → もいます.", kana: "いすのうえにねこが ___。(ada juga)", romaji: "isu no ue ni neko ga ___." }
+  - { front: "いすの上にねこが ___。(ada juga)", answer: "もいます", distractors: ["もです", "もいますた", "もいるます"], kana_hint: "もいます", explain_id: "Keberadaan makhluk + juga → もいます.", kana: "いすのうえにねこが ___。(ada juga)", romaji: "isu no ue ni neko ___." }
 refs:
   - { label: "Tae Kim — Particles で/と", url: "https://www.guidetojapanese.org/learn/grammar/deto" }
-passing: { min_items: 8, grade_pct: 80 }
+passing: { min_items: 5, grade_pct: 80 }
 est_minutes: 10
 version: 1
 ---

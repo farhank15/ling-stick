@@ -27,7 +27,7 @@ cloze_items:
   - { front: "___ 本は難しいです。(buku ini)", answer: "この", distractors: ["これ", "ここ", "こんな"], kana_hint: "この", explain_id: "Sebelum nomina → この.", kana: "___ ほんはむずかしいです。(buku ini)", romaji: "___ hon wa muzukashii desu." }
 refs:
   - { label: "Tae Kim — kore/sore/are", url: "https://www.guidetojapanese.org/learn/grammar/kore" }
-passing: { min_items: 8, grade_pct: 80 }
+passing: { min_items: 5, grade_pct: 80 }
 est_minutes: 8
 version: 1
 ---

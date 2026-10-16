@@ -27,7 +27,7 @@ cloze_items:
   - { front: "彼は ___ 人じゃない。(しんせつ)", answer: "親切な", distractors: ["親切い", "親切の", "親切"], kana_hint: "しんせつな", explain_id: "しんせつ = な-adj → + な.", kana: "かれは ___ ひとじゃない。(しんせつ)", romaji: "kare wa ___ hito ja nai." }
 refs:
   - { label: "Tae Kim — Adjectives", url: "https://www.guidetojapanese.org/learn/grammar/adjectives" }
-passing: { min_items: 8, grade_pct: 80 }
+passing: { min_items: 5, grade_pct: 80 }
 est_minutes: 10
 version: 1
 ---

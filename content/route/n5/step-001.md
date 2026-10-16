@@ -28,7 +28,7 @@ cloze_items:
   - { front: "つくえの上にほん ___ あります。", answer: "が", distractors: ["は", "を", "に"], kana_hint: "", explain_id: "Keberadaan (あります) → subjek が.", kana: "つくえのうえにほん ___ あります。", romaji: "tsukue no ue ni hon ___ arimasu." }
 refs:
   - { label: "Tae Kim — は vs が", url: "https://www.guidetojapanese.org/learn/grammar/topicparticles" }
-passing: { min_items: 8, grade_pct: 80 }
+passing: { min_items: 5, grade_pct: 80 }
 est_minutes: 10
 version: 1
 ---

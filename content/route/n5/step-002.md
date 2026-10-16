@@ -21,14 +21,14 @@ pitfalls_id:
   - "Kelompok 1 vs 2: かえる (pulang, kel.1 → かえります) vs たべる (kel.2 → たべます) — hafalkan per kata."
   - "ませんでした = lampau negatif (tidak ... kemarin)."
 cloze_items:
-  - { front: "毎日パンを ___。(たべる)", answer: "たべます", distractors: ["たべる", "たべました", "たべません"], kana_hint: "", explain_id: "Kelompok 2: る→ます.", kana: "まいにちパンを ___。(たべる)", romaji: "maichipan o ___." }
+  - { front: "毎日パンを ___。(たべる)", answer: "たべます", distractors: ["たべる", "たべました", "たべません"], kana_hint: "", explain_id: "Kelompok 2: る→ます.", kana: "まいにちパンを ___。(たべる)", romaji: "mainichi pan o ___." }
   - { front: "水を ___。(のむ)", answer: "のみます", distractors: ["のむます", "のみる", "のんでます"], kana_hint: "のみます", explain_id: "Kelompok 1: のむ→のみます.", kana: "みずを ___。(のむ)", romaji: "mizu o ___." }
-  - { front: "昨日映画を ___。(みる)", answer: "見ませんでした", distractors: ["見ました", "見ません", "見るでした"], kana_hint: "みませんでした", explain_id: "Lampau negatif → ませんでした.", kana: "きのうえいがを ___。(みる)", romaji: "kinoueiga o ___." }
+  - { front: "昨日映画を ___。(みる)", answer: "見ませんでした", distractors: ["見ました", "見ません", "見るでした"], kana_hint: "みませんでした", explain_id: "Lampau negatif → ませんでした.", kana: "きのうえいがを ___。(みる)", romaji: "kinou eiga o ___." }
   - { front: "明日ともだちに ___。(あう)", answer: "会います", distractors: ["会うます", "会いますた", "会い"], kana_hint: "あいます", explain_id: "Kelompok 1: あう→あいます.", kana: "あしたともだちに ___。(あう)", romaji: "ashita tomodachi ni ___." }
   - { front: "しゅくだいを ___。(する)", answer: "します", distractors: ["するます", "しますた", "すます"], kana_hint: "", explain_id: "Tak beraturan: する→します.", kana: "しゅくだいを ___。(する)", romaji: "shukudai o ___." }
 refs:
   - { label: "Tae Kim — Polite form", url: "https://www.guidetojapanese.org/learn/grammar/polite" }
-passing: { min_items: 8, grade_pct: 80 }
+passing: { min_items: 5, grade_pct: 80 }
 est_minutes: 10
 version: 1
 ---

@@ -27,7 +27,7 @@ cloze_items:
   - { front: "ここにトイレは ___。(ある)", answer: "ない", distractors: ["あらない", "ありませんない", "ないない"], kana_hint: "", explain_id: "ある→ない (spesial).", kana: "ここにトイレは ___。(ある)", romaji: "koko ni toire wa ___." }
 refs:
   - { label: "Tae Kim — Negative verbs", url: "https://www.guidetojapanese.org/learn/grammar/negverb" }
-passing: { min_items: 8, grade_pct: 80 }
+passing: { min_items: 5, grade_pct: 80 }
 est_minutes: 10
 version: 1
 ---

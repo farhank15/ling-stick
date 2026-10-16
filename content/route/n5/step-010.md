@@ -27,7 +27,7 @@ cloze_items:
   - { front: "日本語が ___。(はなします → ingin)", answer: "話したいです", distractors: ["話すたいです", "話したいます", "話したいてす"], kana_hint: "はなしたいです", explain_id: "Stem はなし + たいです.", kana: "にほんごが ___。", romaji: "nihongo ga ___." }
 refs:
   - { label: "Tae Kim — Tai form", url: "https://www.guidetojapanese.org/learn/grammar/desire" }
-passing: { min_items: 8, grade_pct: 80 }
+passing: { min_items: 5, grade_pct: 80 }
 est_minutes: 10
 version: 1
 ---

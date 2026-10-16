@@ -27,7 +27,7 @@ cloze_items:
   - { front: "宿題をして ___ 遊びます。", answer: "から", distractors: ["まで", "より", "のに"], kana_hint: "", explain_id: "Setelah PR → てから.", kana: "しゅくだいを して ___ あそびます。", romaji: "shukudai wo shite ___ asobimasu." }
 refs:
   - { label: "Tae Kim — Kara/made", url: "https://www.guidetojapanese.org/learn/grammar/kara" }
-passing: { min_items: 8, grade_pct: 80 }
+passing: { min_items: 5, grade_pct: 80 }
 est_minutes: 8
 version: 1
 ---

@@ -28,7 +28,7 @@ cloze_items:
   - { front: "ともだち ___ 会います。", answer: "に", distractors: ["を", "へ", "で"], kana_hint: "", explain_id: "Bertemu seseorang → 対象に.", kana: "ともだち ___ あいます。", romaji: "tomodachi ___ aimasu." }
 refs:
   - { label: "Tae Kim — Particles に/へ", url: "https://www.guidetojapanese.org/learn/grammar/nihe" }
-passing: { min_items: 8, grade_pct: 80 }
+passing: { min_items: 5, grade_pct: 80 }
 est_minutes: 10
 version: 1
 ---

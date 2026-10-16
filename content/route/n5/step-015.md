@@ -28,7 +28,7 @@ cloze_items:
   - { front: "心配 ___。(する, jangan khawatir! - kasual)", answer: "しないで", distractors: ["するないで", "しなくて", "しないくて"], kana_hint: "", explain_id: "Kasual: しないで.", kana: "しんぱい ___。", romaji: "shinpai ___." }
 refs:
   - { label: "Tae Kim — Request (negative)", url: "https://www.guidetojapanese.org/learn/grammar/request" }
-passing: { min_items: 8, grade_pct: 80 }
+passing: { min_items: 5, grade_pct: 80 }
 est_minutes: 8
 version: 1
 ---

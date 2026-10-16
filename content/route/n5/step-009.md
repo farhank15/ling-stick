@@ -27,7 +27,7 @@ cloze_items:
   - { front: "15 ___ かかります。(menit)", answer: "分", distractors: ["時", "人", "つ"], kana_hint: "ふん", explain_id: "Menit → 分 (15分=じゅうごふん).", kana: "15 ___ かかります。(menit)", romaji: "15 ___ kakarimasu." }
 refs:
   - { label: "Tae Kim — Numbers and counting", url: "https://www.guidetojapanese.org/learn/grammar/numbers" }
-passing: { min_items: 8, grade_pct: 80 }
+passing: { min_items: 5, grade_pct: 80 }
 est_minutes: 10
 version: 1
 ---

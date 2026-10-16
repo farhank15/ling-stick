@@ -27,7 +27,7 @@ cloze_items:
   - { front: "朝ごはんを ___ 学校に行った。(たべる, lampau)", answer: "食べて", distractors: ["食べるて", "食べって", "食べたて"], kana_hint: "たべて", explain_id: "Rangkaian lampau: Te tetap, V terakhir yang lampau.", kana: "あさごはんを ___ がっこうにいった。", romaji: "asa gohan o ___ gakkou ni itta." }
 refs:
   - { label: "Tae Kim — Te-form", url: "https://www.guidetojapanese.org/learn/grammar/teform" }
-passing: { min_items: 8, grade_pct: 80 }
+passing: { min_items: 5, grade_pct: 80 }
 est_minutes: 10
 version: 1
 ---

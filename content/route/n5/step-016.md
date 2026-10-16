@@ -27,7 +27,7 @@ cloze_items:
   - { front: "タクシーを ___ か。(よぶ, panggilkan?)", answer: "呼びましょう", distractors: ["呼ぶましょう", "呼びますしょうか", "呼びましょうよか"], kana_hint: "よびましょう", explain_id: "Tawaran → 呼びましょうか.", kana: "タクシーを ___ か。", romaji: "takushii wo ___ ka." }
 refs:
   - { label: "Tae Kim — Volitional", url: "https://www.guidetojapanese.org/learn/grammar/volitional" }
-passing: { min_items: 8, grade_pct: 80 }
+passing: { min_items: 5, grade_pct: 80 }
 est_minutes: 8
 version: 1
 ---

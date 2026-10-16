@@ -28,7 +28,7 @@ cloze_items:
   - { front: "この部屋に ___ もいいですか。(はいる)", answer: "入って", distractors: ["入りて", "入るって", "入りって"], kana_hint: "はいって", explain_id: "Te dari はいる → はいって + もいい.", kana: "このへやに はいって もいいですか。", romaji: "kono heya ni hai tte mo ii desu ka?" }
 refs:
   - { label: "Tae Kim — Permission/prohibition", url: "https://www.guidetojapanese.org/learn/grammar/must" }
-passing: { min_items: 8, grade_pct: 80 }
+passing: { min_items: 5, grade_pct: 80 }
 est_minutes: 10
 version: 1
 ---

@@ -18,7 +18,7 @@ examples:
   - { jp: "昨日映画見た。", kana: "きのうえいがみた。", romaji: "kinou eiga mita.", arti_id: "Kemarin nonton. [kasual]", pola_ref: "昨日 + V-た", register: "kasual" }
 pitfalls_id:
   - "今日・明日・毎日・毎週・先週 tanpa に (×明日に)."
-  - "月 (bulan) pakai に: 3月に. 週 juga: 来週に."
+  - "月 (bulan) pakai に: 3月に. Kata relatif (来週・先週) TANPA に."
 cloze_items:
   - { front: "___ 映画を見ました。(kemarin)", answer: "昨日", distractors: ["今日", "明日", "毎日"], kana_hint: "きのう", explain_id: "Kemarin → 昨日.", kana: "___ えいがをみました。(kemarin)", romaji: "___ eiga o mimashita." }
   - { front: "月曜日 ___ 試験があります。", answer: "に", distractors: ["を", "が", "も"], kana_hint: "", explain_id: "Hari spesifik → に.", kana: "げつようび ___ しけんがあります。", romaji: "getsuyoubi ___ shiken ga arimasu." }
@@ -27,7 +27,7 @@ cloze_items:
   - { front: "3月 ___ 卒業します。", answer: "に", distractors: ["を", "が", "も"], kana_hint: "", explain_id: "Bulan spesifik → に.", kana: "3がつ ___ そつぎょうします。", romaji: "3gatsu ___ sotsugyou shimasu." }
 refs:
   - { label: "Tae Kim — Time", url: "https://www.guidetojapanese.org/learn/grammar/time" }
-passing: { min_items: 8, grade_pct: 80 }
+passing: { min_items: 5, grade_pct: 80 }
 est_minutes: 8
 version: 1
 ---

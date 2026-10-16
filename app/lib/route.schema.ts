@@ -53,10 +53,10 @@ export const routeStepSchema = z.object({
   refs: z.array(refSchema).default([]),
   passing: z
     .object({
-      min_items: z.number().int().min(1).default(8),
+      min_items: z.number().int().min(1).default(5),
       grade_pct: z.number().int().min(50).max(100).default(80),
     })
-    .default({ min_items: 8, grade_pct: 80 }),
+    .default({ min_items: 5, grade_pct: 80 }),
   est_minutes: z.number().int().min(3).max(30).default(10),
   version: z.number().int().min(1).default(1),
 });

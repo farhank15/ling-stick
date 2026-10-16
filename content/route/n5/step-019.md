@@ -28,7 +28,7 @@ cloze_items:
   - { front: "すし ___ 好きです。(sushi sih)", answer: "は", distractors: ["が", "を", "も"], kana_hint: "は", explain_id: "Kontras topik → は.", kana: "すし ___ すきです。(sushi sih)", romaji: "sushi ___ suki desu." }
 refs:
   - { label: "Tae Kim — Sukidesu", url: "https://www.guidetojapanese.org/learn/grammar/sukidesu" }
-passing: { min_items: 8, grade_pct: 80 }
+passing: { min_items: 5, grade_pct: 80 }
 est_minutes: 8
 version: 1
 ---

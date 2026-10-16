@@ -116,6 +116,68 @@ export default function Translate() {
     })();
   };
 
+  // Mode JA = MANUAL: ngetik hiragana lambat + jeda = auto-fire berkali-kali
+  // di tengah komposisi IME → boros kuota Lara/LLM. EN/ID tetap auto.
+  // matcha: tiap jeda >500ms = 1 translate + 1 usage sia-sia.
+  const composingRef = useRef(false);
+  const [compTick, setCompTick] = useState(0);
+
+  const doTranslate = async (t: string, mySeq: number, ctrl: AbortController) => {
+    setBusy(true);
+    try {
+      const to = from === "ja" ? "id" : from === "en" ? "id" : ja ? "ja" : "en";
+      const dir = from === "ja" ? "ja2id" : from === "en" ? "en2id" : ja ? "id2ja" : "id2en";
+      // Contoh + cara baca butuh sisi asing: kalau from=id itu HASIL translate
+      // (belum ada → nunggu), kalau from=en/ja itu INPUT (udah ada → paralel).
+      if (from !== "id") fetchUsage(t, dir, ctrl.signal);
+      const res = await fetch("/api/translate", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          text: t.slice(0, 2000),
+          from,
+          to,
+          style: active.style,
+          tone: active.tone || undefined,
+          prefer: "lara",
+        }),
+        signal: ctrl.signal,
+      });
+      const data = await res.json();
+      if (seq.current !== mySeq) return;
+      if (!res.ok) {
+        toast(data.error ?? "Gagal menerjemahkan");
+        setResult(null);
+      } else {
+        setResult(data);
+        setSaved(false);
+        // Jangan null-kan usage kalau key-nya udah cocok (paralel menang) —
+        // dulu setUsage(null) + reset key bikin fetch ulang sia-sia tiap hasil.
+        const finalKey = `${dir}:${(from === "id" ? (data.translation ?? "") : t).slice(0, 300)}`;
+        if (usageKey.current !== finalKey) {
+          setUsage(null);
+          if (from === "id") fetchUsage(data.translation ?? "", dir, ctrl.signal);
+        }
+      }
+    } catch (e) {
+      if ((e as Error)?.name === "AbortError") return;
+      if (seq.current === mySeq) toast("Server nggak merespons");
+    } finally {
+      if (seq.current === mySeq) setBusy(false);
+    }
+  };
+
+  // Tombol manual (mode JA): tembak sekali, batalkan request lama.
+  const runManual = () => {
+    const t = text.trim();
+    if (t.length < 2 || busy) return;
+    const mySeq = ++seq.current;
+    abortRef.current?.abort();
+    const ctrl = new AbortController();
+    abortRef.current = ctrl;
+    void doTranslate(t, mySeq, ctrl);
+  };
+
   useEffect(() => {
     const t = text.trim();
     const mySeq = ++seq.current;
@@ -132,54 +194,20 @@ export default function Translate() {
       setUsageBusy(false);
       return;
     }
-    const timer = setTimeout(async () => {
-      setBusy(true);
-      try {
-        const to = from === "ja" ? "id" : from === "en" ? "id" : ja ? "ja" : "en";
-        const dir = from === "ja" ? "ja2id" : from === "en" ? "en2id" : ja ? "id2ja" : "id2en";
-        // Contoh + cara baca butuh sisi asing: kalau from=id itu HASIL translate
-        // (belum ada → nunggu), kalau from=en/ja itu INPUT (udah ada → paralel).
-        if (from !== "id") fetchUsage(t, dir, ctrl.signal);
-        const res = await fetch("/api/translate", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({
-            text: t.slice(0, 2000),
-            from,
-            to,
-            style: active.style,
-            tone: active.tone || undefined,
-            prefer: "lara",
-          }),
-          signal: ctrl.signal,
-        });
-        const data = await res.json();
-        if (seq.current !== mySeq) return;
-        if (!res.ok) {
-          toast(data.error ?? "Gagal menerjemahkan");
-          setResult(null);
-        } else {
-          setResult(data);
-          setSaved(false);
-          // Jangan null-kan usage kalau key-nya udah cocok (paralel menang) —
-          // dulu setUsage(null) + reset key bikin fetch ulang sia-sia tiap hasil.
-          const finalKey = `${dir}:${(from === "id" ? (data.translation ?? "") : t).slice(0, 300)}`;
-          if (usageKey.current !== finalKey) {
-            setUsage(null);
-            if (from === "id") fetchUsage(data.translation ?? "", dir, ctrl.signal);
-          }
-        }
-      } catch (e) {
-        if ((e as Error)?.name === "AbortError") return;
-        if (seq.current === mySeq) toast("Server nggak merespons");
-      } finally {
-        if (seq.current === mySeq) setBusy(false);
-      }
-    }, 500);
+    if (from === "ja") {
+      // Manual: hasil lama (arah lain / teks lama) dibersihkan tiap ketikan.
+      setResult(null);
+      setUsage(null);
+      setBusy(false);
+      setUsageBusy(false);
+      return;
+    }
+    if (composingRef.current) return; // IME masih composing → tunggu selesai
+    const timer = setTimeout(() => void doTranslate(t, mySeq, ctrl), 500);
     return () => {
       clearTimeout(timer);
     };
-  }, [text, from, preset, toast, active.style, active.tone, ja]);
+  }, [text, from, preset, toast, active.style, active.tone, ja, compTick]);
 
   const speak = (s: string, lang?: string) => {
     if (typeof window === "undefined" || !window.speechSynthesis) return;
@@ -314,9 +342,19 @@ export default function Translate() {
             value={text}
             maxLength={2000}
             onChange={(e) => setText(e.target.value)}
+            onCompositionStart={() => {
+              composingRef.current = true;
+            }}
+            onCompositionEnd={() => {
+              composingRef.current = false;
+              setCompTick((n) => n + 1);
+            }}
+            onKeyDown={(e) => {
+              if (from === "ja" && e.key === "Enter" && (e.ctrlKey || e.metaKey)) runManual();
+            }}
             placeholder={
               from === "ja"
-                ? "Tulis bahasa Jepang… berhenti ngetik = auto translate"
+                ? "Tulis bahasa Jepang… lalu tekan Terjemahkan (Ctrl+Enter)"
                 : from === "en"
                   ? "Tulis bahasa Inggris… berhenti ngetik = auto translate"
                   : "Tulis bahasa Indonesia… berhenti ngetik = auto translate"
@@ -347,6 +385,21 @@ export default function Translate() {
           </div>
           <span className="text-[11px] text-zinc-400">{text.length}/2000</span>
         </div>
+        {from === "ja" ? (
+          <button
+            className="btn-primary w-full"
+            disabled={busy || text.trim().length < 2}
+            onClick={runManual}
+          >
+            {busy ? (
+              <>
+                <Loader2 className="h-4 w-4 animate-spin" /> Menerjemahkan…
+              </>
+            ) : (
+              "Terjemahkan"
+            )}
+          </button>
+        ) : null}
       </div>
 
       {/* Hasil */}
