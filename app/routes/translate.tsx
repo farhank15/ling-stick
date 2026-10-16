@@ -14,6 +14,11 @@ import { requireUser } from "~/lib/auth.server";
 import { getTargetLang } from "~/lib/lang.server";
 import { JaText, hasJa } from "~/components/JaText";
 import { Highlight } from "~/components/Highlight";
+import { KanjiDraw, type DrawStroke } from "~/components/KanjiDraw";
+import { KanjiRadical } from "~/components/KanjiRadical";
+import { KanjiDetailView } from "~/routes/aksara";
+import { normalizeStrokes, rankCandidates, type Stroke } from "~/lib/kanji-match";
+import type { KanjiDetail } from "~/lib/kanji.server";
 import { useToast } from "~/components/Toast";
 import { ttsLang } from "~/lib/utils.shared";
 import { SpeakButton } from "~/components/SpeakButton";
@@ -167,6 +172,89 @@ export default function Translate() {
     }
   };
 
+  // ── Mode kanji (coret → kenali → analisis → simpan) ──
+  const [drawTab, setDrawTab] = useState<"teks" | "kanji">("teks");
+  const [drawStrokes, setDrawStrokes] = useState<DrawStroke[]>([]);
+  const [cands, setCands] = useState<{ char: string; score: number }[]>([]);
+  const [candBusy, setCandBusy] = useState(false);
+  const [selDetail, setSelDetail] = useState<KanjiDetail | null>(null);
+  const [savingKanji, setSavingKanji] = useState(false);
+  const [savedKanji, setSavedKanji] = useState<string | null>(null);
+  const templatesRef = useRef<Record<string, Stroke[]> | null>(null);
+
+  // Kenali 400ms setelah pena diangkat (debounce) — template lazy-load sekali.
+  useEffect(() => {
+    if (drawTab !== "kanji" || drawStrokes.length === 0) {
+      setCands([]);
+      setCandBusy(false);
+      return;
+    }
+    setCandBusy(true);
+    const t = setTimeout(async () => {
+      try {
+        if (!templatesRef.current) {
+          const mod = await import("../../data/kanji-strokes.json");
+          templatesRef.current = mod.default as unknown as Record<string, Stroke[]>;
+        }
+        setCands(rankCandidates(templatesRef.current, normalizeStrokes(drawStrokes), 8));
+      } catch {
+        /* data gagal muat — diam */
+      } finally {
+        setCandBusy(false);
+      }
+    }, 400);
+    return () => clearTimeout(t);
+  }, [drawStrokes, drawTab]);
+
+  const pickKanji = async (char: string) => {
+    setSelDetail(null);
+    setSavedKanji(null);
+    try {
+      const r = await fetch(`/api/kanji?detail=${encodeURIComponent(char)}`);
+      const d = await r.json();
+      if (d.detail) setSelDetail(d.detail as KanjiDetail);
+      else toast("Kanji tak ada di referensi");
+    } catch {
+      toast("Gagal muat detail kanji");
+    }
+  };
+
+  const saveKanji = async () => {
+    if (!selDetail || savingKanji) return;
+    setSavingKanji(true);
+    try {
+      const r = await fetch("/api/items", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          text: selDetail.char,
+          type: "kanji",
+          meaningId: selDetail.meaningId,
+          reading: selDetail.on[0]?.text ?? selDetail.kun[0]?.text ?? null,
+          source: "draw",
+          examples: selDetail.vocab.slice(0, 2).map((v) => ({
+            en: v.word,
+            idText: v.gloss,
+            kana: v.reading,
+          })),
+        }),
+      });
+      const d = await r.json().catch(() => ({}));
+      if (r.status === 409 || d.duplicateOf) {
+        toast("Kanji ini sudah ada di Library");
+      } else if (d.ok ?? r.ok) {
+        setSavedKanji(selDetail.char);
+        toast("Kanji tersimpan — cek Simpanan di Aksara");
+      } else {
+        throw new Error(d.error ?? "Gagal menyimpan");
+      }
+    } catch (e) {
+      toast(e instanceof Error ? e.message : "Gagal menyimpan");
+    } finally {
+      setSavingKanji(false);
+    }
+  };
+
   // Tombol manual (mode JA): tembak sekali, batalkan request lama.
   const runManual = () => {
     const t = text.trim();
@@ -303,6 +391,93 @@ export default function Translate() {
 
   return (
     <div className="space-y-3">
+      {/* Mode: teks vs coret kanji */}
+      <div className="flex gap-1.5">
+        <button
+          className={`chip flex-1 justify-center ${drawTab === "teks" ? "chip-active" : ""}`}
+          onClick={() => setDrawTab("teks")}
+          aria-pressed={drawTab === "teks"}
+        >
+          Teks
+        </button>
+        <button
+          className={`chip flex-1 justify-center ${drawTab === "kanji" ? "chip-active" : ""}`}
+          onClick={() => setDrawTab("kanji")}
+          aria-pressed={drawTab === "kanji"}
+          title="Coret kanji yang tak bisa diketik"
+        >
+          ✍️ Kanji
+        </button>
+      </div>
+      {drawTab === "kanji" ? (
+        <div className="card space-y-3">
+          <div>
+            <p className="font-semibold">Coret kanjinya</p>
+            <p className="text-xs text-zinc-500">
+              Ketemu kanji baru di anime/papan? Tulis di sini — urutan gores tak harus benar.
+            </p>
+          </div>
+          <KanjiDraw
+            onChange={(s) => {
+              setDrawStrokes(s);
+              setSelDetail(null);
+            }}
+          />
+          {candBusy ? (
+            <p className="inline-flex items-center gap-1.5 text-xs text-zinc-400">
+              <Loader2 className="h-3.5 w-3.5 animate-spin" /> Mengenali…
+            </p>
+          ) : null}
+          {cands.length > 0 ? (
+            <div>
+              <p className="label mb-1.5">Tap yang benar ({cands.length} kandidat)</p>
+              <div className="grid grid-cols-4 gap-1.5">
+                {cands.map((c) => (
+                  <button
+                    key={c.char}
+                    className={`btn-secondary justify-center py-2.5 text-2xl ${
+                      selDetail?.char === c.char ? "!border-teal-500 !bg-teal-50 dark:!bg-teal-950" : ""
+                    }`}
+                    onClick={() => void pickKanji(c.char)}
+                  >
+                    {c.char}
+                  </button>
+                ))}
+              </div>
+              <p className="mt-1.5 text-[11px] text-zinc-400">
+                Tak ada yang benar? Kurangi/tambah gores, atau gambar lebih besar.
+              </p>
+            </div>
+          ) : null}
+          {selDetail ? (
+            <div className="space-y-2 border-t border-zinc-100 pt-3 dark:border-zinc-800">
+              <KanjiDetailView detail={selDetail} />
+              <button
+                className="btn-primary w-full"
+                disabled={savingKanji || savedKanji === selDetail.char}
+                onClick={() => void saveKanji()}
+              >
+                {savedKanji === selDetail.char ? (
+                  <>
+                    <BookmarkCheck className="h-4 w-4" /> Tersimpan
+                  </>
+                ) : (
+                  <>
+                    <Bookmark className="h-4 w-4" /> Simpan ke list kanji
+                  </>
+                )}
+              </button>
+            </div>
+          ) : null}
+          <div className="border-t border-zinc-100 pt-3 dark:border-zinc-800">
+            <KanjiRadical onPick={(c) => void pickKanji(c)} />
+          </div>
+          <p className="text-[11px] text-zinc-400">
+            Data: KanjiVG (CC BY-SA 3.0) + KRADFILE (EDRDG) · coretan: N5–N3 (638 kanji).
+          </p>
+        </div>
+      ) : (
+      <>
       {/* Input */}
       <div className="card space-y-3">
         <div className="flex items-center gap-1.5">
@@ -402,6 +577,8 @@ export default function Translate() {
         ) : null}
       </div>
 
+      </>)}
+      {drawTab === "teks" ? (<>
       {/* Hasil */}
       {/* Status loading yang jelas: skeleton kartu + tahapan (bukan layar kosong) */}
       {!result && busy ? (
@@ -551,6 +728,8 @@ export default function Translate() {
           )}
         </div>
       ) : null}
+
+      </>) : null}
 
       <QuotaNote />
     </div>

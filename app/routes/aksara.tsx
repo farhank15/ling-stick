@@ -177,14 +177,21 @@ export async function loader({ request }: LoaderFunctionArgs) {
   let kanjiList: { char: string; meaningId: string; strokes: number; jlpt: number | null; freq: number | null; components: string[] }[] = [];
   let kanjiComponents: { component: string; count: number }[] = [];
   let kanjiProgress: { total: number; done: number } | null = null;
+  let savedKanji: { id: number; char: string; meaningId: string | null }[] = [];
   if (script === "kanji") {
     const jlptNum = Number(level.slice(1)) || 5;
     const { listKanji, listComponents, getKanjiProgress } = await import("~/lib/kanji.server");
-    [kanjiList, kanjiComponents, kanjiProgress] = await Promise.all([
+    const { listItems } = await import("~/lib/items.server");
+    const [list, comps, prog, saved] = await Promise.all([
       listKanji({ jlpt: jlptNum }),
       listComponents(jlptNum),
       getKanjiProgress(jlptNum),
+      listItems({ type: "kanji", status: "all", limit: 100 }),
     ]);
+    kanjiList = list;
+    kanjiComponents = comps;
+    kanjiProgress = prog;
+    savedKanji = saved.map((r) => ({ id: r.id, char: r.text, meaningId: r.meaningId }));
   }
 
   // Kelompok kana mirip — import JSON langsung (masuk bundle server).
@@ -200,6 +207,7 @@ export async function loader({ request }: LoaderFunctionArgs) {
     kanjiList,
     kanjiComponents,
     kanjiProgress,
+    savedKanji,
     confusables,
   };
 }
@@ -699,7 +707,7 @@ function KanaDrillQuiz({ script }: { script: string }) {
 }
 
 export default function AksaraPage() {
-  const { script, level, kanjiList, kanjiComponents, kanjiProgress, confusables } =
+  const { script, level, kanjiList, kanjiComponents, kanjiProgress, savedKanji, confusables } =
     useLoaderData<typeof loader>();
   const [params, setParams] = useSearchParams();
 
@@ -920,6 +928,25 @@ export default function AksaraPage() {
             level={level}
           />
 
+          {(savedKanji ?? []).length > 0 ? (
+            <div className="card space-y-2 p-4">
+              <p className="label">Simpananku ({savedKanji!.length}) — dari coret kanji</p>
+              <div className="flex flex-wrap gap-1.5">
+                {savedKanji!.map((k) => (
+                  <Link
+                    key={k.id}
+                    to={`/library/${k.id}`}
+                    className="flex min-h-11 min-w-11 flex-col items-center justify-center rounded-xl border border-teal-600/25 bg-teal-50/60 px-2.5 py-1.5 dark:border-teal-500/25 dark:bg-teal-950/40"
+                    title={k.meaningId ?? ""}
+                  >
+                    <span className="text-xl font-bold leading-none">{k.char}</span>
+                    <span className="mt-0.5 max-w-16 truncate text-[9px] text-zinc-500">{k.meaningId}</span>
+                  </Link>
+                ))}
+              </div>
+            </div>
+          ) : null}
+
           <p className="text-center text-xs text-zinc-400">
             Latihan nulis kanji ada di{" "}
             <Link to={`/write?level=${level}`} className="font-medium text-teal-700 underline underline-offset-2 dark:text-teal-400">
@@ -1126,7 +1153,7 @@ function KanjiGrid({
   );
 }
 
-function KanjiDetailView({ detail }: { detail: KanjiDetail }) {
+export function KanjiDetailView({ detail }: { detail: KanjiDetail }) {
   return (
     <div className="space-y-3">
       <div className="flex items-start gap-4">

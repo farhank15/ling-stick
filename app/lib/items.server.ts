@@ -28,7 +28,8 @@ export type ItemType =
   | "collocation"
   | "slang"
   | "reaction"
-  | "sentence";
+  | "sentence"
+  | "kanji"; // simpanan kanji (dari draw-mode) — ikut FSRS + kuis
 
 export type SaveItemInput = {
   text: string;

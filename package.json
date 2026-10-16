@@ -17,6 +17,8 @@
     "kanji:import": "tsx scripts/kanji-import.ts",
     "route:cloze-kana": "tsx scripts/route-cloze-kana.ts",
     "route:option-kana": "tsx scripts/route-option-kana.ts",
+    "kanji:strokes": "tsx scripts/kanji-strokes-build.ts",
+    "kanji:krad": "tsx scripts/kanji-krad-build.ts",
     "deck:openjlpt-n5": "tsx scripts/deck-import-openjlpt.ts"
   },
   "dependencies": {
