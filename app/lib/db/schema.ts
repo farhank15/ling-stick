@@ -31,12 +31,30 @@ export const items = sqliteTable(
     lang: text("lang").notNull().default("en"), // en | ja — bahasa target item
     reading: text("reading"), // JA: kana (+ romaji), tampil redup di bawah kanji
     createdAt: integer("created_at").notNull(),
+    // Decks impor: deck pemilik (null = library), kolom tak-terpetakan, flag butuh arti ID.
+    deckId: integer("deck_id"),
+    extraJson: text("extra_json"),
+    needsId: integer("needs_id").notNull().default(0),
   },
   (t) => [
     uniqueIndex("items_text_norm_uq").on(t.textNorm),
     index("items_status_idx").on(t.status),
+    index("items_deck_idx").on(t.deckId),
   ],
 );
+
+/** Deck impor (TSV user) — terpisah dari Library. */
+export const decks = sqliteTable("decks", {
+  id: integer("id").primaryKey({ autoIncrement: true }),
+  name: text("name").notNull(),
+  lang: text("lang").notNull().default("ja"), // en | ja
+  level: text("level"), // N5..N1 / CEFR — default per deck
+  source: text("source"), // mis. "OpenJLPT", URL, "Anki TSV"
+  license: text("license"), // teks lisensi deck
+  count: integer("count").notNull().default(0),
+  skipped: integer("skipped").notNull().default(0), // duplikat vs library
+  createdAt: integer("created_at").notNull(),
+});
 
 export const examples = sqliteTable(
   "examples",

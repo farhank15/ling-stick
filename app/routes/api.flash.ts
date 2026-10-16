@@ -19,7 +19,19 @@ export async function loader({ request }: LoaderFunctionArgs) {
     .map(Number)
     .filter((n) => Number.isInteger(n) && n > 0)
     .slice(0, 200);
-  const queue = await getFlashQueue(30, exclude);
+  // Deck scope: ?deckId=N → hanya item deck itu (bahasa ikut deck).
+  const deckIdParam = Number(url.searchParams.get("deckId"));
+  let deckId: number | undefined;
+  let lang: string | undefined;
+  if (Number.isInteger(deckIdParam) && deckIdParam > 0) {
+    const { getDeck } = await import("~/lib/decks.server");
+    const deck = await getDeck(deckIdParam);
+    if (deck) {
+      deckId = deck.id;
+      lang = deck.lang;
+    }
+  }
+  const queue = await getFlashQueue(30, exclude, { deckId, lang });
   return Response.json({ cards: queue });
 }
 

@@ -70,9 +70,24 @@ export async function loader({ request }: LoaderFunctionArgs) {
   const set =
     mode === "daily"
       ? await getTodaySet()
-      : await getSetForDay(mode, localDayStr(), envLimit(mode), {
-          bankLevel: level,
-        });
+      : await (async () => {
+          // Deck scope: ?deckId=N → set per deck per hari (bahasa ikut deck).
+          const deckIdParam = Number(url.searchParams.get("deckId"));
+          if (Number.isInteger(deckIdParam) && deckIdParam > 0) {
+            const { getDeck } = await import("~/lib/decks.server");
+            const deck = await getDeck(deckIdParam);
+            if (deck) {
+              return getSetForDay(mode, `deck:${deck.id}:${localDayStr()}`, envLimit(mode), {
+                bankLevel: level,
+                deckId: deck.id,
+                lang: deck.lang,
+              });
+            }
+          }
+          return getSetForDay(mode, localDayStr(), envLimit(mode), {
+            bankLevel: level,
+          });
+        })();
   if (!set) return Response.json({ questions: [], set: null });
   return setResponse(set);
 }

@@ -684,11 +684,23 @@ export default function ReviewPage() {
   const [hintUsed, setHintUsed] = useState(false);
   const matchResults = useRef<{ itemId: number; correct: boolean }[]>([]);
   const matchWrong = useRef<Record<number, number>>({});
+  // Sumber latihan: library (default) atau satu deck impor.
+  // matcha: deck vs library campur = user bingung.
+  const [decks, setDecks] = useState<{ id: number; name: string; count: number; lang: string }[]>([]);
+  const [deckSel, setDeckSel] = useState<number | null>(null);
+  const deckSelRef = useRef<number | null>(null);
+  const deckQ = () => (deckSelRef.current != null ? `&deckId=${deckSelRef.current}` : "");
+  const pickDeck = (id: number | null) => {
+    setDeckSel(id);
+    deckSelRef.current = id;
+  };
 
   const load = useCallback((m: Mode) => {
     setLoading(true);
     setLoadError(null);
-    const url = m === "daily" ? "/api/quiz" : `/api/quiz?mode=${m}`;
+    // Set harian = library (streak/XP). Mode lain ikut deck kalau dipilih.
+    const deck = m === "daily" ? "" : deckQ();
+    const url = m === "daily" ? "/api/quiz" : `/api/quiz?mode=${m}${deck}`;
     fetch(url)
       .then((r) => safeJson<QuizResponse>(r))
       .then((d) => {
@@ -707,12 +719,22 @@ export default function ReviewPage() {
       .catch(() => {});
   }, []);
 
-  // Muat status tes periodik untuk picker.
+  // Muat status tes periodik + daftar deck untuk picker.
   useEffect(() => {
     if (screen !== "pick") return;
     fetch("/api/quiz?periodic=1")
       .then((r) => safeJson<Periodic>(r))
       .then(setPeriodic)
+      .catch(() => {});
+    fetch("/api/decks")
+      .then((r) => safeJson<{ decks: { id: number; name: string; count: number; lang: string }[] }>(r))
+      .then((d) => {
+        setDecks(d.decks ?? []);
+        // Deck terhapus → balik ke library.
+        if (deckSelRef.current != null && !(d.decks ?? []).some((x) => x.id === deckSelRef.current)) {
+          pickDeck(null);
+        }
+      })
       .catch(() => {});
   }, [screen]);
 
@@ -855,7 +877,8 @@ export default function ReviewPage() {
     setScreen("flash");
     setParams({ mode: "flash" }, { preventScrollReset: true });
     setLoading(true);
-    fetch("/api/flash")
+    const flashQ = deckSelRef.current != null ? `/api/flash?deckId=${deckSelRef.current}` : "/api/flash";
+    fetch(flashQ)
       .then((r) => safeJson<{ cards: FlashCard[] }>(r))
       .then((d) => {
         setCards(d.cards ?? []);
@@ -880,7 +903,7 @@ export default function ReviewPage() {
     setLoading(true);
     matchResults.current = [];
     matchWrong.current = {};
-    fetch("/api/match")
+    fetch(`/api/match${deckQ() ? `?deckId=${deckSelRef.current}` : ""}`)
       .then((r) => safeJson<{ rounds: MatchPair[][] }>(r))
       .then((d) => {
         setMatchRounds(d.rounds ?? []);
@@ -1045,7 +1068,7 @@ export default function ReviewPage() {
     setFlashDone((n) => n + 1);
     if (cardIdx + 1 >= cards.length) {
       const exclude = [...shownIds.current].join(",");
-      fetch(`/api/flash?exclude=${exclude}`)
+      fetch(`/api/flash?exclude=${exclude}${deckQ()}`)
         .then((r) => safeJson<{ cards: FlashCard[] }>(r))
         .then((d) => {
           if (d.cards && d.cards.length > 0) {
@@ -1326,6 +1349,37 @@ export default function ReviewPage() {
             </p>
           </div>
         </div>
+        {/* Sumber latihan: Library vs Deck impor. Set harian tetap Library. */}
+        {decks.length > 0 ? (
+          <div className="card space-y-2 p-3">
+            <p className="label">Sumber latihan</p>
+            <div className="flex flex-wrap gap-1.5">
+              <button
+                className={`chip min-h-8 px-2.5 text-[11px] ${deckSel === null ? "chip-active" : ""}`}
+                onClick={() => pickDeck(null)}
+                aria-pressed={deckSel === null}
+              >
+                Library
+              </button>
+              {decks.map((d) => (
+                <button
+                  key={d.id}
+                  className={`chip min-h-8 px-2.5 text-[11px] ${deckSel === d.id ? "chip-active" : ""}`}
+                  onClick={() => pickDeck(deckSel === d.id ? null : d.id)}
+                  aria-pressed={deckSel === d.id}
+                  title={`${d.count} kartu · ${d.lang.toUpperCase()}`}
+                >
+                  {d.name} · {d.count}
+                </button>
+              ))}
+            </div>
+            {deckSel !== null ? (
+              <p className="text-[11px] text-zinc-400">
+                Mode deck: flashcard, kuis, match. Set harian tetap Library.
+              </p>
+            ) : null}
+          </div>
+        ) : null}
         <ModePicker
         periodic={periodic}
         ja={ja}

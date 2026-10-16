@@ -8,6 +8,7 @@ export default [
     index("routes/_index.tsx"),
     route("library", "routes/library.tsx"),
     route("library/:id", "routes/library.$id.tsx"),
+    route("decks", "routes/decks.tsx"),
     route("bank", "routes/bank.tsx"),
     route("review", "routes/review.tsx"),
     route("explore", "routes/explore._index.tsx"),
@@ -51,6 +52,7 @@ export default [
   route("api/chat", "routes/api.chat.ts"),
   route("api/chat/sessions", "routes/api.chat.sessions.ts"),
   route("api/import", "routes/api.import.ts"),
+  route("api/decks", "routes/api.decks.ts"),
   route("api/reading", "routes/api.reading.ts"),
   route("api/settings", "routes/api.settings.ts"),
 ] satisfies RouteConfig;

@@ -1,4 +1,4 @@
-import { and, desc, eq, inArray, notInArray, sql } from "drizzle-orm";
+import { and, desc, eq, inArray, isNull, notInArray, sql } from "drizzle-orm";
 import { db } from "~/lib/db/client.server";
 import { cards, items, quizSets, quizAnswers, wordbank } from "~/lib/db/schema";
 import { env } from "~/lib/env.server";
@@ -149,7 +149,7 @@ export function localDayStr(): string {
     .slice(0, 10);
 }
 
-type BuildOpts = { sources?: ("library" | "bank")[]; bankLevel?: string; scrambleTokens?: boolean; grammarCloze?: boolean; shuffledTypes?: boolean; shufflePool?: boolean; itemIds?: number[]; typeMix?: QuizQuestion["type"][]; recallKnown?: boolean; staged?: boolean };
+type BuildOpts = { sources?: ("library" | "bank")[]; bankLevel?: string; scrambleTokens?: boolean; grammarCloze?: boolean; shuffledTypes?: boolean; shufflePool?: boolean; itemIds?: number[]; typeMix?: QuizQuestion["type"][]; recallKnown?: boolean; staged?: boolean; deckId?: number; lang?: string };
 
 /**
  * Segmentasi kalimat Jepang jadi token per-kata via AI (partikel selalu token
@@ -175,9 +175,12 @@ async function segmentJa(sentence: string): Promise<string[]> {
 /** Kumpulan kandidat: dari Library, dari Bank Kata (status learning), atau keduanya. Ter-scope bahasa aktif. */
 async function collectRows(opts: BuildOpts) {
   const sources = opts.sources ?? ["library", "bank"];
-  const lang = await getTargetLang();
+  const lang = opts.lang ?? (await getTargetLang());
   // Ulas Salah: cuma item library yang ID-nya dikasih (jawaban salah terakhir).
   const idFilter = opts.itemIds && opts.itemIds.length > 0 ? opts.itemIds : null;
+  // Deck scope: deckId terisi = hanya item deck itu; null = library saja
+  // (item deck tak bocor ke antrean library). matcha: deck vs library campur.
+  const deckScope = opts.deckId != null ? eq(items.deckId, opts.deckId) : isNull(items.deckId);
   const lib = sources.includes("library")
     ? await db
         .select({
@@ -194,6 +197,7 @@ async function collectRows(opts: BuildOpts) {
           and(
             eq(items.status, "learning"),
             eq(items.lang, lang),
+            deckScope,
             ...(idFilter ? [inArray(items.id, idFilter)] : []),
           ),
         )
@@ -232,13 +236,14 @@ async function buildQuestions(
 ): Promise<QuizQuestion[]> {
   const allRows = await collectRows(opts);
   if (allRows.length === 0) return [];
+  const lang = opts.lang ?? (await getTargetLang());
+  const deckScope = opts.deckId != null ? eq(items.deckId, opts.deckId) : isNull(items.deckId);
 
   // Recall: selipkan item yang sudah hafal (±15%) di antara materi belajar.
   // Riset: retrieval sesekali atas materi hafal mencegah forgetting curve diam-diam.
   // Kecuali mode salah (fokus penuh ke kesalahan) — dimatikan via recallKnown:false.
   // matcha: pool learning saja = yang hafal tidak pernah dites lagi.
   if (opts.recallKnown !== false) {
-    const lang = await getTargetLang();
     const recallN = Math.min(6, Math.max(2, Math.round(limit * 0.15)));
     const recallRows = await db
       .select({
@@ -251,7 +256,7 @@ async function buildQuestions(
         firstEn: sql<string | null>`(SELECT en FROM examples WHERE item_id = items.id ORDER BY length(en), id LIMIT 1)`,
       })
       .from(items)
-      .where(and(eq(items.status, "known"), eq(items.lang, lang)))
+      .where(and(eq(items.status, "known"), eq(items.lang, lang), deckScope))
       .orderBy(sql`RANDOM()`)
       .limit(recallN);
     const knownIds = new Set(allRows.map((r) => r.id));
@@ -309,7 +314,6 @@ async function buildQuestions(
     : (opts.typeMix ?? ["mcq_en_id", "mcq_id_en", "cloze", "listen"]);
   // Campur = urutan tipe diacak per set (daily/intens rapi bergiliran).
   const types = opts.shuffledTypes ? shuffle(baseTypes) : baseTypes;
-  const lang = await getTargetLang();
 
   // Ketik/Susun Kata: jawaban berupa kalimat panjang (mis. kalimat hasil
   // translate yang tersimpan sebagai item) tidak layak jadi soal — chip/input
@@ -931,11 +935,17 @@ export async function getStreak(): Promise<{ days: number; todayDone: boolean }>
  * exclude: itemId yang sudah tampil sesi ini — biar putaran berikutnya beda
  * kartu + kartu baru otomatis masuk. Kalau filter menghabiskan semua, fallback
  * ke antrean penuh (panggil ulang tanpa exclude di sisi server). */
-export async function getFlashQueue(limit = 30, exclude: number[] = []) {
+export async function getFlashQueue(
+  limit = 30,
+  exclude: number[] = [],
+  opts: { deckId?: number; lang?: string } = {},
+) {
   const today = localDayStr();
   const dayStart = new Date(today + "T00:00:00+07:00").getTime();
   const dayEnd = dayStart + 86_400_000;
-  const lang = await getTargetLang();
+  const lang = opts.lang ?? (await getTargetLang());
+  // Deck scope: deckId = hanya item deck itu; default = library saja.
+  const deckScope = opts.deckId != null ? eq(items.deckId, opts.deckId) : isNull(items.deckId);
   // Contoh TERPENDEK + terjemahannya (pasangan) — contoh panjang melelahkan
   // tampil di kartu/soal. matcha: contoh ledger 10 kata selalu tampil pertama.
   const firstEn = sql<string | null>`(SELECT en FROM examples WHERE item_id = items.id ORDER BY length(en), id LIMIT 1)`;
@@ -970,7 +980,7 @@ export async function getFlashQueue(limit = 30, exclude: number[] = []) {
     })
     .from(cards)
     .innerJoin(items, eq(items.id, cards.itemId))
-    .where(and(eq(items.status, "learning"), eq(items.lang, lang), sql`${cards.due} < ${Date.now()}`, ...notShown))
+    .where(and(eq(items.status, "learning"), eq(items.lang, lang), deckScope, sql`${cards.due} < ${Date.now()}`, ...notShown))
     .orderBy(cards.due)
     .limit(limit);
   const newRows = await db
@@ -989,11 +999,11 @@ export async function getFlashQueue(limit = 30, exclude: number[] = []) {
     })
     .from(cards)
     .innerJoin(items, eq(items.id, cards.itemId))
-    .where(and(eq(items.status, "learning"), eq(items.lang, lang), sql`${cards.due} >= ${dayStart}`, sql`${cards.due} < ${dayEnd}`, eq(cards.reps, 0), ...notShown))
+    .where(and(eq(items.status, "learning"), eq(items.lang, lang), deckScope, sql`${cards.due} >= ${dayStart}`, sql`${cards.due} < ${dayEnd}`, eq(cards.reps, 0), ...notShown))
     .limit(Math.max(0, limit - dueRows.length));
   const queue = [...dueRows, ...newRows];
   // Exclude menghabiskan semua (mis. kartu sedikit) → fallback antrean penuh.
-  if (queue.length === 0 && exclude.length > 0) return getFlashQueue(limit, []);
+  if (queue.length === 0 && exclude.length > 0) return getFlashQueue(limit, [], opts);
   // Active recall: campur kartu due/baru (acak, bukan urut due) + selipkan
   // kartu yang sudah hafal (±20%, maks 6) biar retrieval tidak cuma yang susah.
   // matcha: antrean deterministik + cuma status learning = bosan & forgetting curve diam-diam.
@@ -1015,7 +1025,7 @@ export async function getFlashQueue(limit = 30, exclude: number[] = []) {
       })
       .from(cards)
       .innerJoin(items, eq(items.id, cards.itemId))
-      .where(and(eq(items.status, "known"), eq(items.lang, lang)))
+      .where(and(eq(items.status, "known"), eq(items.lang, lang), deckScope))
       .orderBy(sql`RANDOM()`)
       .limit(recallN);
     const seen = new Set(queue.map((c) => c.itemId));
@@ -1195,12 +1205,18 @@ export async function periodicStatus() {
 /** Ronde minigame Match: 5 ronde × 4 pasangan kata-arti dari kosakata yang dipelajari. */
 export type MatchPair = { itemId: number; word: string; meaning: string };
 
-export async function getMatchRounds(rounds = 5, perRound = 4): Promise<MatchPair[][]> {
+export async function getMatchRounds(
+  rounds = 5,
+  perRound = 4,
+  opts: { deckId?: number; lang?: string } = {},
+): Promise<MatchPair[][]> {
+  const lang = opts.lang ?? (await getTargetLang());
+  const deckScope = opts.deckId != null ? eq(items.deckId, opts.deckId) : isNull(items.deckId);
   const rows = (
     await db
       .select({ id: items.id, text: items.text, meaningId: items.meaningId })
       .from(items)
-      .where(and(eq(items.status, "learning"), eq(items.lang, await getTargetLang()), sql`${items.meaningId} IS NOT NULL`))
+      .where(and(eq(items.status, "learning"), eq(items.lang, lang), deckScope, sql`${items.meaningId} IS NOT NULL`))
       .limit(200)
   ).map((r) => ({ itemId: r.id, word: r.text, meaning: r.meaningId! }));
   if (rows.length < perRound) return [];

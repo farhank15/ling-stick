@@ -301,6 +301,22 @@ const TOLERANT_MIGRATIONS: string[] = [
   `ALTER TABLE explore_items ADD COLUMN reading TEXT`,
   // Furigana contoh simpanan (JA): kana penuh per kalimat contoh.
   `ALTER TABLE examples ADD COLUMN kana TEXT`,
+  // Decks impor: deck pemilik + kolom ekstra + flag butuh arti ID.
+  `CREATE TABLE IF NOT EXISTS decks (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    name TEXT NOT NULL,
+    lang TEXT NOT NULL DEFAULT 'ja',
+    level TEXT,
+    source TEXT,
+    license TEXT,
+    count INTEGER NOT NULL DEFAULT 0,
+    skipped INTEGER NOT NULL DEFAULT 0,
+    created_at INTEGER NOT NULL
+  )`,
+  `ALTER TABLE items ADD COLUMN deck_id INTEGER`,
+  `ALTER TABLE items ADD COLUMN extra_json TEXT`,
+  `ALTER TABLE items ADD COLUMN needs_id INTEGER NOT NULL DEFAULT 0`,
+  `CREATE INDEX IF NOT EXISTS items_deck_idx ON items(deck_id)`,
 ];
 
 /** Seed awal Bank Kata — jalan sekali (skip kalau bank sudah berisi). */

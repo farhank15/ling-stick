@@ -10,7 +10,19 @@ import { getMatchRounds } from "~/lib/quiz.server";
  */
 export async function loader({ request }: LoaderFunctionArgs) {
   await requireUser(request);
-  const rounds = await getMatchRounds(5, 4);
+  const url = new URL(request.url);
+  const deckIdParam = Number(url.searchParams.get("deckId"));
+  let deckId: number | undefined;
+  let lang: string | undefined;
+  if (Number.isInteger(deckIdParam) && deckIdParam > 0) {
+    const { getDeck } = await import("~/lib/decks.server");
+    const deck = await getDeck(deckIdParam);
+    if (deck) {
+      deckId = deck.id;
+      lang = deck.lang;
+    }
+  }
+  const rounds = await getMatchRounds(5, 4, { deckId, lang });
   return Response.json({ rounds });
 }
 

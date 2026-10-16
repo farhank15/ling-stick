@@ -14,6 +14,7 @@ import {
   Compass,
   House,
   Languages,
+  Layers,
   Library,
   MessageCircle,
   Repeat,
@@ -33,6 +34,7 @@ export async function loader({ request }: LoaderFunctionArgs) {
 const NAV: { to: string; label: string; icon: LucideIcon }[] = [
   { to: "/", label: "Home", icon: House },
   { to: "/library", label: "Library", icon: Library },
+  { to: "/decks", label: "Decks", icon: Layers },
   { to: "/bank", label: "Bank", icon: BookMarked },
   { to: "/chat", label: "Chat", icon: MessageCircle },
   { to: "/review", label: "Review", icon: Repeat },
