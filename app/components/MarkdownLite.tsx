@@ -66,10 +66,12 @@ function jaNodes(text: string, keyPrefix: string): ReactNode[] {
   return out;
 }
 
-/** Parse inline markdown (bold/italic/code) jadi ReactNode[] — aman, tanpa HTML injection. */
+/** Parse inline markdown (bold/italic/code/stabilo) jadi ReactNode[] — aman, tanpa HTML injection.
+ *  Stabilo `==teks==` = sorot amber untuk MAKSIMAL 1 frasa kunci per blok (von Restorff:
+ *  1 isolate per layar; Dunlosky: highlight massal ≈ tak berguna). */
 function inline(text: string, keyPrefix: string): ReactNode[] {
   const out: ReactNode[] = [];
-  const re = /(\*\*([^*]+)\*\*)|(\*([^*]+)\*)|(`([^`]+)`)/g;
+  const re = /(==([^=]+)==)|(\*\*([^*]+)\*\*)|(\*([^*]+)\*)|(`([^`]+)`)/g;
   let last = 0;
   let m: RegExpExecArray | null;
   let i = 0;
@@ -77,23 +79,32 @@ function inline(text: string, keyPrefix: string): ReactNode[] {
     if (m.index > last) out.push(...jaNodes(text.slice(last, m.index), `${keyPrefix}-t${i}`));
     if (m[2] !== undefined) {
       out.push(
-        <strong key={`${keyPrefix}-${i++}`} className="font-semibold text-zinc-900 dark:text-zinc-100">
-          {jaNodes(m[2], `${keyPrefix}-b${i}`)}
-        </strong>,
+        <mark
+          key={`${keyPrefix}-${i++}`}
+          className="rounded-sm bg-amber-200/80 px-0.5 font-semibold text-zinc-900 dark:bg-amber-400/25 dark:text-amber-100"
+        >
+          {jaNodes(m[2], `${keyPrefix}-h${i}`)}
+        </mark>,
       );
     } else if (m[4] !== undefined) {
       out.push(
-        <em key={`${keyPrefix}-${i++}`} className="italic text-zinc-600 dark:text-zinc-400">
-          {jaNodes(m[4], `${keyPrefix}-e${i}`)}
-        </em>,
+        <strong key={`${keyPrefix}-${i++}`} className="font-semibold text-zinc-900 dark:text-zinc-100">
+          {jaNodes(m[4], `${keyPrefix}-b${i}`)}
+        </strong>,
       );
     } else if (m[6] !== undefined) {
+      out.push(
+        <em key={`${keyPrefix}-${i++}`} className="italic text-zinc-600 dark:text-zinc-400">
+          {jaNodes(m[6], `${keyPrefix}-e${i}`)}
+        </em>,
+      );
+    } else if (m[8] !== undefined) {
       out.push(
         <code
           key={`${keyPrefix}-${i++}`}
           className="rounded bg-zinc-100 px-1 py-0.5 text-[13px] dark:bg-zinc-800"
         >
-          {m[6]}
+          {m[8]}
         </code>,
       );
     }
@@ -106,6 +117,7 @@ function inline(text: string, keyPrefix: string): ReactNode[] {
 /**
  * Markdown mini untuk bubble chat Ling.
  * Support: "### heading", "- " / "* " bullet, "1. " / "2) " numbered, **bold**, *italic*, `code`,
+ * ==stabilo== (maks 1 frasa kunci per blok),
  * plus pola Jepang 漢字（かな）/ 漢字（かな・romaji) → JaText (kanji hijau + furigana + toggle romaji).
  * Struktur dibangun sebagai elemen React (bukan HTML string) → aman & styling konsisten.
  */

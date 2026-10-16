@@ -3,6 +3,12 @@
 #   npm run route:validate
 # Aturan: explanation_id min 20 char; examples 3-8 (jp+kana+arti_id wajib);
 # cloze_items 5-12 (distractors 2-4, sekelas kata; answer TIDAK boleh di distractors).
+# FORMAT OTAK (riset: Dunlosky, von Restorff, Mayer, Cowan):
+# - explanation_id: 2-4 kalimat pendek (≤20 kata/kalimat). Token JP otomatis
+#   teal+besar; **bold** = maks 1-2 frasa struktur; ==stabilo== = MAKS 1 frasa
+#   kunci per step (kalimat inti yang kalau diingat = paham pola).
+# - JANGAN CAPS, JANGAN >2 warna, JANGAN >3 poin baru per section.
+# - objectives: maks 3. pitfalls: 1-3, tiap butir 1 ide + contoh mini.
 step_id: ja-n5-001
 level: N5
 segment: 1
@@ -12,7 +18,7 @@ pattern: "V-て + ください"
 objectives:
   - "Tujuan 1"
   - "Tujuan 2"
-explanation_id: "Penjelasan singkat Bahasa Indonesia (min 20 karakter)."
+explanation_id: "Penjelasan singkat Bahasa Indonesia (min 20 karakter). Sorot ==satu frasa kunci== saja."
 formation: "Aturan bentuk (markdown singkat)."
 register_note_id: "ください = sopan (ke siapa pun aman). Bentuk て polos = ke teman dekat saja."
 examples:

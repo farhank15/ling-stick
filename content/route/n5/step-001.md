@@ -8,7 +8,7 @@ pattern: "は vs が"
 objectives:
   - "Bedakan fungsi は (topik) dan が (subjek/fokus)"
   - "Memakai は・が dengan benar di kalimat dasar"
-explanation_id: "は menandai **topik** pembicaraan (tentang apa kita bicara), dibaca わ. が menandai **subjek** pelakunya, dipakai untuk info baru, kata tanya, dan penekanan. Pola dasar: XはYです (X itu Y) vs Xがすきです (suka X — X = fokus)."
+explanation_id: "は menandai **topik** pembicaraan (tentang apa kita bicara), dibaca わ. が menandai **subjek** pelakunya, dipakai untuk info baru, kata tanya, dan penekanan. Pola dasar: XはYです (X itu Y) vs Xがすきです (suka X — X = fokus). Kuncinya: ==は topik, が pelaku==."
 formation: "X は Y です。| X が すきです。/ だれが X ですか。"
 register_note_id: "です/ます aman ke siapa pun; bentuk plain (だ) untuk teman dekat — dan fondasi semua konjugasi."
 examples:

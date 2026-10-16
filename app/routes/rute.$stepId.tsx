@@ -197,7 +197,7 @@ export default function RuteStep() {
         {step.formation ? (
           <div>
             <p className="label mb-1">Rumus</p>
-            <p className="rounded-xl bg-zinc-900 px-3 py-2.5 font-mono text-[13px] leading-relaxed text-teal-200 dark:bg-black/60">{step.formation}</p>
+            <p className="rounded-xl border border-teal-600/25 bg-teal-50 px-3 py-2.5 font-mono text-[13px] font-semibold leading-relaxed text-teal-900 dark:border-teal-500/25 dark:bg-teal-950/50 dark:text-teal-100">{step.formation}</p>
           </div>
         ) : null}
       </div>
