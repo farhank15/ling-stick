@@ -75,8 +75,10 @@ export async function loader({ request }: LoaderFunctionArgs) {
           const deckIdParam = Number(url.searchParams.get("deckId"));
           if (Number.isInteger(deckIdParam) && deckIdParam > 0) {
             const { getDeck } = await import("~/lib/decks.server");
+            const { getTargetLang } = await import("~/lib/lang.server");
             const deck = await getDeck(deckIdParam);
-            if (deck) {
+            // Deck beda bahasa dari mode aktif ditolak — anti bocor antar bahasa.
+            if (deck && deck.lang === (await getTargetLang())) {
               return getSetForDay(mode, `deck:${deck.id}:${localDayStr()}`, envLimit(mode), {
                 bankLevel: level,
                 deckId: deck.id,

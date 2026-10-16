@@ -23,8 +23,12 @@ export type DeckRow = {
   createdAt: number;
 };
 
-export async function listDecks(): Promise<DeckRow[]> {
-  const rows = await db.select().from(decks).orderBy(decks.createdAt);
+export async function listDecks(lang?: string): Promise<DeckRow[]> {
+  const rows = await db
+    .select()
+    .from(decks)
+    .where(lang ? eq(decks.lang, lang) : undefined)
+    .orderBy(decks.createdAt);
   return rows.map((d) => ({
     id: d.id,
     name: d.name,

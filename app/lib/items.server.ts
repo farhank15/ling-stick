@@ -1,4 +1,4 @@
-import { and, desc, eq, gte, inArray, lte, sql } from "drizzle-orm";
+import { and, desc, eq, gte, inArray, isNull, lte, sql } from "drizzle-orm";
 import type { SQLWrapper } from "drizzle-orm";
 import { db } from "./db/client.server";
 import {
@@ -246,6 +246,7 @@ export async function listItems(filters: LibraryFilters): Promise<LibraryRow[]> 
         JOIN items_fts f ON i.id = f.rowid
         WHERE items_fts MATCH ${ftsQuery}
           AND i.lang = ${lang}
+          AND i.deck_id IS NULL
           AND i.status = ${filters.status === "all" ? sql`i.status` : (filters.status || "learning")}
           ${filters.type ? sql`AND i.type = ${filters.type}` : sql``}
           ${filters.register ? sql`AND i.register = ${filters.register}` : sql``}
@@ -285,6 +286,7 @@ export async function listItems(filters: LibraryFilters): Promise<LibraryRow[]> 
     FROM items i
     WHERE ${statusCond}
       AND i.lang = ${lang}
+      AND i.deck_id IS NULL
       ${filters.type ? sql`AND i.type = ${filters.type}` : sql``}
       ${filters.register ? sql`AND i.register = ${filters.register}` : sql``}
       ${filters.dateFrom ? sql`AND i.created_at >= ${filters.dateFrom}` : sql``}
@@ -310,7 +312,7 @@ export async function getFacetCounts(status?: string): Promise<{
   byType: Record<string, number>;
   byRegister: Record<string, number>;
 }> {
-  const conds: SQLWrapper[] = [eq(items.lang, await getTargetLang())];
+  const conds: SQLWrapper[] = [eq(items.lang, await getTargetLang()), isNull(items.deckId)];
   if (status === "all") conds.push(sql`${items.status} IN ('learning', 'known')`);
   else if (status) conds.push(eq(items.status, status));
   else conds.push(eq(items.status, "learning"));
@@ -460,7 +462,7 @@ export async function getReviewQueue(): Promise<{
     })
     .from(cards)
     .innerJoin(items, eq(items.id, cards.itemId))
-    .where(and(lte(cards.due, tomorrow - 1), eq(items.status, "learning"), eq(items.lang, lang), sql`${cards.reps} > 0`))
+    .where(and(lte(cards.due, tomorrow - 1), eq(items.status, "learning"), eq(items.lang, lang), isNull(items.deckId), sql`${cards.reps} > 0`))
     .orderBy(cards.due)
     .limit(200);
 
@@ -476,7 +478,7 @@ export async function getReviewQueue(): Promise<{
     })
     .from(cards)
     .innerJoin(items, eq(items.id, cards.itemId))
-    .where(and(gte(cards.due, today), lte(cards.due, tomorrow - 1), sql`${cards.reps} = 0`, eq(items.status, "learning"), eq(items.lang, lang)))
+    .where(and(gte(cards.due, today), lte(cards.due, tomorrow - 1), sql`${cards.reps} = 0`, eq(items.status, "learning"), eq(items.lang, lang), isNull(items.deckId)))
     .orderBy(items.createdAt)
     .limit(newPerDay);
 

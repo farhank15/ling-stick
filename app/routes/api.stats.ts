@@ -1,5 +1,5 @@
 import type { LoaderFunctionArgs } from "react-router";
-import { and, desc, eq, gte, sql } from "drizzle-orm";
+import { and, desc, eq, gte, isNull, sql } from "drizzle-orm";
 import { requireUser } from "~/lib/auth.server";
 import { db } from "~/lib/db/client.server";
 import { items, llmUsage, quizSets } from "~/lib/db/schema";
@@ -29,7 +29,7 @@ export async function loader({ request }: LoaderFunctionArgs) {
     db
       .select({ status: items.status, total: sql<number>`count(*)` })
       .from(items)
-      .where(eq(items.lang, lang))
+      .where(and(eq(items.lang, lang), isNull(items.deckId)))
       .groupBy(items.status),
     db
       .select({
@@ -37,7 +37,7 @@ export async function loader({ request }: LoaderFunctionArgs) {
         total: sql<number>`count(*)`,
       })
       .from(items)
-      .where(and(gte(items.createdAt, since), eq(items.lang, lang)))
+      .where(and(gte(items.createdAt, since), eq(items.lang, lang), isNull(items.deckId)))
       .groupBy(sql`1`),
     db.select().from(llmUsage).orderBy(desc(llmUsage.day)).limit(7),
     db
@@ -56,7 +56,7 @@ export async function loader({ request }: LoaderFunctionArgs) {
     db
       .select({ total: sql<number>`count(*)` })
       .from(items)
-      .where(and(eq(items.status, "known"), eq(items.lang, lang))),
+      .where(and(eq(items.status, "known"), eq(items.lang, lang), isNull(items.deckId))),
   ]);
 
   const byStatus = Object.fromEntries(statusRows.map((r) => [r.status, Number(r.total)]));

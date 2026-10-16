@@ -624,7 +624,9 @@ async function recentWrongItemIds(limit = 60): Promise<number[]> {
     .select({ itemId: quizAnswers.itemId })
     .from(quizAnswers)
     .innerJoin(quizSets, eq(quizSets.id, quizAnswers.setId))
-    .where(and(eq(quizAnswers.correct, 0), eq(quizSets.lang, lang), sql`${quizAnswers.answeredAt} >= ${cutoff}`))
+    // Set deck (day `deck:*`) dikecualikan — salah deck dilatih di mode deck.
+    // matcha: salah deck bocor ke ulas-salah library.
+    .where(and(eq(quizAnswers.correct, 0), eq(quizSets.lang, lang), sql`${quizAnswers.answeredAt} >= ${cutoff}`, sql`${quizSets.day} NOT LIKE 'deck:%'`))
     .limit(400);
   const freq = new Map<number, number>();
   for (const r of rows) freq.set(r.itemId, (freq.get(r.itemId) ?? 0) + 1);

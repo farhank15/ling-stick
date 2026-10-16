@@ -7,7 +7,9 @@ import { Layers, Trash2, Upload } from "lucide-react";
 
 export async function loader({ request }: { request: Request }) {
   await requireUser(request);
-  const decks = await listDecks();
+  const { getTargetLang } = await import("~/lib/lang.server");
+  const lang = await getTargetLang();
+  const decks = await listDecks(lang);
   const needs = await Promise.all(decks.map((d) => deckNeedsId(d.id)));
   return { decks: decks.map((d, i) => ({ ...d, needsId: needs[i] ?? 0 })) };
 }
@@ -85,7 +87,7 @@ export default function DecksPage() {
       <div>
         <h1 className="text-lg font-bold">Decks</h1>
         <p className="text-xs text-zinc-500">
-          Koleksi impor (TSV/CSV) — terpisah dari Library. File milikmu = tanggung jawabmu (pakai deck berlisensi terbuka).
+          Koleksi impor (TSV/CSV) — terpisah dari Library, ikut bahasa aktif. File milikmu = tanggung jawabmu (pakai deck berlisensi terbuka).
         </p>
       </div>
 

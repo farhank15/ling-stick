@@ -16,8 +16,10 @@ export async function loader({ request }: LoaderFunctionArgs) {
   let lang: string | undefined;
   if (Number.isInteger(deckIdParam) && deckIdParam > 0) {
     const { getDeck } = await import("~/lib/decks.server");
+    const { getTargetLang } = await import("~/lib/lang.server");
     const deck = await getDeck(deckIdParam);
-    if (deck) {
+    // Deck beda bahasa dari mode aktif ditolak — anti bocor antar bahasa.
+    if (deck && deck.lang === (await getTargetLang())) {
       deckId = deck.id;
       lang = deck.lang;
     }

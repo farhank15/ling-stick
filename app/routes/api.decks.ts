@@ -10,7 +10,8 @@ import { deleteDeck, importDeck, listDecks, type ImportRow } from "~/lib/decks.s
  */
 export async function loader({ request }: LoaderFunctionArgs) {
   await requireUser(request);
-  return Response.json({ decks: await listDecks() });
+  const { getTargetLang } = await import("~/lib/lang.server");
+  return Response.json({ decks: await listDecks(await getTargetLang()) });
 }
 
 export async function action({ request }: ActionFunctionArgs) {
