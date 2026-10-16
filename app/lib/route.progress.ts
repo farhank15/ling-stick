@@ -5,6 +5,10 @@ import { getTargetLang } from "~/lib/lang.server";
 import { loadAllSteps } from "./route.server";
 import type { RouteStep } from "./route.schema";
 import type { QuizQuestion } from "./quiz.server";
+import optionKana from "../../data/route-option-kana.json";
+
+/** Kana per opsi jawaban (dari data/route-option-kana.json) — furigana opsi. */
+const OPTION_KANA: Record<string, string> = optionKana as Record<string, string>;
 
 /**
  * Progres + unlock Rute JA di atas quiz_sets (tanpa migrasi).
@@ -47,6 +51,8 @@ export function stepToQuestions(step: RouteStep): QuizQuestion[] {
     const opts = shuffle([c.answer, ...c.distractors]);
     // Bacaan kalimat penuh → furigana + toggle romaji di soal (format JaText).
     const reading = c.kana ? (c.romaji ? `${c.kana} (${c.romaji})` : c.kana) : null;
+    // Furigana tiap opsi (format kana saja — toggle romaji mati di opsi).
+    const optionReadings = opts.map((o) => OPTION_KANA[o] ?? null);
     return {
       itemId: 0,
       type: "cloze" as const,
@@ -56,6 +62,7 @@ export function stepToQuestions(step: RouteStep): QuizQuestion[] {
       meaningId: c.explain_id || step.title_id,
       exampleEn: c.kana_hint ? `(${c.kana_hint})` : null,
       reading,
+      optionReadings,
     };
   });
 }
