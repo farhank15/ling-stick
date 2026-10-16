@@ -17,7 +17,7 @@ examples:
   - { jp: "あれは富士山です。", kana: "あれはふじさんです。", romaji: "are wa fujisan desu.", arti_id: "Itu (di sana) Gunung Fuji.", pola_ref: "あれ" }
   - { jp: "これ俺の。", kana: "これおれの。", romaji: "kore ore no.", arti_id: "Ini punya gue. [kasual]", pola_ref: "これ", register: "kasual" }
 pitfalls_id:
-  - "それ vs あれ: kalau benda jauh dari KEDUANYA → あれ, bukan それ."
+  - "それ vs あれ: kalau benda jauh dari **keduanya** → あれ, bukan それ."
   - "この vs これ: この本 (buku ini) vs これは本です (ini adalah buku) — この selalu diikuti nomina."
 cloze_items:
   - { front: "___ は私の傘です。(di tanganku)", answer: "これ", distractors: ["それ", "あれ", "どれ"], kana_hint: "", explain_id: "Dekat pembicara → これ." }

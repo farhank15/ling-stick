@@ -9,6 +9,36 @@ import { JaText, hasJa } from "./JaText";
  */
 const JA_RE = /([^\s*`_()（）[\]]+?)[(（]([\u3040-\u30ffー]+)(?:[・,]\s*([a-zāīūēōâîûêô ]+))?[)）]/g;
 
+/** Bungkus run kana/kanji telanjang (di luar pola 漢字（かな）) dengan treatment
+ *  konsisten: teal + semibold + sedikit lebih besar dari Latin sekitarnya.
+ *  Riset: glif CJK mengisi em-square penuh sementara Latin menyisakan ruang
+ *  ascender/descender → kana seukuran teks terlihat kecil & tenggelam.
+ *  matcha: は/が/わ sewarna-seukuran teks Indonesia = susah scan. */
+const BARE_JP_RE = /([\u3040-\u30ff\u4e00-\u9fafー々]+)/g;
+
+function bareJp(text: string, keyPrefix: string): ReactNode[] {
+  if (!hasJa(text)) return [text];
+  const out: ReactNode[] = [];
+  let last = 0;
+  let m: RegExpExecArray | null;
+  let i = 0;
+  BARE_JP_RE.lastIndex = 0;
+  while ((m = BARE_JP_RE.exec(text)) !== null) {
+    if (m.index > last) out.push(text.slice(last, m.index));
+    out.push(
+      <span
+        key={`${keyPrefix}-j${i++}`}
+        className="jp-token font-semibold text-teal-700 dark:text-teal-300"
+      >
+        {m[1]}
+      </span>,
+    );
+    last = m.index + m[0].length;
+  }
+  if (last < text.length) out.push(text.slice(last));
+  return out;
+}
+
 function jaNodes(text: string, keyPrefix: string): ReactNode[] {
   if (!hasJa(text)) return [text];
   const out: ReactNode[] = [];
@@ -17,7 +47,7 @@ function jaNodes(text: string, keyPrefix: string): ReactNode[] {
   let i = 0;
   JA_RE.lastIndex = 0;
   while ((m = JA_RE.exec(text)) !== null) {
-    if (m.index > last) out.push(text.slice(last, m.index));
+    if (m.index > last) out.push(...bareJp(text.slice(last, m.index), `${keyPrefix}-t${i}`));
     const word = m[1]!;
     const kana = m[2]!;
     const romaji = (m[3] ?? "").trim();
@@ -32,7 +62,7 @@ function jaNodes(text: string, keyPrefix: string): ReactNode[] {
     );
     last = m.index + m[0].length;
   }
-  if (last < text.length) out.push(text.slice(last));
+  if (last < text.length) out.push(...bareJp(text.slice(last), `${keyPrefix}-t${i}`));
   return out;
 }
 
@@ -79,7 +109,7 @@ function inline(text: string, keyPrefix: string): ReactNode[] {
  * plus pola Jepang 漢字（かな）/ 漢字（かな・romaji) → JaText (kanji hijau + furigana + toggle romaji).
  * Struktur dibangun sebagai elemen React (bukan HTML string) → aman & styling konsisten.
  */
-export function MarkdownLite({ text }: { text: string }) {
+export function MarkdownLite({ text, className }: { text: string; className?: string }) {
   const lines = text.split(/\r?\n/);
   const blocks: ReactNode[] = [];
   let list: { ordered: boolean; items: string[] } | null = null;
@@ -154,5 +184,5 @@ export function MarkdownLite({ text }: { text: string }) {
   });
   flushList("tail");
 
-  return <div className="space-y-0.5 text-sm leading-relaxed">{blocks}</div>;
+  return <div className={`space-y-0.5 text-sm leading-relaxed ${className ?? ""}`}>{blocks}</div>;
 }

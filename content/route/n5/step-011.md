@@ -8,7 +8,7 @@ pattern: "V-て、V"
 objectives:
   - "Menyambung dua aksi berurutan dengan て"
   - "Memakai ています (sedang berlangsung)"
-explanation_id: "Bentuk Te menyambung aksi berurutan: 朝ごはんを食べて、学校に行きます (sarapan DULU lalu berangkat). V-ています = sedang berlangsung (テレビを見ています) atau keadaan hasil (結婚しています = sudah menikah). Negatif sambung: なくて (食べなくて)."
+explanation_id: "Bentuk Te menyambung aksi berurutan: 朝ごはんを食べて、学校に行きます (sarapan **dulu** lalu berangkat). V-ています = sedang berlangsung (テレビを見ています) atau keadaan hasil (結婚しています = sudah menikah). Negatif sambung: なくて (食べなくて)."
 formation: "V-て、V (urutan) | V-ています (progres/hasil) | V-なくて (negatif sambung)"
 register_note_id: "ています netral — dipakai formal dan kasual (bedanya akhiran: います vs いる)."
 examples:

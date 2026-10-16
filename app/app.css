@@ -174,4 +174,11 @@ body {
   .label {
     @apply text-xs font-medium uppercase tracking-wide text-zinc-500 dark:text-zinc-500;
   }
+  /* Token Jepang telanjang di teks Latin — sedikit lebih besar (glif CJK padat)
+   * + line-height lega biar furigana/kanji tak bertumpuk. Riset: LH CJK ≈ 1.7. */
+  .jp-token {
+    font-size: 1.1em;
+    line-height: 1.7;
+    letter-spacing: 0.01em;
+  }
 }

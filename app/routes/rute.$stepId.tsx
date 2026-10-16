@@ -193,9 +193,7 @@ export default function RuteStep() {
 
       <div className="card space-y-2.5 p-4">
         <SecHead n="02">Penjelasan</SecHead>
-        <div className="text-[15px] leading-relaxed text-zinc-700 dark:text-zinc-200">
-          <MarkdownLite text={step.explanation_id} />
-        </div>
+        <MarkdownLite text={step.explanation_id} className="text-[15px] leading-loose" />
         {step.formation ? (
           <div>
             <p className="label mb-1">Rumus</p>

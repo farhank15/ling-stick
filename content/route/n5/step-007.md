@@ -8,7 +8,7 @@ pattern: "を (objek)・に/へ (tujuan)"
 objectives:
   - "Menandai objek dengan を"
   - "Menandai tujuan/arah dengan に・へ + 行きます"
-explanation_id: "を menandai OBJEK aksi (ごはんを食べる). に menandai TUJUAN tiba / WAKTU (学校に行く, 3時に). へ = に versi arah (ditulis へ dibaca え), nuansa arah perjalanan. Pola inti: 場所に/へ行きます・来ます・帰ります."
+explanation_id: "を menandai **objek** aksi (ごはんを食べる). に menandai **tujuan** tiba / **waktu** (学校に行く, 3時に). へ = に versi arah (ditulis へ dibaca え), nuansa arah perjalanan. Pola inti: 場所に/へ行きます・来ます・帰ります."
 formation: "N を V | 場所に/へ 行く・来る・帰る | 時間に V"
 register_note_id: "Partikel sama di semua register; versi kasual cukup ganti akhiran (行きます→行く)."
 examples:
@@ -19,7 +19,7 @@ examples:
 pitfalls_id:
   - "へ dibaca え sebagai partikel."
   - "を tidak dipakai untuk tujuan (×学校をいきます)."
-  - "に waktu: jam/hari tertentu pakai に, tapi 今日・明日・毎日 TANPA に."
+  - "に waktu: jam/hari tertentu pakai に, tapi 今日・明日・毎日 **tanpa** に."
 cloze_items:
   - { front: "ごはん ___ 食べます。", answer: "を", distractors: ["に", "へ", "が"], kana_hint: "", explain_id: "Objek aksi → を." }
   - { front: "東京 ___ 行きます。", answer: "に", distractors: ["を", "が", "で"], kana_hint: "", explain_id: "Tujuan tiba → に (へ juga benar, tapi opsi ini に)." }

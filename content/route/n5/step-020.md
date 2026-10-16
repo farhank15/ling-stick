@@ -8,7 +8,7 @@ pattern: "昨日・今日・明日 + 時間"
 objectives:
   - "Kosakata waktu relatif dan absolut"
   - "Kalimat lampau/kini/depan dengan penanda waktu"
-explanation_id: "Relatif: 昨日 (kemarin)・今日 (hari ini)・明日 (besok), 先週・今週・来週, 去年・今年・来年. Absolut: 月曜日・3月・2024年. Aturan に: jam/hari/tanggal/bulan spesifik pakai に (3時に, 月曜日に) — tapi 今日・明日・毎日・先週 TANPA に. Lampau kasual/sopan ikuti V-た/V-ました."
+explanation_id: "Relatif: 昨日 (kemarin)・今日 (hari ini)・明日 (besok), 先週・今週・来週, 去年・今年・来年. Absolut: 月曜日・3月・2024年. Aturan に: jam/hari/tanggal/bulan spesifik pakai に (3時に, 月曜日に) — tapi 今日・明日・毎日・先週 **tanpa** に. Lampau kasual/sopan ikuti V-た/V-ました."
 formation: "昨日/今日/明日 (tanpa に) | N時・N曜日・N月 + に | V-た/V-ました (lampau)"
 register_note_id: "Penanda waktu netral; beda register di akhir kalimat (見ました vs 見た)."
 examples:

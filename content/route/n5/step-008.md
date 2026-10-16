@@ -8,7 +8,7 @@ pattern: "で (tempat/alat)・と (bersama)・も (juga)"
 objectives:
   - "Menandai tempat aksi dan alat dengan で"
   - "Menyatakan bersama (と) dan juga (も)"
-explanation_id: "で = TEMPAT aksi terjadi (学校で勉強する) atau ALAT (バスで行く, はしで食べる). と = BERSAMA (友達と行く) atau kutipan (と言う). も = JUGA — menggantikan は/が/を (わたしも学生です). Beda に vs で: に = titik tiba/keberadaan, で = tempat aksi."
+explanation_id: "で = **tempat** aksi terjadi (学校で勉強する) atau **alat** (バスで行く, はしで食べる). と = **bersama** (友達と行く) atau kutipan (と言う). も = **juga** — menggantikan は/が/を (わたしも学生です). Beda に vs で: に = titik tiba/keberadaan, で = tempat aksi."
 formation: "場所でV (aksi) | 道具でV | NとV (bersama) | Nも (juga)"
 register_note_id: "Partikel sama di semua register; kasual sering drop partikel (友達と→友達と tetap, を yang hilang)."
 examples:
