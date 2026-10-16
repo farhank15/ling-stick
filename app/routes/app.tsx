@@ -370,10 +370,9 @@ export default function AppLayout() {
       </main>
 
       {/* Floating bottom nav — bar melayang rounded + pill di item aktif */}
-      <nav className="fixed inset-x-0 bottom-0 z-30 px-4 pb-[calc(env(safe-area-inset-bottom)+12px)]">
-        {/* Floating bottom nav — tetap di bawah (HP & laptop), melebar di layar besar.
-            matcha: bukan sidebar monoton — dock melayang yang responsif. */}
-        <div className="mx-auto grid w-full max-w-md grid-cols-6 gap-1 rounded-2xl border border-zinc-200/80 bg-white/90 p-1.5 shadow-lg shadow-zinc-900/5 backdrop-blur-md md:max-w-xl dark:border-zinc-800 dark:bg-zinc-900/90 dark:shadow-black/20">
+      <nav className="fixed inset-x-0 bottom-0 z-30 px-3 pb-[calc(env(safe-area-inset-bottom)+10px)]">
+        {/* Dock kompak: 7 item sejajar, label mungil. matcha: grid-cols-6 vs 7 item = wrap berantakan. */}
+        <div className="mx-auto grid w-full max-w-md grid-cols-7 gap-0.5 rounded-2xl border border-zinc-200/80 bg-white/90 p-1 shadow-lg shadow-zinc-900/5 backdrop-blur-md dark:border-zinc-800 dark:bg-zinc-900/90 dark:shadow-black/20">
           {NAV.map((n) => {
             const active = isActive(n.to);
             return (
@@ -382,14 +381,14 @@ export default function AppLayout() {
                 to={n.to}
                 prefetch="intent"
                 aria-current={active ? "page" : undefined}
-                className={`flex min-h-14 flex-col items-center justify-center gap-0.5 rounded-xl text-[11px] font-medium transition-all ${
+                className={`flex min-h-12 flex-col items-center justify-center gap-0 rounded-xl text-[10px] font-medium transition-all ${
                   active
                     ? "bg-teal-50 text-teal-700 dark:bg-teal-950/70 dark:text-teal-400"
                     : "text-zinc-500 hover:text-zinc-700 dark:hover:text-zinc-300"
                 }`}
               >
                 <n.icon
-                  className={`h-5 w-5 transition-transform ${active ? "scale-110" : ""}`}
+                  className={`h-[18px] w-[18px] transition-transform ${active ? "scale-110" : ""}`}
                   strokeWidth={active ? 2 : 1.75}
                 />
                 {n.label}

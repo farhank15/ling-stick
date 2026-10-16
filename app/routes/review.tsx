@@ -684,15 +684,34 @@ export default function ReviewPage() {
   const [hintUsed, setHintUsed] = useState(false);
   const matchResults = useRef<{ itemId: number; correct: boolean }[]>([]);
   const matchWrong = useRef<Record<number, number>>({});
-  // Sumber latihan: library (default) atau satu deck impor.
-  // matcha: deck vs library campur = user bingung.
+  // Sumber latihan: library (default) atau satu deck impor. Disimpan di URL
+  // (?deck=ID) biar tahan refresh. matcha: pilih sumber lalu refresh = hilang.
   const [decks, setDecks] = useState<{ id: number; name: string; count: number; lang: string }[]>([]);
-  const [deckSel, setDeckSel] = useState<number | null>(null);
+  const [deckSel, setDeckSel] = useState<number | null>(() => {
+    const d = Number(params.get("deck"));
+    return Number.isInteger(d) && d > 0 ? d : null;
+  });
   const deckSelRef = useRef<number | null>(null);
+  if (deckSelRef.current === null) {
+    const d = Number(params.get("deck"));
+    if (Number.isInteger(d) && d > 0) deckSelRef.current = d;
+  }
   const deckQ = () => (deckSelRef.current != null ? `&deckId=${deckSelRef.current}` : "");
   const pickDeck = (id: number | null) => {
     setDeckSel(id);
     deckSelRef.current = id;
+    const next: Record<string, string> = {};
+    const m = params.get("mode");
+    if (m) next.mode = m;
+    if (id != null) next.deck = String(id);
+    setParams(next, { preventScrollReset: true });
+  };
+  // Pindah layar tanpa buang ?deck= di URL.
+  const goScreen = (mode?: string) => {
+    const next: Record<string, string> = {};
+    if (mode) next.mode = mode;
+    if (deckSelRef.current != null) next.deck = String(deckSelRef.current);
+    setParams(next, { preventScrollReset: true });
   };
 
   const load = useCallback((m: Mode) => {
@@ -757,7 +776,7 @@ export default function ReviewPage() {
     }
     if (urlMode === "toefl" || urlMode === "bulanan") return; // ditangani efek periodik
     // Param asing — bersihkan & balik picker.
-    setParams({}, { preventScrollReset: true });
+    goScreen();
     setScreen("pick");
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
@@ -826,7 +845,7 @@ export default function ReviewPage() {
     setScreen("quiz");
     setLoading(true);
     setLoadError(null);
-    setParams({ mode: kind }, { preventScrollReset: true });
+    goScreen(kind);
     fetch(`/api/quiz?mode=${kind}`)
       .then((r) => safeJson<QuizResponse>(r))
       .then((d) => {
@@ -850,7 +869,7 @@ export default function ReviewPage() {
   const startQuiz = (m: Mode) => {
     setMode(m);
     setScreen("quiz");
-    setParams({ mode: m }, { preventScrollReset: true });
+    goScreen(m);
     load(m);
   };
 
@@ -875,7 +894,7 @@ export default function ReviewPage() {
   const startFlash = () => {
     setMode("daily");
     setScreen("flash");
-    setParams({ mode: "flash" }, { preventScrollReset: true });
+    goScreen("flash");
     setLoading(true);
     const flashQ = deckSelRef.current != null ? `/api/flash?deckId=${deckSelRef.current}` : "/api/flash";
     fetch(flashQ)
@@ -899,7 +918,7 @@ export default function ReviewPage() {
 
   const startMatch = () => {
     setScreen("match");
-    setParams({ mode: "match" }, { preventScrollReset: true });
+    goScreen("match");
     setLoading(true);
     matchResults.current = [];
     matchWrong.current = {};
@@ -931,7 +950,7 @@ export default function ReviewPage() {
       setGenBusy(null);
       setMode(m);
       setScreen("quiz");
-      setParams({ mode: m }, { preventScrollReset: true });
+      goScreen(m);
       loadSetById(d.setId!);
     } catch (e) {
       setGenMsg(e instanceof Error ? e.message : "Gagal generate");
@@ -1048,7 +1067,7 @@ export default function ReviewPage() {
 
   const backToPick = (msg?: string) => {
     setScreen("pick");
-    setParams({}, { preventScrollReset: true });
+    goScreen();
     if (msg) setGenMsg(msg);
   };
 
