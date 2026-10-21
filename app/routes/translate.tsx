@@ -196,7 +196,7 @@ export default function Translate() {
         if (!refPatternsRef.current) {
           const mod = await import("../../data/kanji-strokes.json");
           const templates = mod.default as unknown as Record<string, Stroke[]>;
-          refPatternsRef.current = buildRefPatterns(templates);
+          refPatternsRef.current = await buildRefPatterns(templates);
         }
         setCands(recognize(drawStrokes, refPatternsRef.current, 16));
       } catch {

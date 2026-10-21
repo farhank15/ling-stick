@@ -315,19 +315,118 @@ export function fineClassify(input: Stroke[], refs: KanjiPattern[], coarse: { id
 }
 
 // ──────────────────────────────────────────────────────────────
+// Preprocess: KanjiVG calligraphic → textbook strokes (split at corners)
+// ──────────────────────────────────────────────────────────────
+
+/** Split a stroke at sharp direction changes (corners) → textbook strokes. */
+function splitStrokeAtCorners(stroke: Stroke, angleThreshold = 0.7): Stroke[] {
+  if (stroke.length < 4) return [stroke];
+  const out: Stroke[] = [];
+  let current: Stroke = [stroke[0]];
+  for (let i = 1; i < stroke.length - 1; i++) {
+    const prev = stroke[i - 1];
+    const curr = stroke[i];
+    const next = stroke[i + 1];
+    const v1 = [curr[0] - prev[0], curr[1] - prev[1]];
+    const v2 = [next[0] - curr[0], next[1] - curr[1]];
+    const len1 = Math.hypot(v1[0], v1[1]);
+    const len2 = Math.hypot(v2[0], v2[1]);
+    if (len1 > 1 && len2 > 1) {
+      const dot = (v1[0] * v2[0] + v1[1] * v2[1]) / (len1 * len2);
+      if (dot < angleThreshold) {
+        current.push(curr);
+        out.push(current);
+        current = [curr];
+        continue;
+      }
+    }
+    current.push(curr);
+  }
+  current.push(stroke[stroke.length - 1]);
+  if (current.length >= 2) out.push(current);
+  return out.length > 0 ? out : [stroke];
+}
+
+/** Preprocess KanjiVG calligraphic strokes → textbook strokes (split at corners). */
+function preprocessTextbookStrokes(strokes: Stroke[]): Stroke[] {
+  const out: Stroke[] = [];
+  for (const s of strokes) {
+    out.push(...splitStrokeAtCorners(s, 0.7));
+  }
+  return out.filter(s => s.length >= 3);
+}
+
+// ──────────────────────────────────────────────────────────────
 // High-level API
 // ──────────────────────────────────────────────────────────────
 
-/** Build reference patterns from KanjiVG template data (16 pts/stroke, 0..100 centered). */
-export function buildRefPatterns(templateData: Record<string, Stroke[]>): KanjiPattern[] {
+type TextbookStrokes = Record<string, [number, number][][]>;
+let textbookAuto: TextbookStrokes | null = null;
+let textbookOverride: TextbookStrokes | null = null;
+
+/** Load auto-generated textbook strokes from KanjiVG (2380 kanji). */
+async function loadTextbookAuto(): Promise<TextbookStrokes> {
+  if (textbookAuto) return textbookAuto;
+  try {
+    const mod = await import("../../data/textbook-strokes.json");
+    textbookAuto = (mod.default?.strokes ?? {}) as unknown as TextbookStrokes;
+  } catch {
+    textbookAuto = {};
+  }
+  return textbookAuto;
+}
+
+/** Load manual textbook stroke overrides (for simple kanji where KanjiVG is calligraphic). */
+async function loadTextbookOverrides(): Promise<TextbookStrokes> {
+  if (textbookOverride) return textbookOverride;
+  try {
+    const mod = await import("../../data/textbook-overrides.json");
+    textbookOverride = (mod.default?.strokes ?? {}) as unknown as TextbookStrokes;
+  } catch {
+    textbookOverride = {};
+  }
+  return textbookOverride;
+}
+
+/** Load merged textbook strokes (auto + manual overrides). */
+async function loadMergedTextbook(): Promise<TextbookStrokes> {
+  const [auto, overrides] = await Promise.all([loadTextbookAuto(), loadTextbookOverrides()]);
+  return { ...auto, ...overrides }; // overrides take precedence
+}
+
+/** Build reference patterns from KanjiVG template data + textbook stroke overrides. */
+export async function buildRefPatterns(templateData: Record<string, Stroke[]>): Promise<KanjiPattern[]> {
+  const mergedTextbook = await loadMergedTextbook();
+  const out: KanjiPattern[] = [];
+  for (const [char, strokes] of Object.entries(templateData)) {
+    // Use merged textbook strokes if available, else KanjiVG with corner-split
+    let raw: Stroke[];
+    if (mergedTextbook[char]) {
+      raw = mergedTextbook[char].map(s => s.map(([x, y]) => [x * 2.56, y * 2.56] as [number, number]));
+    } else {
+      raw = strokes.map(s =>
+        s.map(([x, y]) => [x * 2.56, y * 2.56] as [number, number])
+      );
+      raw = preprocessTextbookStrokes(raw);
+    }
+    const norm = momentNormalize(raw);
+    const feat = extractFeatures(norm, 20);
+    out.push({ char, strokes: raw.length, pattern: feat });
+  }
+  return out;
+}
+
+/** Synchronous version for tests (uses corner-split only). */
+export function buildRefPatternsSync(templateData: Record<string, Stroke[]>): KanjiPattern[] {
   const out: KanjiPattern[] = [];
   for (const [char, strokes] of Object.entries(templateData)) {
     const raw: Stroke[] = strokes.map(s =>
       s.map(([x, y]) => [x * 2.56, y * 2.56] as [number, number])
     );
-    const norm = momentNormalize(raw);
+    const textbookStrokes = preprocessTextbookStrokes(raw);
+    const norm = momentNormalize(textbookStrokes);
     const feat = extractFeatures(norm, 20);
-    out.push({ char, strokes: strokes.length, pattern: feat });
+    out.push({ char, strokes: textbookStrokes.length, pattern: feat });
   }
   return out;
 }
