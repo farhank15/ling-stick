@@ -18,7 +18,7 @@ import { Highlight } from "~/components/Highlight";
 import { KanjiDraw, type DrawStroke } from "~/components/KanjiDraw";
 import { KanjiRadical } from "~/components/KanjiRadical";
 import { KanjiDetailView } from "~/routes/aksara";
-import { normalizeStrokes, rankCandidates, type Stroke } from "~/lib/kanji-match";
+import { buildRefPatterns, recognize, type KanjiPattern, type Stroke } from "~/lib/kanji-match2";
 import type { KanjiDetail } from "~/lib/kanji.server";
 import { useToast } from "~/components/Toast";
 import { ttsLang } from "~/lib/utils.shared";
@@ -181,9 +181,9 @@ export default function Translate() {
   const [selDetail, setSelDetail] = useState<KanjiDetail | null>(null);
   const [savingKanji, setSavingKanji] = useState(false);
   const [savedKanji, setSavedKanji] = useState<string | null>(null);
-  const templatesRef = useRef<Record<string, Stroke[]> | null>(null);
+  const refPatternsRef = useRef<KanjiPattern[] | null>(null);
 
-  // Kenali 400ms setelah pena diangkat (debounce) — template lazy-load sekali.
+  // Kenali 400ms setelah pena diangkat (debounce) — refPatterns lazy-load sekali.
   useEffect(() => {
     if (drawTab !== "kanji" || drawStrokes.length === 0) {
       setCands([]);
@@ -193,11 +193,12 @@ export default function Translate() {
     setCandBusy(true);
     const t = setTimeout(async () => {
       try {
-        if (!templatesRef.current) {
+        if (!refPatternsRef.current) {
           const mod = await import("../../data/kanji-strokes.json");
-          templatesRef.current = mod.default as unknown as Record<string, Stroke[]>;
+          const templates = mod.default as unknown as Record<string, Stroke[]>;
+          refPatternsRef.current = buildRefPatterns(templates);
         }
-        setCands(rankCandidates(templatesRef.current, normalizeStrokes(drawStrokes), 16));
+        setCands(recognize(drawStrokes, refPatternsRef.current, 16));
       } catch {
         /* data gagal muat — diam */
       } finally {
