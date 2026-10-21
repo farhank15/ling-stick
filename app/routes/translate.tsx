@@ -7,6 +7,7 @@ import {
   BookmarkCheck,
   Copy,
   Loader2,
+  PenTool,
   Volume2,
   X,
 } from "lucide-react";
@@ -196,7 +197,7 @@ export default function Translate() {
           const mod = await import("../../data/kanji-strokes.json");
           templatesRef.current = mod.default as unknown as Record<string, Stroke[]>;
         }
-        setCands(rankCandidates(templatesRef.current, normalizeStrokes(drawStrokes), 8));
+        setCands(rankCandidates(templatesRef.current, normalizeStrokes(drawStrokes), 16));
       } catch {
         /* data gagal muat — diam */
       } finally {
@@ -212,8 +213,53 @@ export default function Translate() {
     try {
       const r = await fetch(`/api/kanji?detail=${encodeURIComponent(char)}`);
       const d = await r.json();
-      if (d.detail) setSelDetail(d.detail as KanjiDetail);
-      else toast("Kanji tak ada di referensi");
+      if (d.detail) {
+        setSelDetail(d.detail as KanjiDetail);
+        return;
+      }
+      // Fallback: kanji tidak di DB (template N5-N3, DB cuma N5) → bangun detail minimal dari template + kanjiapi.dev
+      const mod = await import("../../data/kanji-strokes.json");
+      const tpl = (mod.default as unknown as Record<string, Stroke[]>)[char];
+      if (tpl) {
+        const strokes = tpl.length;
+        // Coba ambil dari kanjiapi.dev (public, no key)
+        let meaningId = "";
+        let on: { text: string; primary: boolean }[] = [];
+        let kun: { text: string; primary: boolean }[] = [];
+        let grade: number | null = null;
+        let freq: number | null = null;
+        let jlpt: number | null = null;
+        try {
+          const api = await fetch(`https://kanjiapi.dev/v1/kanji/${encodeURIComponent(char)}`);
+          if (api.ok) {
+            const j = await api.json();
+            meaningId = j.meanings?.join(", ") ?? "";
+            on = (j.on_readings ?? []).map((r: string, i: number) => ({ text: r, primary: i === 0 }));
+            kun = (j.kun_readings ?? []).map((r: string, i: number) => ({ text: r, primary: i === 0 }));
+            grade = j.grade ?? null;
+            freq = j.freq ?? null;
+            jlpt = j.jlpt ?? null;
+          }
+        } catch {
+          /* offline / gagal — pakai data minimal */
+        }
+        if (!meaningId) meaningId = `(kanji U+${char.codePointAt(0)!.toString(16).toUpperCase().padStart(5, "0")})`;
+        setSelDetail({
+          char,
+          meaningId,
+          strokes,
+          grade,
+          freq,
+          jlpt,
+          svg: null,
+          on,
+          kun,
+          components: [],
+          vocab: [],
+        } as KanjiDetail);
+      } else {
+        toast("Kanji tak dikenal");
+      }
     } catch {
       toast("Gagal muat detail kanji");
     }
@@ -394,24 +440,26 @@ export default function Translate() {
 
   return (
     <div className="space-y-3">
-      {/* Mode: teks vs coret kanji */}
-      <div className="flex gap-1.5">
-        <button
-          className={`chip flex-1 justify-center ${drawTab === "teks" ? "chip-active" : ""}`}
-          onClick={() => setDrawTab("teks")}
-          aria-pressed={drawTab === "teks"}
-        >
-          Teks
-        </button>
-        <button
-          className={`chip flex-1 justify-center ${drawTab === "kanji" ? "chip-active" : ""}`}
-          onClick={() => setDrawTab("kanji")}
-          aria-pressed={drawTab === "kanji"}
-          title="Coret kanji yang tak bisa diketik"
-        >
-          ✍️ Kanji
-        </button>
-      </div>
+      {/* Mode: teks vs coret kanji (hanya di mode JA) */}
+      {ja ? (
+        <div className="flex gap-1.5">
+          <button
+            className={`chip flex-1 justify-center ${drawTab === "teks" ? "chip-active" : ""}`}
+            onClick={() => setDrawTab("teks")}
+            aria-pressed={drawTab === "teks"}
+          >
+            Teks
+          </button>
+          <button
+            className={`chip flex-1 justify-center ${drawTab === "kanji" ? "chip-active" : ""}`}
+            onClick={() => setDrawTab("kanji")}
+            aria-pressed={drawTab === "kanji"}
+            title="Coret kanji yang tak bisa diketik"
+          >
+            <PenTool className="h-4 w-4" /> Kanji
+          </button>
+        </div>
+      ) : null}
       {drawTab === "kanji" ? (
         <div className="card space-y-3">
           <div>
@@ -434,7 +482,7 @@ export default function Translate() {
           {cands.length > 0 ? (
             <div>
               <p className="label mb-1.5">Tap yang benar ({cands.length} kandidat)</p>
-              <div className="grid grid-cols-4 gap-1.5">
+              <div className="grid grid-cols-4 md:grid-cols-8 gap-1.5">
                 {cands.map((c) => (
                   <button
                     key={c.char}

@@ -1,7 +1,8 @@
 /**
  * Matcher coretan kanji vs template KanjiVG — murni, tanpa dep.
- * Skor = jarak gores terdkat (abaikan urutan + arah) + penalti selisih jumlah gores.
+ * Skor = jarak gores terdekat (abaikan urutan + arah) + penalti selisih jumlah gores.
  * matcha: top-1 jari-HP tak andal → UI wajib kandidat top-N, bukan jawaban tunggal.
+ * Improvements: Hungarian-like assignment (greedy), larger prefilter, more candidates.
  */
 
 export type Stroke = [number, number][]; // 16 titik ternormalisasi 0..100
@@ -22,31 +23,46 @@ function strokeDist(a: Stroke, b: Stroke): number {
 /** Jarak coretan pengguna ke satu template (kecil = mirip). */
 export function matchScore(template: Stroke[], drawn: Stroke[]): number {
   if (drawn.length === 0 || template.length === 0) return Infinity;
+
+  // Greedy assignment: setiap gores template dipakai max 1x.
+  // Urutkan drawn strokes berdasarkan panjang (panjang dulu = lebih informatif).
+  const drawnIdx = [...drawn.keys()].sort((i, j) => drawn[j]!.length - drawn[i]!.length);
+  const usedTemplate = new Set<number>();
   let sum = 0;
-  for (const d of drawn) {
+
+  for (const di of drawnIdx) {
+    const d = drawn[di]!;
     let best = Infinity;
-    for (const t of template) {
+    let bestTi = -1;
+    for (let ti = 0; ti < template.length; ti++) {
+      if (usedTemplate.has(ti)) continue;
+      const t = template[ti]!;
       const n = Math.min(d.length, t.length);
       const dd = strokeDist(d.slice(0, n) as Stroke, t.slice(0, n) as Stroke);
-      if (dd < best) best = dd;
+      if (dd < best) {
+        best = dd;
+        bestTi = ti;
+      }
     }
-    sum += best;
+    if (bestTi >= 0) usedTemplate.add(bestTi);
+    sum += best === Infinity ? 100 : best; // penalty besar kalau tak ada template tersisa
   }
+
   const mean = sum / drawn.length;
-  // Penalti selisih jumlah gores — filter terkuat (KanjiVG: stroke count duluan).
-  return mean + 8 * Math.abs(template.length - drawn.length);
+  // Penalti selisih jumlah gores — filter terkuat, tapi lebih lunak (5 bukan 8).
+  return mean + 5 * Math.abs(template.length - drawn.length);
 }
 
 /** Ranking kandidat {char, score} terbaik dulu, maks n. */
 export function rankCandidates(
   templates: Record<string, Stroke[]>,
   drawn: Stroke[],
-  n = 8,
+  n = 16,
 ): { char: string; score: number }[] {
   const out: { char: string; score: number }[] = [];
   for (const [char, t] of Object.entries(templates)) {
-    // Prefilter murah: selisih gores >3 tak mungkin menang.
-    if (Math.abs(t.length - drawn.length) > 3) continue;
+    // Prefilter murah: selisih gores >5 tak mungkin menang (lebih longgar dari 3).
+    if (Math.abs(t.length - drawn.length) > 5) continue;
     const score = matchScore(t, drawn);
     if (!Number.isFinite(score)) continue;
     out.push({ char, score });
@@ -55,19 +71,26 @@ export function rankCandidates(
   return out.slice(0, n);
 }
 
-/** Normalisasi coretan mentah (piksel) → format template: resample 16 + skala 0..100. */
+/** Normalisasi coretan mentah (piksel) → format template: resample 16 + skala 0..100 + center. */
 export function normalizeStrokes(raw: { x: number; y: number }[][], n = 16): Stroke[] {
   const resampled = raw
     .map((s) => resample(s.map((p) => [p.x, p.y] as [number, number]), n))
     .filter((s) => s.length > 0);
   if (resampled.length === 0) return [];
+
+  // Center + scale (bukan cuma scale) — konsisten dengan template.
   const xs = resampled.flat().map((p) => p[0]);
   const ys = resampled.flat().map((p) => p[1]);
   const minX = Math.min(...xs), maxX = Math.max(...xs);
   const minY = Math.min(...ys), maxY = Math.max(...ys);
   const w = Math.max(1, maxX - minX), h = Math.max(1, maxY - minY);
+  const cx = (minX + maxX) / 2, cy = (minY + maxY) / 2;
+
   return resampled.map((s) =>
-    s.map(([x, y]) => [((x - minX) / w) * 100, ((y - minY) / h) * 100] as [number, number]),
+    s.map(([x, y]) => [
+      ((x - cx) / Math.max(w, h)) * 100 + 50,
+      ((y - cy) / Math.max(w, h)) * 100 + 50,
+    ] as [number, number]),
   );
 }
 
