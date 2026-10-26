@@ -47,7 +47,8 @@ final (seed per-kanji hanya fallback).
 ## Alur seed & script
 
 ```bash
-npm run kanji:seed    # dataset → data/kanji-n5.json (butuh GROQ_API_KEY di env untuk glos; IDS=/tmp/ids.txt)
+npm run kanji:seed    # dataset → data/kanji-n5.json (glos via Groq → Poolside; IDS opsional, fallback KRAD)
+LEVEL=n4 npm run kanji:seed   # dataset → data/kanji-n4.json (142 kanji, arti di scripts/kanji-glosses-n4.json)
 npm run kanji:audit   # silang: on/kun+strokes vs OpenJLPT, komponen CJK, tiap vocab dicek Jisho
 npm run kanji:import  # validasi total → upsert DB (butuh DB reachable)
 ```
@@ -56,7 +57,7 @@ npm run kanji:import  # validasi total → upsert DB (butuh DB reachable)
   fetch kanjiapi + SVG + Jisho, glos kata via LLM batch (fallback `[EN]` bila
   gagal — harus dibetulkan manual sebelum import).
 - `scripts/kanji-import.ts` — `ensureDbReady()` + validasi + upsert idempoten.
-- `data/kanji-n5.json` ikut ke-commit (sumber review + repro).
+- `data/kanji-n5.json` + `data/kanji-n4.json` ikut ke-commit (sumber review + repro).
 
 ## Flashcard khusus kanji (3 mode, 1 fakta per kartu)
 
@@ -85,15 +86,16 @@ untuk kanji JLPT. Riset: `.agents/research/kanji-theme-radical-jlpt-sources.md`.
 Yang ada hanya level (kanjiapi.dev → tanos/Waller) dan `wk_level` (WaniKani,
 bukan JLPT). Jadi urutan/tema **dikurasi in-repo**:
 
-- `data/kanji-study-n5.json` — sumber kebenaran urutan N5: 11 tema
-  (angka, waktu, alam, orang, sekolah, tempat, makan, arah, sifat, aksi, tanya),
-  urutan di dalam tema, dan radikal per kanji.
-- Radikal diambil dari `data/kanji-levels.json` (KANJIDIC/OpenJLPT) + override
-  lima kanji batas N4 (田文道暑寒) yang tidak ada di daftar level.
+- `data/kanji-study-themes.json` — registry 17 tema (angka, waktu, alam,
+  orang, sekolah, tempat, makan, arah, sifat, aksi, tanya, tubuh, pikiran,
+  kerja, benda, budaya, fungsi).
+- `data/kanji-study-n5.json` — urutan belajar N5 (111 kanji).
+- `data/kanji-study-n4.json` — urutan belajar N4 (142 kanji).
+- Radikal diambil dari `data/kanji-levels.json` (KANJIDIC/OpenJLPT).
 - Mode **Pola** di UI mengelompokkan kanji berbagi radikal (bukan etimologi —
   labelnya "pola bentuk"). Keluarga ≥2 tampil dulu; sisanya digabung.
 - Tema bersifat kurasi subjektif: ubah JSON, jalankan test, tidak perlu migrasi DB.
-  Test `tests/kanji-study.test.ts` memastikan 116/116 kanji N5 punya tema + radikal.
+  Test `tests/kanji-study.test.ts` memastikan 111/111 N5 dan 142/142 N4 punya tema + radikal.
 
 ## Notasi bacaan (KANJIDIC2)
 

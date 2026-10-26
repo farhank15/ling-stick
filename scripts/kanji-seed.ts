@@ -1,5 +1,5 @@
 /**
- * Seed kanji N5 dari dataset kanonis (BUKAN generate asal):
+ * Seed kanji N5/N4 dari dataset kanonis (BUKAN generate asal):
  * - Bacaan/arti EN/stroke/grade/freq/jlpt: kanjiapi.dev (turunan KANJIDIC2/EDRDG, CC BY-SA)
  * - Komponen: cjkvi-ids (file lokal /tmp/ids.txt ATAU IDS_URL)
  * - Stroke SVG: KanjiVG via GitHub raw (CC BY-SA 3.0, Ulrich Apel)
@@ -7,7 +7,8 @@
  * - Arti Indonesia: kurasi manual (GLOSSES) + glos kata via LLM (sekali, direview)
  *
  * Atribusi wajib tampil di UI (Settings/Aksara).
- * Usage: GROQ_API_KEY=xxx IDS=/tmp/ids.txt npm run kanji:seed
+ * Usage: GROQ_API_KEY=xxx LEVEL=n5|n4 npm run kanji:seed
+ * Komponen: IDS (kalau ada) → fallback data/kanji-krad.json (KRADFILE).
  */
 import { readFileSync, writeFileSync, existsSync, mkdirSync } from "node:fs";
 
@@ -39,13 +40,40 @@ const GLOSSES: Record<string, string> = {
   入: "masuk", 出: "keluar", 半: "setengah", 誰: "siapa",
 };
 
-const N5 = Object.keys(GLOSSES);
+type Level = "n5" | "n4";
+
+const LEVEL = (process.env.LEVEL ?? "n5").toLowerCase();
+if (LEVEL !== "n5" && LEVEL !== "n4") throw new Error(`LEVEL tidak dikenal: ${LEVEL} (pakai n5/n4)`);
+
+/** Daftar karakter per level: N5 dari kurasi GLOSSES, N4 dari kanji-levels.json. */
+const LEVEL_CHARS: Record<Level, string[]> = {
+  n5: Object.keys(GLOSSES),
+  n4: (
+    JSON.parse(readFileSync("data/kanji-levels.json", "utf8")) as {
+      levels: Record<string, { char: string }[]>;
+    }
+  ).levels.n4.map((e) => e.char),
+};
+
+/** Arti Indonesia: N5 inline, N4 dari file kurasi terpisah. */
+const N4_GLOSSES = JSON.parse(
+  readFileSync("scripts/kanji-glosses-n4.json", "utf8"),
+) as Record<string, string>;
+const MEANING: Record<string, string> = LEVEL === "n5" ? GLOSSES : N4_GLOSSES;
+const CHARS = LEVEL_CHARS[LEVEL];
 
 type Vocab = { word: string; reading: string; gloss_en: string; gloss: string };
 
-async function fetchJson(url: string): Promise<any> {
+async function fetchJson(url: string, attempt = 0): Promise<any> {
   const r = await fetch(url, { headers: { "User-Agent": "LingStick-seed/1.0" } });
-  if (!r.ok) throw new Error(`${url} → ${r.status}`);
+  if (!r.ok) {
+    // Jisho/kanjiapi bisa 429 saat seed 142 kanji berturut-turut.
+    if (attempt < 2 && (r.status === 429 || r.status >= 500)) {
+      await new Promise((res) => setTimeout(res, 1000 * (attempt + 1)));
+      return fetchJson(url, attempt + 1);
+    }
+    throw new Error(`${url} → ${r.status}`);
+  }
   return r.json();
 }
 
@@ -53,37 +81,47 @@ function hexOf(ch: string): string {
   return ch.codePointAt(0)!.toString(16).padStart(5, "0");
 }
 
+function isCjkChar(ch: string): boolean {
+  const cp = ch.codePointAt(0)!;
+  return (
+    (cp >= 0x4e00 && cp <= 0x9fff) || (cp >= 0x3400 && cp <= 0x4dbf) ||
+    (cp >= 0x2e80 && cp <= 0x2eff) || (cp >= 0x3000 && cp <= 0x303f) ||
+    (cp >= 0xf900 && cp <= 0xfaff) || cp === 0x3005
+  );
+}
+
 /** Ambil komponen CJK dari baris IDS cjkvi (semua char CJK kecuali dirinya). */
 function componentsOf(idsLine: string, self: string): string[] {
   const seen = new Set<string>();
   for (const ch of idsLine) {
     if (ch === self || ch === "\t" || ch === "U" || ch === "+" || /[0-9A-F]/.test(ch)) continue;
-    const cp = ch.codePointAt(0)!;
-    const isCjk =
-      (cp >= 0x4e00 && cp <= 0x9fff) || (cp >= 0x3400 && cp <= 0x4dbf) ||
-      (cp >= 0x2e80 && cp <= 0x2eff) || (cp >= 0x3000 && cp <= 0x303f) ||
-      (cp >= 0xf900 && cp <= 0xfaff) || cp === 0x3005;
-    if (isCjk) seen.add(ch);
+    if (isCjkChar(ch)) seen.add(ch);
   }
   return [...seen];
 }
 
 async function main() {
+  // IDS opsional — KRADFILE lokal selalu tersedia sebagai fallback.
   const idsPath = process.env.IDS ?? "/tmp/ids.txt";
-  const idsText = readFileSync(idsPath, "utf8");
   const idsByChar = new Map<string, string>();
-  for (const line of idsText.split("\n")) {
-    const tab = line.indexOf("\t");
-    if (tab === -1) continue;
-    const seq = line.slice(tab + 1);
-    const ch = [...seq][0];
-    if (ch && !idsByChar.has(ch)) idsByChar.set(ch, line);
+  if (existsSync(idsPath)) {
+    for (const line of readFileSync(idsPath, "utf8").split("\n")) {
+      const tab = line.indexOf("\t");
+      if (tab === -1) continue;
+      const seq = line.slice(tab + 1);
+      const ch = [...seq][0];
+      if (ch && !idsByChar.has(ch)) idsByChar.set(ch, line);
+    }
+  } else {
+    console.warn(`IDS tidak ada di ${idsPath} — pakai data/kanji-krad.json`);
   }
+  const krad = JSON.parse(readFileSync("data/kanji-krad.json", "utf8")) as Record<string, string[]>;
 
   const out: any[] = [];
   const errors: string[] = [];
-  for (const ch of N5) {
+  for (const ch of CHARS) {
     try {
+      if (!MEANING[ch]) throw new Error("arti Indonesia belum dikurasi");
       const info = await fetchJson(`https://kanjiapi.dev/v1/kanji/${encodeURIComponent(ch)}`);
       if (!info.stroke_count || (!info.on_readings?.length && !info.kun_readings?.length)) {
         throw new Error("data bacaan/stroke kosong");
@@ -100,22 +138,25 @@ async function main() {
         .trim();
       if (!svg.includes("<svg")) throw new Error("SVG KanjiVG gagal");
       const idsLine = idsByChar.get(ch) ?? "";
-      const components = componentsOf(idsLine, ch);
+      const components = idsLine
+        ? componentsOf(idsLine, ch)
+        : (krad[ch] ?? []).filter(isCjkChar);
 
       // Kosakata: Jisho, saring kata umum mengandung kanji, maks 3.
       const jisho = await fetchJson(
-        `https://jisho.org/api/v1/search/words?keyword=${encodeURIComponent(ch + " #jlpt-n5")}`,
+        `https://jisho.org/api/v1/search/words?keyword=${encodeURIComponent(ch + " #jlpt-" + LEVEL)}`,
       );
       const vocab: Vocab[] = [];
       for (const d of jisho.data ?? []) {
         if (vocab.length >= 3) break;
         const j = (d.japanese ?? [])[0];
         if (!j?.word?.includes(ch) || !j?.reading) continue;
+        if (vocab.some((v) => v.word === j.word)) continue;
         const gloss_en = (d.senses?.[0]?.english_definitions ?? []).slice(0, 2).join("; ");
         if (!gloss_en) continue;
         vocab.push({ word: j.word, reading: j.reading, gloss_en, gloss: "" });
       }
-      // Fallback tanpa tag N5 bila kosong.
+      // Fallback tanpa tag JLPT bila kosong.
       if (vocab.length === 0) {
         const j2 = await fetchJson(`https://jisho.org/api/v1/search/words?keyword=${encodeURIComponent(ch)}`);
         for (const d of j2.data ?? []) {
@@ -123,6 +164,7 @@ async function main() {
           if (!d.is_common) continue;
           const j = (d.japanese ?? []).find((x: any) => x.word?.includes(ch));
           if (!j?.word || !j?.reading) continue;
+          if (vocab.some((v) => v.word === j.word)) continue;
           const gloss_en = (d.senses?.[0]?.english_definitions ?? []).slice(0, 2).join("; ");
           if (!gloss_en) continue;
           vocab.push({ word: j.word, reading: j.reading, gloss_en, gloss: "" });
@@ -130,69 +172,107 @@ async function main() {
       }
       out.push({
         char: ch,
-        meaning_id: GLOSSES[ch],
+        meaning_id: MEANING[ch],
         strokes: info.stroke_count,
         grade: info.grade ?? null,
         freq: info.freq_mainichi_shinbun ?? null,
-        jlpt: info.jlpt ?? 5,
+        jlpt: info.jlpt ?? Number(LEVEL.slice(1)),
         on: info.on_readings ?? [],
         kun: info.kun_readings ?? [],
         components,
         svg,
         vocab,
       });
-      console.log(`ok ${ch} (${out.length}/${N5.length})`);
+      console.log(`ok ${ch} (${out.length}/${CHARS.length})`);
       await new Promise((r) => setTimeout(r, 250)); // sopan ke API publik
     } catch (e) {
       errors.push(`${ch}: ${e instanceof Error ? e.message : e}`);
     }
   }
 
-  // Glos kata → Indonesia via LLM (sekali, batch) — bisa direview di JSON.
-  const groq = process.env.GROQ_API_KEY ?? "";
-  if (groq && out.length) {
-    const items: { i: number; k: number; text: string }[] = [];
-    out.forEach((k, i) => k.vocab.forEach((v: Vocab, kk: number) => items.push({ i, k: kk, text: `${v.word} = ${v.gloss_en}` })));
-    // Batch 60 biar respons tak kepotong.
-    for (let b = 0; b < items.length; b += 60) {
-      const chunk = items.slice(b, b + 60);
-      await translateChunk(chunk);
+  // Glos kata → Indonesia via LLM (Groq → Poolside), batch 60.
+  const items: { i: number; k: number; text: string }[] = [];
+  out.forEach((k, i) => k.vocab.forEach((v: Vocab, kk: number) => items.push({ i, k: kk, text: `${v.word} = ${v.gloss_en}` })));
+  for (let b = 0; b < items.length; b += 60) {
+    await translateChunk(items.slice(b, b + 60));
+  }
+
+  type GlossProvider = { name: string; url: string; key: string; model: string; jsonMode: boolean };
+
+  function glossProviders(): GlossProvider[] {
+    const list: GlossProvider[] = [];
+    if (process.env.GROQ_API_KEY) {
+      list.push({
+        name: "groq",
+        url: "https://api.groq.com/openai/v1/chat/completions",
+        key: process.env.GROQ_API_KEY,
+        model: process.env.GROQ_MODEL ?? "openai/gpt-oss-120b",
+        jsonMode: true,
+      });
     }
+    if (process.env.POOLSIDE_API_KEY && process.env.POOLSIDE_MODEL) {
+      const base = (process.env.POOLSIDE_BASE_URL ?? "https://inference.poolside.ai/v1").replace(/\/+$/, "");
+      list.push({
+        name: "poolside",
+        url: `${base}/chat/completions`,
+        key: process.env.POOLSIDE_API_KEY,
+        model: process.env.POOLSIDE_MODEL,
+        jsonMode: false,
+      });
+    }
+    return list;
   }
 
   async function translateChunk(chunk: { i: number; k: number; text: string }[]) {
-    const groqKey = process.env.GROQ_API_KEY ?? "";
     const prompt = `Terjemahkan glos kosakata Jepang berikut ke Bahasa Indonesia kasual SINGKAT (maks 5 kata per glos). Balas HANYA JSON object {"glosses": [...]} dengan urutan sama, tanpa penjelasan.\n${chunk.map((x) => `${x.i}.${x.k} ${x.text}`).join("\n")}`;
-    try {
-      const r = await fetch("https://api.groq.com/openai/v1/chat/completions", {
-        method: "POST",
-        headers: { "Content-Type": "application/json", Authorization: `Bearer ${groq}` },
-        body: JSON.stringify({
-          model: process.env.GROQ_MODEL ?? "openai/gpt-oss-120b",
-          messages: [{ role: "user", content: prompt }],
-          temperature: 0.1,
-          response_format: { type: "json_object" },
-        }),
-      });
-      const data = await r.json();
-      const rawText: string = data.choices?.[0]?.message?.content ?? "";
-      // Model kadang bungkus { "glosses": [...] } atau tambah prose — ekstrak array pertama.
-      let arr: unknown = null;
+    let lastError = "tidak ada provider";
+    for (const p of glossProviders()) {
       try {
-        const parsed = JSON.parse(rawText);
-        arr = Array.isArray(parsed) ? parsed : parsed.glosses ?? parsed.result ?? null;
-      } catch {
-        const m = rawText.match(/\[[\s\S]*\]/);
-        if (m) arr = JSON.parse(m[0]);
+        const r = await fetch(p.url, {
+          method: "POST",
+          headers: { "Content-Type": "application/json", Authorization: `Bearer ${p.key}` },
+          body: JSON.stringify({
+            model: p.model,
+            messages: [{ role: "user", content: prompt }],
+            temperature: 0.1,
+            ...(p.jsonMode ? { response_format: { type: "json_object" } } : {}),
+          }),
+        });
+        if (!r.ok) throw new Error(`${p.name} → ${r.status}`);
+        const data = await r.json();
+        const rawText: string = data.choices?.[0]?.message?.content ?? "";
+        // Model kadang bungkus { "glosses": [...] } atau tambah prose — ekstrak array pertama.
+        let arr: unknown = null;
+        try {
+          const parsed = JSON.parse(rawText);
+          arr = Array.isArray(parsed) ? parsed : parsed.glosses ?? parsed.result ?? null;
+        } catch {
+          const m = rawText.match(/\[[\s\S]*\]/);
+          if (m) arr = JSON.parse(m[0]);
+        }
+        if (!Array.isArray(arr)) throw new Error("respons bukan array");
+        chunk.forEach((x, n) => {
+          if (typeof arr[n] === "string" && (arr[n] as string).trim()) out[x.i].vocab[x.k].gloss = (arr[n] as string).trim().slice(0, 60);
+        });
+        return;
+      } catch (e) {
+        lastError = `${p.name}: ${e instanceof Error ? e.message : e}`;
+        console.error(`gloss ${lastError}`);
       }
-      if (!Array.isArray(arr)) throw new Error("respons bukan array");
-      chunk.forEach((x, n) => {
-        if (typeof arr[n] === "string" && (arr[n] as string).trim()) out[x.i].vocab[x.k].gloss = (arr[n] as string).trim().slice(0, 60);
-      });
-    } catch (e) {
-      console.error("gloss LLM gagal — gloss dikosongkan:", e instanceof Error ? e.message : e);
+    }
+    console.error(`gloss LLM gagal semua provider (${lastError}) — gloss EN dipakai`);
+  }
+  // Rapikan glos: buang pengulangan "x; x" + koreksi manual (kanji-vocab-fixes.json).
+  const vocabFixes = JSON.parse(readFileSync("scripts/kanji-vocab-fixes.json", "utf8")) as Record<string, string>;
+  for (const k of out) {
+    for (const v of k.vocab) {
+      const fix = vocabFixes[`${k.char}|${v.word}`];
+      if (fix) v.gloss = fix;
+      const parts = [...new Set(v.gloss.split(";").map((s: string) => s.trim()).filter(Boolean))];
+      v.gloss = parts.join("; ");
     }
   }
+
   // Fallback: gloss EN bila LLM tak jalan (tandai).
   for (const k of out) for (const v of k.vocab) if (!v.gloss) v.gloss = `[EN] ${v.gloss_en}`;
 
@@ -201,8 +281,9 @@ async function main() {
     _license: "Kanji readings/meanings/strokes: KANJIDIC2 (EDRDG, CC BY-SA 4.0) via kanjiapi.dev; stroke SVG: KanjiVG (Ulrich Apel, CC BY-SA 3.0); vocab: JMdict/Tatoeba via Jisho; jlpt: patokan komunitas (tak resmi).",
     _sources: ["https://kanjiapi.dev", "https://github.com/KanjiVG/kanjivg", "https://jisho.org", "https://github.com/cjkvi/cjkvi-ids"],
   };
-  writeFileSync("data/kanji-n5.json", JSON.stringify({ ...header, count: out.length, kanji: out }, null, 1));
-  console.log(`\nTersimpan: data/kanji-n5.json (${out.length} kanji)`);
+  const outFile = `data/kanji-${LEVEL}.json`;
+  writeFileSync(outFile, JSON.stringify({ ...header, level: LEVEL.toUpperCase(), count: out.length, kanji: out }, null, 1));
+  console.log(`\nTersimpan: ${outFile} (${out.length} kanji)`);
   if (errors.length) {
     console.error(`GAGAL ${errors.length}:\n${errors.join("\n")}`);
     process.exit(1);

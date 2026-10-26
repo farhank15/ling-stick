@@ -1,11 +1,14 @@
-import study from "../../data/kanji-study-n5.json";
+import themesFile from "../../data/kanji-study-themes.json";
+import studyN4 from "../../data/kanji-study-n4.json";
+import studyN5 from "../../data/kanji-study-n5.json";
 
 /**
  * Urutan belajar N5 + notasi bacaan KANJIDIC.
  *
- * Tema & urutan = kurasi di data/kanji-study-n5.json (bukan API — tak ada
- * sumber publik yang menyediakan urutan/tema JLPT). Radikal = data resmi
- * kanji-levels.json; dipakai untuk mode "pola" (kanji berbagi radikal).
+ * Tema & urutan = kurasi di data/kanji-study-n5.json + n4.json (bukan API —
+ * tak ada sumber publik yang menyediakan urutan/tema JLPT). Daftar tema di
+ * data/kanji-study-themes.json. Radikal = data resmi kanji-levels.json;
+ * dipakai untuk mode "pola" (kanji berbagi radikal).
  */
 
 export type StudyTheme = {
@@ -36,8 +39,11 @@ export type StudyGroup<T> = {
   rows: T[];
 };
 
-const ENTRIES = study.kanji as Record<string, StudyEntry>;
-const THEMES = [...(study.themes as StudyTheme[])].sort((a, b) => a.order - b.order);
+const ENTRIES: Record<string, StudyEntry> = {
+  ...(studyN5.kanji as Record<string, StudyEntry>),
+  ...(studyN4.kanji as Record<string, StudyEntry>),
+};
+const THEMES = [...(themesFile.themes as StudyTheme[])].sort((a, b) => a.order - b.order);
 
 export const STUDY_THEMES: readonly StudyTheme[] = THEMES;
 

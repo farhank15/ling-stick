@@ -1,0 +1,718 @@
+{
+  "_note": "Kurasi urutan belajar N4: tema + radikal. Radikal dari data/kanji-levels.json (KANJIDIC/OpenJLPT). Urutan dalam tema = pedagogis, bukan frekuensi.",
+  "_source": [
+    "data/kanji-levels.json"
+  ],
+  "kanji": {
+    "不": {
+      "theme": "fungsi",
+      "order": 1,
+      "radical": "一"
+    },
+    "世": {
+      "theme": "kerja",
+      "order": 1,
+      "radical": "一"
+    },
+    "主": {
+      "theme": "orang",
+      "order": 1,
+      "radical": "丶"
+    },
+    "事": {
+      "theme": "kerja",
+      "order": 2,
+      "radical": "亅"
+    },
+    "京": {
+      "theme": "tempat",
+      "order": 1,
+      "radical": "亠"
+    },
+    "仕": {
+      "theme": "kerja",
+      "order": 3,
+      "radical": "人"
+    },
+    "代": {
+      "theme": "kerja",
+      "order": 4,
+      "radical": "人"
+    },
+    "以": {
+      "theme": "fungsi",
+      "order": 2,
+      "radical": "人"
+    },
+    "会": {
+      "theme": "kerja",
+      "order": 5,
+      "radical": "人"
+    },
+    "住": {
+      "theme": "tempat",
+      "order": 2,
+      "radical": "人"
+    },
+    "体": {
+      "theme": "tubuh",
+      "order": 1,
+      "radical": "人"
+    },
+    "作": {
+      "theme": "kerja",
+      "order": 12,
+      "radical": "人"
+    },
+    "使": {
+      "theme": "aksi",
+      "order": 1,
+      "radical": "人"
+    },
+    "借": {
+      "theme": "aksi",
+      "order": 2,
+      "radical": "人"
+    },
+    "元": {
+      "theme": "waktu",
+      "order": 10,
+      "radical": "儿"
+    },
+    "兄": {
+      "theme": "orang",
+      "order": 2,
+      "radical": "儿"
+    },
+    "公": {
+      "theme": "kerja",
+      "order": 6,
+      "radical": "八"
+    },
+    "写": {
+      "theme": "sekolah",
+      "order": 3,
+      "radical": "冖"
+    },
+    "冬": {
+      "theme": "waktu",
+      "order": 1,
+      "radical": "冫"
+    },
+    "凄": {
+      "theme": "sifat",
+      "order": 1,
+      "radical": "冫"
+    },
+    "切": {
+      "theme": "aksi",
+      "order": 3,
+      "radical": "刀"
+    },
+    "別": {
+      "theme": "sifat",
+      "order": 2,
+      "radical": "刀"
+    },
+    "力": {
+      "theme": "tubuh",
+      "order": 3,
+      "radical": "力"
+    },
+    "勉": {
+      "theme": "sekolah",
+      "order": 1,
+      "radical": "力"
+    },
+    "動": {
+      "theme": "aksi",
+      "order": 23,
+      "radical": "力"
+    },
+    "医": {
+      "theme": "tubuh",
+      "order": 9,
+      "radical": "匸"
+    },
+    "去": {
+      "theme": "aksi",
+      "order": 4,
+      "radical": "厶"
+    },
+    "口": {
+      "theme": "tubuh",
+      "order": 2,
+      "radical": "口"
+    },
+    "台": {
+      "theme": "benda",
+      "order": 1,
+      "radical": "口"
+    },
+    "同": {
+      "theme": "fungsi",
+      "order": 3,
+      "radical": "口"
+    },
+    "味": {
+      "theme": "makan",
+      "order": 1,
+      "radical": "口"
+    },
+    "品": {
+      "theme": "benda",
+      "order": 2,
+      "radical": "口"
+    },
+    "員": {
+      "theme": "kerja",
+      "order": 7,
+      "radical": "口"
+    },
+    "問": {
+      "theme": "sekolah",
+      "order": 2,
+      "radical": "口"
+    },
+    "図": {
+      "theme": "benda",
+      "order": 3,
+      "radical": "囗"
+    },
+    "地": {
+      "theme": "alam",
+      "order": 1,
+      "radical": "土"
+    },
+    "坊": {
+      "theme": "orang",
+      "order": 6,
+      "radical": "土"
+    },
+    "堂": {
+      "theme": "tempat",
+      "order": 3,
+      "radical": "土"
+    },
+    "場": {
+      "theme": "tempat",
+      "order": 4,
+      "radical": "土"
+    },
+    "売": {
+      "theme": "makan",
+      "order": 3,
+      "radical": "士"
+    },
+    "夏": {
+      "theme": "waktu",
+      "order": 2,
+      "radical": "夊"
+    },
+    "夕": {
+      "theme": "waktu",
+      "order": 3,
+      "radical": "夕"
+    },
+    "多": {
+      "theme": "sifat",
+      "order": 3,
+      "radical": "夕"
+    },
+    "夜": {
+      "theme": "waktu",
+      "order": 4,
+      "radical": "夕"
+    },
+    "妹": {
+      "theme": "orang",
+      "order": 3,
+      "radical": "女"
+    },
+    "姉": {
+      "theme": "orang",
+      "order": 4,
+      "radical": "女"
+    },
+    "始": {
+      "theme": "aksi",
+      "order": 5,
+      "radical": "女"
+    },
+    "室": {
+      "theme": "tempat",
+      "order": 5,
+      "radical": "宀"
+    },
+    "寒": {
+      "theme": "alam",
+      "order": 2,
+      "radical": "宀"
+    },
+    "少": {
+      "theme": "sifat",
+      "order": 4,
+      "radical": "小"
+    },
+    "屋": {
+      "theme": "tempat",
+      "order": 6,
+      "radical": "尸"
+    },
+    "工": {
+      "theme": "kerja",
+      "order": 13,
+      "radical": "工"
+    },
+    "広": {
+      "theme": "sifat",
+      "order": 5,
+      "radical": "广"
+    },
+    "度": {
+      "theme": "angka",
+      "order": 1,
+      "radical": "广"
+    },
+    "建": {
+      "theme": "aksi",
+      "order": 24,
+      "radical": "廴"
+    },
+    "弟": {
+      "theme": "orang",
+      "order": 5,
+      "radical": "弓"
+    },
+    "待": {
+      "theme": "aksi",
+      "order": 6,
+      "radical": "彳"
+    },
+    "心": {
+      "theme": "pikiran",
+      "order": 1,
+      "radical": "心"
+    },
+    "思": {
+      "theme": "pikiran",
+      "order": 2,
+      "radical": "心"
+    },
+    "急": {
+      "theme": "sifat",
+      "order": 6,
+      "radical": "心"
+    },
+    "悪": {
+      "theme": "sifat",
+      "order": 7,
+      "radical": "心"
+    },
+    "意": {
+      "theme": "pikiran",
+      "order": 3,
+      "radical": "心"
+    },
+    "手": {
+      "theme": "tubuh",
+      "order": 4,
+      "radical": "手"
+    },
+    "持": {
+      "theme": "aksi",
+      "order": 7,
+      "radical": "手"
+    },
+    "教": {
+      "theme": "sekolah",
+      "order": 4,
+      "radical": "攴"
+    },
+    "文": {
+      "theme": "sekolah",
+      "order": 5,
+      "radical": "文"
+    },
+    "料": {
+      "theme": "makan",
+      "order": 2,
+      "radical": "斗"
+    },
+    "方": {
+      "theme": "arah",
+      "order": 1,
+      "radical": "方"
+    },
+    "旅": {
+      "theme": "tempat",
+      "order": 7,
+      "radical": "方"
+    },
+    "早": {
+      "theme": "waktu",
+      "order": 9,
+      "radical": "日"
+    },
+    "映": {
+      "theme": "budaya",
+      "order": 4,
+      "radical": "日"
+    },
+    "春": {
+      "theme": "waktu",
+      "order": 5,
+      "radical": "日"
+    },
+    "昼": {
+      "theme": "waktu",
+      "order": 6,
+      "radical": "日"
+    },
+    "暑": {
+      "theme": "alam",
+      "order": 3,
+      "radical": "日"
+    },
+    "有": {
+      "theme": "fungsi",
+      "order": 4,
+      "radical": "月"
+    },
+    "服": {
+      "theme": "benda",
+      "order": 4,
+      "radical": "月"
+    },
+    "朝": {
+      "theme": "waktu",
+      "order": 7,
+      "radical": "月"
+    },
+    "業": {
+      "theme": "kerja",
+      "order": 8,
+      "radical": "木"
+    },
+    "楽": {
+      "theme": "sifat",
+      "order": 17,
+      "radical": "木"
+    },
+    "歌": {
+      "theme": "budaya",
+      "order": 1,
+      "radical": "欠"
+    },
+    "止": {
+      "theme": "aksi",
+      "order": 8,
+      "radical": "止"
+    },
+    "正": {
+      "theme": "sifat",
+      "order": 8,
+      "radical": "止"
+    },
+    "歩": {
+      "theme": "aksi",
+      "order": 9,
+      "radical": "止"
+    },
+    "死": {
+      "theme": "tubuh",
+      "order": 7,
+      "radical": "歹"
+    },
+    "注": {
+      "theme": "aksi",
+      "order": 10,
+      "radical": "水"
+    },
+    "洋": {
+      "theme": "alam",
+      "order": 4,
+      "radical": "水"
+    },
+    "漢": {
+      "theme": "sekolah",
+      "order": 6,
+      "radical": "水"
+    },
+    "特": {
+      "theme": "sifat",
+      "order": 9,
+      "radical": "牛"
+    },
+    "犬": {
+      "theme": "makan",
+      "order": 4,
+      "radical": "犬"
+    },
+    "理": {
+      "theme": "pikiran",
+      "order": 6,
+      "radical": "玉"
+    },
+    "用": {
+      "theme": "kerja",
+      "order": 9,
+      "radical": "用"
+    },
+    "田": {
+      "theme": "alam",
+      "order": 5,
+      "radical": "田"
+    },
+    "町": {
+      "theme": "tempat",
+      "order": 8,
+      "radical": "田"
+    },
+    "画": {
+      "theme": "budaya",
+      "order": 2,
+      "radical": "田"
+    },
+    "界": {
+      "theme": "tempat",
+      "order": 9,
+      "radical": "田"
+    },
+    "痩": {
+      "theme": "tubuh",
+      "order": 8,
+      "radical": "疒"
+    },
+    "発": {
+      "theme": "aksi",
+      "order": 11,
+      "radical": "癶"
+    },
+    "目": {
+      "theme": "tubuh",
+      "order": 5,
+      "radical": "目"
+    },
+    "真": {
+      "theme": "sifat",
+      "order": 10,
+      "radical": "目"
+    },
+    "着": {
+      "theme": "aksi",
+      "order": 12,
+      "radical": "目"
+    },
+    "知": {
+      "theme": "pikiran",
+      "order": 4,
+      "radical": "矢"
+    },
+    "研": {
+      "theme": "sekolah",
+      "order": 7,
+      "radical": "石"
+    },
+    "私": {
+      "theme": "orang",
+      "order": 7,
+      "radical": "禾"
+    },
+    "秋": {
+      "theme": "waktu",
+      "order": 8,
+      "radical": "禾"
+    },
+    "究": {
+      "theme": "sekolah",
+      "order": 8,
+      "radical": "穴"
+    },
+    "立": {
+      "theme": "aksi",
+      "order": 13,
+      "radical": "立"
+    },
+    "答": {
+      "theme": "sekolah",
+      "order": 9,
+      "radical": "竹"
+    },
+    "紙": {
+      "theme": "benda",
+      "order": 5,
+      "radical": "糸"
+    },
+    "終": {
+      "theme": "aksi",
+      "order": 14,
+      "radical": "糸"
+    },
+    "習": {
+      "theme": "sekolah",
+      "order": 10,
+      "radical": "羽"
+    },
+    "考": {
+      "theme": "pikiran",
+      "order": 5,
+      "radical": "老"
+    },
+    "者": {
+      "theme": "orang",
+      "order": 8,
+      "radical": "老"
+    },
+    "自": {
+      "theme": "orang",
+      "order": 9,
+      "radical": "自"
+    },
+    "色": {
+      "theme": "sifat",
+      "order": 11,
+      "radical": "色"
+    },
+    "英": {
+      "theme": "sekolah",
+      "order": 11,
+      "radical": "艸"
+    },
+    "茶": {
+      "theme": "makan",
+      "order": 5,
+      "radical": "艸"
+    },
+    "親": {
+      "theme": "orang",
+      "order": 10,
+      "radical": "見"
+    },
+    "計": {
+      "theme": "kerja",
+      "order": 11,
+      "radical": "言"
+    },
+    "試": {
+      "theme": "sekolah",
+      "order": 12,
+      "radical": "言"
+    },
+    "貸": {
+      "theme": "kerja",
+      "order": 10,
+      "radical": "貝"
+    },
+    "質": {
+      "theme": "sifat",
+      "order": 12,
+      "radical": "貝"
+    },
+    "赤": {
+      "theme": "sifat",
+      "order": 13,
+      "radical": "赤"
+    },
+    "走": {
+      "theme": "aksi",
+      "order": 15,
+      "radical": "走"
+    },
+    "起": {
+      "theme": "aksi",
+      "order": 16,
+      "radical": "走"
+    },
+    "足": {
+      "theme": "tubuh",
+      "order": 6,
+      "radical": "足"
+    },
+    "転": {
+      "theme": "aksi",
+      "order": 17,
+      "radical": "車"
+    },
+    "送": {
+      "theme": "aksi",
+      "order": 18,
+      "radical": "辵"
+    },
+    "通": {
+      "theme": "aksi",
+      "order": 19,
+      "radical": "辵"
+    },
+    "運": {
+      "theme": "aksi",
+      "order": 20,
+      "radical": "辵"
+    },
+    "道": {
+      "theme": "tempat",
+      "order": 10,
+      "radical": "辵"
+    },
+    "重": {
+      "theme": "sifat",
+      "order": 16,
+      "radical": "里"
+    },
+    "野": {
+      "theme": "alam",
+      "order": 6,
+      "radical": "里"
+    },
+    "開": {
+      "theme": "aksi",
+      "order": 21,
+      "radical": "門"
+    },
+    "集": {
+      "theme": "aksi",
+      "order": 22,
+      "radical": "隹"
+    },
+    "青": {
+      "theme": "sifat",
+      "order": 14,
+      "radical": "靑"
+    },
+    "音": {
+      "theme": "budaya",
+      "order": 3,
+      "radical": "音"
+    },
+    "題": {
+      "theme": "sekolah",
+      "order": 13,
+      "radical": "頁"
+    },
+    "風": {
+      "theme": "alam",
+      "order": 7,
+      "radical": "風"
+    },
+    "飯": {
+      "theme": "makan",
+      "order": 6,
+      "radical": "食"
+    },
+    "館": {
+      "theme": "tempat",
+      "order": 11,
+      "radical": "食"
+    },
+    "験": {
+      "theme": "sekolah",
+      "order": 14,
+      "radical": "馬"
+    },
+    "黒": {
+      "theme": "sifat",
+      "order": 15,
+      "radical": "黑"
+    }
+  }
+}

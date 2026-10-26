@@ -1,5 +1,7 @@
 import { describe, expect, it } from "vitest";
+import n4 from "../data/kanji-n4.json";
 import n5 from "../data/kanji-n5.json";
+import studyN4 from "../data/kanji-study-n4.json";
 import study from "../data/kanji-study-n5.json";
 import {
   groupByRadical,
@@ -52,7 +54,7 @@ describe("parseReading (notasi KANJIDIC2)", () => {
 
 describe("data/kanji-study-n5.json", () => {
   it("mencakup semua kanji N5 tanpa duplikat", () => {
-    expect(chars).toHaveLength(116);
+    expect(chars).toHaveLength(111);
     expect(new Set(chars).size).toBe(chars.length);
     for (const char of chars) {
       expect(studyEntry(char), `tema hilang: ${char}`).not.toBeNull();
@@ -77,6 +79,37 @@ describe("data/kanji-study-n5.json", () => {
     const orders = STUDY_THEMES.map((t) => t.order);
     expect(orders).toEqual([...orders].sort((a, b) => a - b));
     expect(new Set(orders).size).toBe(orders.length);
+  });
+});
+
+describe("data/kanji-study-n4.json", () => {
+  it("mencakup semua kanji N4 tanpa duplikat", () => {
+    expect(n4.kanji).toHaveLength(142);
+    expect(Object.keys(studyN4.kanji)).toHaveLength(142);
+    for (const k of n4.kanji) {
+      expect(studyEntry(k.char), `tema hilang: ${k.char}`).not.toBeNull();
+    }
+  });
+
+  it("setiap tema & radikal N4 valid", () => {
+    const ids = new Set(STUDY_THEMES.map((t) => t.id));
+    for (const [char, entry] of Object.entries(studyN4.kanji)) {
+      expect(ids, `tema tak dikenal untuk ${char}: ${entry.theme}`).toContain(entry.theme);
+      expect(entry.radical, `radikal kosong: ${char}`).not.toBe("");
+    }
+  });
+
+  it("kanji N4 dapat tema yang benar", () => {
+    expect(themeOf("体")?.label).toBe("Tubuh & kesehatan");
+    expect(themeOf("春")?.label).toBe("Waktu & kalender");
+    expect(themeOf("教")?.label).toBe("Sekolah & bahasa");
+  });
+
+  it("groupByTheme N4 tidak kehilangan baris", () => {
+    const rowsN4 = n4.kanji.map((k) => ({ char: k.char, strokes: k.strokes }));
+    const groups = groupByTheme(rowsN4);
+    expect(groups.reduce((n, g) => n + g.rows.length, 0)).toBe(142);
+    expect(groups.some((g) => g.key === "lain")).toBe(false);
   });
 });
 

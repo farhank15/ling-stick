@@ -4,74 +4,6 @@
     "data/kanji-n5.json",
     "data/kanji-levels.json"
   ],
-  "themes": [
-    {
-      "id": "angka",
-      "label": "Angka & uang",
-      "hint": "1–10, ratusan, ribuan, yen",
-      "order": 1
-    },
-    {
-      "id": "waktu",
-      "label": "Waktu & kalender",
-      "hint": "hari, bulan, tahun, jam",
-      "order": 2
-    },
-    {
-      "id": "alam",
-      "label": "Alam & cuaca",
-      "hint": "elemen, cuaca, lanskap",
-      "order": 3
-    },
-    {
-      "id": "orang",
-      "label": "Orang & keluarga",
-      "hint": "siapa, kerabat, nama",
-      "order": 4
-    },
-    {
-      "id": "sekolah",
-      "label": "Sekolah & bahasa",
-      "hint": "belajar, baca-tulis, bicara",
-      "order": 5
-    },
-    {
-      "id": "tempat",
-      "label": "Tempat & perjalanan",
-      "hint": "negara, stasiun, toko, gedung",
-      "order": 6
-    },
-    {
-      "id": "makan",
-      "label": "Makanan & hewan",
-      "hint": "makan-minum, beli, hewan",
-      "order": 7
-    },
-    {
-      "id": "arah",
-      "label": "Arah & posisi",
-      "hint": "atas-bawah, kiri-kanan, mata angin",
-      "order": 8
-    },
-    {
-      "id": "sifat",
-      "label": "Sifat & keadaan",
-      "hint": "besar-kecil, baru-lama, panas-dingin",
-      "order": 9
-    },
-    {
-      "id": "aksi",
-      "label": "Kata kerja dasar",
-      "hint": "pergi, datang, masuk, keluar",
-      "order": 10
-    },
-    {
-      "id": "tanya",
-      "label": "Kata tanya",
-      "hint": "apa, siapa",
-      "order": 11
-    }
-  ],
   "kanji": {
     "日": {
       "theme": "waktu",
@@ -258,11 +190,6 @@
       "order": 12,
       "radical": "巛"
     },
-    "田": {
-      "theme": "alam",
-      "order": 13,
-      "radical": "田"
-    },
     "空": {
       "theme": "alam",
       "order": 14,
@@ -353,11 +280,6 @@
       "order": 5,
       "radical": "言"
     },
-    "文": {
-      "theme": "sekolah",
-      "order": 6,
-      "radical": "文"
-    },
     "字": {
       "theme": "sekolah",
       "order": 7,
@@ -407,11 +329,6 @@
       "theme": "tempat",
       "order": 5,
       "radical": "馬"
-    },
-    "道": {
-      "theme": "tempat",
-      "order": 6,
-      "radical": "辵"
     },
     "社": {
       "theme": "tempat",
@@ -597,16 +514,6 @@
       "theme": "sifat",
       "order": 10,
       "radical": "弓"
-    },
-    "暑": {
-      "theme": "sifat",
-      "order": 11,
-      "radical": "日"
-    },
-    "寒": {
-      "theme": "sifat",
-      "order": 12,
-      "radical": "宀"
     },
     "本": {
       "theme": "sekolah",

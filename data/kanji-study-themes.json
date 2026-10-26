@@ -1,0 +1,107 @@
+{
+  "_note": "Registry tema urutan belajar kanji. Tema = kurasi manual (subjektif, mudah direview).",
+  "themes": [
+    {
+      "id": "angka",
+      "label": "Angka & uang",
+      "hint": "1–10, ratusan, ribuan, yen",
+      "order": 1
+    },
+    {
+      "id": "waktu",
+      "label": "Waktu & kalender",
+      "hint": "hari, bulan, tahun, jam",
+      "order": 2
+    },
+    {
+      "id": "alam",
+      "label": "Alam & cuaca",
+      "hint": "elemen, cuaca, lanskap",
+      "order": 3
+    },
+    {
+      "id": "orang",
+      "label": "Orang & keluarga",
+      "hint": "siapa, kerabat, nama",
+      "order": 4
+    },
+    {
+      "id": "sekolah",
+      "label": "Sekolah & bahasa",
+      "hint": "belajar, baca-tulis, bicara",
+      "order": 5
+    },
+    {
+      "id": "tempat",
+      "label": "Tempat & perjalanan",
+      "hint": "negara, stasiun, toko, gedung",
+      "order": 6
+    },
+    {
+      "id": "makan",
+      "label": "Makanan & hewan",
+      "hint": "makan-minum, beli, hewan",
+      "order": 7
+    },
+    {
+      "id": "arah",
+      "label": "Arah & posisi",
+      "hint": "atas-bawah, kiri-kanan, mata angin",
+      "order": 8
+    },
+    {
+      "id": "sifat",
+      "label": "Sifat & keadaan",
+      "hint": "besar-kecil, baru-lama, panas-dingin",
+      "order": 9
+    },
+    {
+      "id": "aksi",
+      "label": "Kata kerja dasar",
+      "hint": "pergi, datang, masuk, keluar",
+      "order": 10
+    },
+    {
+      "id": "tanya",
+      "label": "Kata tanya",
+      "hint": "apa, siapa",
+      "order": 11
+    },
+    {
+      "id": "tubuh",
+      "label": "Tubuh & kesehatan",
+      "hint": "bagian badan, sakit, obat",
+      "order": 12
+    },
+    {
+      "id": "pikiran",
+      "label": "Pikiran & perasaan",
+      "hint": "pikir, rasa, maksud, tahu",
+      "order": 13
+    },
+    {
+      "id": "kerja",
+      "label": "Kerja & masyarakat",
+      "hint": "pekerjaan, kantor, jual-beli",
+      "order": 14
+    },
+    {
+      "id": "benda",
+      "label": "Benda & bahan",
+      "hint": "alat, pakaian, kertas, gambar",
+      "order": 15
+    },
+    {
+      "id": "budaya",
+      "label": "Budaya & hiburan",
+      "hint": "lagu, gambar, film, suara",
+      "order": 16
+    },
+    {
+      "id": "fungsi",
+      "label": "Kata fungsi",
+      "hint": "kata bantu & penghubung",
+      "order": 17
+    }
+  ]
+}
