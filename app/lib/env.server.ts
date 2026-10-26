@@ -53,7 +53,10 @@ export const env = {
   LARA_MONTHLY_CHAR_LIMIT: int("LARA_MONTHLY_CHAR_LIMIT", 10000),
   NEW_CARDS_PER_DAY: int("NEW_CARDS_PER_DAY", 8),
   DAILY_QUIZ_SIZE: int("DAILY_QUIZ_SIZE", 20),
-  DAILY_LLM_CALL_LIMIT: int("DAILY_LLM_CALL_LIMIT", 200),
+  // Kuota harian panggilan LLM. 500 = cukup buat generate bank + kuis + chat
+  // seharian; provider gratis (Groq/Poolside) masih sanggup. Turunkan kalau
+  // kena rate limit provider.
+  DAILY_LLM_CALL_LIMIT: int("DAILY_LLM_CALL_LIMIT", 500),
   SESSION_TTL_DAYS: int("SESSION_TTL_DAYS", 30),
   // Opsional: kunci HMAC sesi. Kosong = diturunkan dari APP_PASSWORD.
   SESSION_SECRET: str("SESSION_SECRET"),

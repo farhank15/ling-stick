@@ -74,6 +74,8 @@ type QuizQuestion = {
   answer: string;
   meaningId: string | null;
   exampleEn: string | null;
+  /** JA: kana kalimat contoh — furigana + romaji di feedback jawaban. */
+  exampleKana?: string | null;
   reading?: string | null; // JA: kana (+romaji) — furigana di UI shadow
   tokens?: string[]; // JA Susun Kata: token per-kata dari segmentasi AI
   optionReadings?: (string | null)[]; // JA: reading per opsi
@@ -550,6 +552,31 @@ function OptionList({
         );
       })}
     </div>
+  );
+}
+
+/**
+ * Kalimat contoh di feedback jawaban: furigana di atas kanji + romaji di
+ * bawah. Dulu cuma teks italic polos → kalimat Jepang tanpa cara baca.
+ */
+function ExampleLine({ q }: { q: QuizQuestion }) {
+  if (!q.exampleEn) return null;
+  const [first, ...rest] = q.exampleEn.split("\n");
+  const jp = (first ?? "").trim();
+  const romaji = rest.join(" ").trim();
+  if (!hasJa(jp)) {
+    return <span className="mt-1 block text-xs italic opacity-70">“{q.exampleEn}”</span>;
+  }
+  return (
+    <span className="mt-1 block text-xs italic opacity-80">
+      <JaText
+        text={jp}
+        reading={q.exampleKana ?? undefined}
+        romaji={romaji || undefined}
+        kanjiClassName="text-teal-700 dark:text-teal-400"
+        defaultShowRomaji={Boolean(romaji)}
+      />
+    </span>
   );
 }
 
@@ -1176,6 +1203,8 @@ export default function ReviewPage() {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
+          // Ephemeral: penjelasan sekali pakai — jangan masuk riwayat chat.
+          ephemeral: true,
           message: `Jelaskan kata "${c.text}" (${c.meaningId ?? "tanpa arti"}) singkat: arti, kapan dipakai, 1 contoh kalimat + artinya. Bahasa Indonesia. Tulis kata/kalimat Jepang dengan format 漢字（かな・romaji) saat pertama muncul, lalu 漢字（かな）.`,
         }),
       });
@@ -2318,7 +2347,6 @@ export default function ReviewPage() {
                 text={q.prompt}
                 reading={q.reading ?? undefined}
                 kanjiClassName="text-teal-700 dark:text-teal-400"
-                romajiToggle={false}
               />
             </p>
           ) : (
@@ -2368,7 +2396,7 @@ export default function ReviewPage() {
               </span>
             )}
             {q.meaningId ? <span className="block text-xs opacity-80">{q.meaningId}</span> : null}
-            {q.exampleEn ? <span className="block text-xs italic opacity-70">“{q.exampleEn}”</span> : null}
+            <ExampleLine q={q} />
           </div>
           <button className="btn-primary w-full" onClick={next}>
             Lanjut <ArrowRight className="h-4 w-4" />
@@ -2393,7 +2421,7 @@ export default function ReviewPage() {
               </span>
             )}
             {q.meaningId ? <span className="block text-xs opacity-80">{q.meaningId}</span> : null}
-            {q.exampleEn ? <span className="block text-xs italic opacity-70">“{q.exampleEn}”</span> : null}
+            <ExampleLine q={q} />
           </div>
           <button className="btn-primary w-full" onClick={next}>
             Lanjut <ArrowRight className="h-4 w-4" />

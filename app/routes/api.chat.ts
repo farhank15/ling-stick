@@ -6,6 +6,7 @@ import {
   createSession,
   getMessages,
   getSession,
+  historyWindow,
   type StoredSuggestion,
 } from "~/lib/chat.server";
 
@@ -20,10 +21,29 @@ export async function action({ request }: ActionFunctionArgs) {
   const body = (await request.json().catch(() => ({}))) as {
     message?: string;
     sessionId?: number;
+    /** Sekali pakai: jawab tanpa membuat/menulis sesi chat (Tanya Ling di
+     *  review & rute). Dulu tiap klik bikin sesi baru → riwayat chat sampah. */
+    ephemeral?: boolean;
   };
   const message = (body.message ?? "").trim().slice(0, 1000);
   if (!message) {
     return Response.json({ error: "Pesan kosong" }, { status: 400 });
+  }
+
+  if (body.ephemeral) {
+    try {
+      const { data } = await llmChat([], message);
+      return Response.json({
+        ok: true,
+        reply: data.reply,
+        suggestions: (data.suggestions ?? []) as StoredSuggestion[],
+      });
+    } catch (e) {
+      return Response.json(
+        { error: e instanceof Error ? e.message : "Ling lagi nggak bisa jawab" },
+        { status: 502 },
+      );
+    }
   }
 
   // Sesi: pakai yang ada atau bikin baru.
@@ -41,11 +61,13 @@ export async function action({ request }: ActionFunctionArgs) {
     isFirstExchange = true;
   }
 
-  // History dari DB (maks 8 giliran terakhir untuk context window).
+  // History dari DB — pesan pertama + sebanyak mungkin pesan terakhir (budget
+  // karakter), bukan 8 pesan terakhir yang bikin topik sesi panjang hilang.
   const prior = await getMessages(sessionId);
-  const history = prior
-    .slice(-8)
-    .map((m) => ({ role: m.role as "user" | "assistant", content: m.content }));
+  const history = historyWindow(prior).map((m) => ({
+    role: m.role as "user" | "assistant",
+    content: m.content,
+  }));
 
   try {
     const { data } = await llmChat(history, message);

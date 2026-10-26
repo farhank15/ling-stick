@@ -57,6 +57,28 @@ export async function getSession(id: number) {
   return row ?? null;
 }
 
+/** Budget karakter transkrip yang dikirim ke LLM (~8k char ≈ 2k token). */
+const HISTORY_CHAR_BUDGET = 8000;
+
+/**
+ * Jendela konteks buat LLM: pertanyaan PERTAMA (penentu topik) + pesan
+ * terakhir sebanyak yang muat budget. Dulu cuma 8 pesan terakhir → sesi
+ * panjang kehilangan topik dan Ling balik nanya hal yang sudah dijawab.
+ */
+export function historyWindow<T extends { role: string; content: string }>(rows: T[]): T[] {
+  const first = rows[0];
+  if (!first) return [];
+  const picked: T[] = [];
+  let chars = first.content.length;
+  for (let i = rows.length - 1; i > 0; i--) {
+    const m = rows[i]!;
+    if (chars + m.content.length > HISTORY_CHAR_BUDGET) break;
+    picked.unshift(m);
+    chars += m.content.length;
+  }
+  return picked[0] === first ? picked : [first, ...picked];
+}
+
 export async function getMessages(sessionId: number) {
   return db
     .select()

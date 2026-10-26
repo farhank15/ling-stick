@@ -80,6 +80,8 @@ export type QuizQuestion = {
   answer: string;
   meaningId: string | null;
   exampleEn: string | null;
+  /** JA: kana kalimat contoh (furigana + romaji di feedback jawaban). */
+  exampleKana?: string | null;
   reading?: string | null; // JA: kana (+romaji) — furigana di UI shadow
   tokens?: string[]; // JA Susun Kata: token per-kata dari segmentasi AI
   /** JA: reading per opsi (sejajar options) — furigana opsi kuis. Set lama: undefined → tanpa ruby. */
@@ -93,6 +95,8 @@ type ItemRow = {
   register: string;
   meaningId: string | null;
   firstEn: string | null;
+  /** Kana kalimat contoh — dipakai furigana prompt cloze + feedback. */
+  firstKana?: string | null;
   reading: string | null;
 };
 
@@ -103,6 +107,11 @@ const FUNCTION_WORDS_JA = ["は", "が", "を", "に", "で", "へ", "と", "も
 const FUNCTION_WORDS_EN = ["in", "on", "at", "to", "for", "of", "with", "by", "from", "about", "that", "who", "which", "is", "are", "was", "were", "have", "has", "will", "would", "can"];
 
 const KANA_RE = /[\u3040-\u30ff]/;
+
+/** Kana pertama dari reading ("がくせい (gakusei)" → "がくせい"). */
+function headKanaOf(reading: string | null | undefined): string {
+  return (reading ?? "").match(/[\u3040-\u30ff]+/)?.[0] ?? "";
+}
 
 /**
  * Cari partikel JA yang aman dirumpang: tolak yang nempel di konjugasi
@@ -191,6 +200,7 @@ async function collectRows(opts: BuildOpts) {
           meaningId: items.meaningId,
           reading: items.reading,
           firstEn: sql<string | null>`(SELECT en FROM examples WHERE item_id = items.id ORDER BY length(en), id LIMIT 1)`,
+          firstKana: sql<string | null>`(SELECT kana FROM examples WHERE item_id = items.id ORDER BY length(en), id LIMIT 1)`,
         })
         .from(items)
         .where(
@@ -254,6 +264,7 @@ async function buildQuestions(
         meaningId: items.meaningId,
         reading: items.reading,
         firstEn: sql<string | null>`(SELECT en FROM examples WHERE item_id = items.id ORDER BY length(en), id LIMIT 1)`,
+        firstKana: sql<string | null>`(SELECT kana FROM examples WHERE item_id = items.id ORDER BY length(en), id LIMIT 1)`,
       })
       .from(items)
       .where(and(eq(items.status, "known"), eq(items.lang, lang), deckScope))
@@ -489,6 +500,9 @@ async function buildQuestions(
               answer: String(opts2.indexOf(hit)),
               meaningId: item.meaningId,
               exampleEn: item.firstEn,
+              // matcha: partikel dirumpang di tengah run kanji — kana kalimat tak
+              // bisa di-align tanpa menebak batas, jadi prompt dibiarkan polos.
+              // Furigana + romaji tetap muncul di feedback (ExampleLine).
             });
             if (i > limit * 10) break; // pengaman
             continue;
@@ -526,6 +540,12 @@ async function buildQuestions(
       const pairs = shuffle([{ t: item.text, r: item.reading }, ...distractors.map((d) => ({ t: d.text, r: d.reading }))]);
       const opts2 = pairs.map((p) => p.t);
       usedText.add(sentence);
+      // Furigana prompt: kana KALIMAT contoh, dengan kana kata yang dirumpang
+      // dibuang — blanko tidak menelan kana, jadi sisa kalimat tetap align.
+      // matcha: pakai item.reading (kana headword) = buildRuby gagal → ruby hilang.
+      const blankKana = headKanaOf(item.reading);
+      const promptKana =
+        item.firstKana && blankKana ? item.firstKana.replace(blankKana, "") : item.firstKana;
       questions.push({
         itemId: item.id,
         type: "cloze",
@@ -534,7 +554,7 @@ async function buildQuestions(
         answer: String(opts2.indexOf(item.text)),
         meaningId: item.meaningId,
         exampleEn: sentence,
-        reading: item.reading,
+        reading: promptKana ?? undefined,
         optionReadings: pairs.map((p) => p.r ?? null),
       });
     } else {
@@ -555,7 +575,10 @@ async function buildQuestions(
     }
     if (i > limit * 10) break; // pengaman
   }
-  return questions;
+  // Kana kalimat contoh untuk SEMUA tipe soal (feedback jawaban pakai furigana
+  // + romaji). Satu pass di akhir biar tak perlu diulang di tiap cabang.
+  const kanaById = new Map(allRows.map((r) => [r.id, r.firstKana ?? null]));
+  return questions.map((q) => ({ ...q, exampleKana: kanaById.get(q.itemId) ?? null }));
 }
 
 function modeTitle(mode: QuizMode, day: string, lang: TargetLang = "en"): string {

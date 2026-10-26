@@ -279,9 +279,12 @@ export async function llmChat(
   history: { role: "user" | "assistant"; content: string }[],
   message: string,
 ): Promise<{ data: ChatOutput; provider: string }> {
+  // Jendela konteks sudah dipotong pemanggil (chat.server.historyWindow) —
+  // di sini cuma pengaman terakhir + potong per-pesan biar satu balasan
+  // panjang tidak menghabiskan seluruh budget token.
   const transcript = history
-    .slice(-8)
-  .map((m) => `${m.role === "user" ? "Learner" : "Ling"}: ${m.content.slice(0, 500)}`)
+    .slice(-24)
+    .map((m) => `${m.role === "user" ? "Learner" : "Ling"}: ${m.content.slice(0, 700)}`)
     .join("\n");
   const user = transcript
     ? `Conversation so far:
