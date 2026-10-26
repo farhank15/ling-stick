@@ -779,7 +779,7 @@ export default function AksaraPage() {
         </div>
         {script === "kanji" ? (
           <div className="flex items-center gap-1.5">
-            <div className="relative flex-1">
+            <div className="relative min-w-0 flex-1">
               <Search
                 className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-zinc-400"
                 aria-hidden
@@ -791,7 +791,7 @@ export default function AksaraPage() {
                 onChange={(e) => setQuery(e.target.value)}
                 placeholder="Cari kanji, arti, atau bacaan…"
                 aria-label="Cari kanji"
-                className="input min-h-10 w-full pl-9 pr-9 text-sm [&::-webkit-search-cancel-button]:hidden"
+                className="input min-h-10 w-full pl-9 pr-9 text-base [&::-webkit-search-cancel-button]:hidden"
               />
               {query ? (
                 <button
@@ -1775,7 +1775,7 @@ function KanjiFlash({
       </div>
 
       <div className="flex-1 overflow-y-auto overscroll-contain px-4 py-4">
-        <div className="mx-auto w-full max-w-md">
+        <div className="mx-auto flex min-h-full w-full max-w-md flex-col justify-center">
           {!started ? (
             <div className="space-y-4">
               <div className="grid grid-cols-2 gap-2">
