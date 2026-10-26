@@ -9,6 +9,7 @@ import {
   RotateCcw,
   Search,
   SlidersHorizontal,
+  TriangleAlert,
   Volume2,
   X,
 } from "lucide-react";
@@ -350,102 +351,6 @@ function buildTrapQuiz(
   return qs;
 }
 
-function KanaTrapQuiz({ script, groups }: { script: string; groups: TrapGroup[] }) {
-  const [qs, setQs] = useState<TrapQ[]>([]);
-  const [qi, setQi] = useState(0);
-  const [picked, setPicked] = useState<string | null>(null);
-  const [score, setScore] = useState(0);
-
-  if (script === "kanji" || groups.length === 0) return null;
-  const start = () => {
-    setQs(buildTrapQuiz(groups, romajiMapFor(script as "hiragana" | "katakana")));
-    setQi(0);
-    setPicked(null);
-    setScore(0);
-  };
-
-  if (qs.length === 0) {
-    return (
-      <div className="card flex items-center gap-3 p-4">
-        <div className="min-w-0 flex-1">
-          <p className="font-semibold">Latihan Jebakan Mirip</p>
-          <p className="text-xs text-zinc-500">10 soal — pilihan selalu dari grup yang sama. Berani?</p>
-        </div>
-        <button className="btn-primary shrink-0 text-sm" onClick={start}>
-          Mulai
-        </button>
-      </div>
-    );
-  }
-
-  const q = qs[qi];
-  const done = qi >= qs.length;
-  if (!q || done) {
-    return (
-      <div className="card space-y-2 p-4 text-center">
-        <p className="font-bold">Skor {score}/{qs.length}</p>
-        <p className="text-xs text-zinc-500">
-          {score === qs.length ? "Sempurna — grup mirip takluk!" : "Ulangi sampai sempurna, lalu lepas mnemoniknya."}
-        </p>
-        <div className="flex justify-center gap-2">
-          <button className="btn-secondary text-sm" onClick={() => setQs([])}>
-            Selesai
-          </button>
-          <button className="btn-primary text-sm" onClick={start}>
-            Ulangi
-          </button>
-        </div>
-      </div>
-    );
-  }
-
-  return (
-    <div className="card space-y-3 p-4 text-center">
-      <p className="text-[11px] uppercase tracking-wide text-zinc-400">
-        Soal {qi + 1}/{qs.length} · benar {score}
-      </p>
-      <p className="text-5xl font-bold">{q.kana}</p>
-      <p className="text-xs text-zinc-400">Bacanya yang mana?</p>
-      <div className="grid grid-cols-2 gap-1.5">
-        {q.options.map((opt) => {
-          const isAnswer = opt === q.answer;
-          const isPicked = picked === opt;
-          let cls = "btn-secondary justify-center";
-          if (picked !== null) {
-            if (isAnswer) cls += " !border-teal-500 !bg-teal-50 !text-teal-800 dark:!bg-teal-950 dark:!text-teal-300";
-            else if (isPicked) cls += " !border-red-300 !bg-red-50 !text-red-700 dark:!bg-red-950 dark:!text-red-300";
-            else cls += " opacity-50";
-          }
-          return (
-            <button
-              key={opt}
-              className={cls}
-              disabled={picked !== null}
-              onClick={() => {
-                setPicked(opt);
-                if (isAnswer) setScore((s) => s + 1);
-              }}
-            >
-              {opt}
-            </button>
-          );
-        })}
-      </div>
-      {picked !== null ? (
-        <button
-          className="btn-primary w-full"
-          onClick={() => {
-            setQi((i) => i + 1);
-            setPicked(null);
-          }}
-        >
-          Lanjut
-        </button>
-      ) : null}
-    </div>
-  );
-}
-
 /* ── Drill acak kana: dua arah (kana⇄romaji) + filter baris per script.
  * matcha: belum ada review kana sama sekali — tabel doang tanpa drill. */
 type DrillFilter = "gojuon" | "dakuten" | "yoon";
@@ -512,218 +417,417 @@ const DRILL_DIRS: { id: DrillDir; label: string }[] = [
   { id: "ketik", label: "Ketik (Free-response)" },
 ];
 
-function KanaDrillQuiz({ script }: { script: string }) {
+/* ── Drill kana terpadu: acak + jebakan mirip ───────────────────────────
+ * Dulu dua kartu inline terpisah (setting drill di atas, kuis jebakan di
+ * bawah) — dua alur, dua tempat, dua gaya, dan tab kana jadi panjang.
+ * Sekarang satu overlay full-screen dengan pemilih mode, mengikuti pola
+ * drill kanji. matcha: dua quiz inline = drill susah ditemukan di HP.
+ */
+type KanaDrillMode = "drill" | "trap";
+type KanaQ = DrillQ & { note?: { rule: string; mnemonic: string } };
+
+const KANA_MODE_META: { id: KanaDrillMode; label: string; desc: string }[] = [
+  { id: "drill", label: "Drill acak", desc: "kana ⇄ romaji, baris bisa dipilih" },
+  { id: "trap", label: "Jebakan mirip", desc: "pilihan selalu dari grup yang sama" },
+];
+
+function KanaDrill({
+  script,
+  groups,
+  open,
+  initialMode,
+  onClose,
+}: {
+  script: "hiragana" | "katakana";
+  groups: TrapGroup[];
+  open: boolean;
+  initialMode: KanaDrillMode;
+  onClose: () => void;
+}) {
+  const label = script === "hiragana" ? "Hiragana" : "Katakana";
+  const [mode, setMode] = useState<KanaDrillMode>(initialMode);
   const [filters, setFilters] = useState<DrillFilter[]>(["gojuon", "dakuten", "yoon"]);
   const [dir, setDir] = useState<DrillDir>("campur");
-  const [qs, setQs] = useState<DrillQ[]>([]);
+  const [qs, setQs] = useState<KanaQ[]>([]);
   const [qi, setQi] = useState(0);
   const [picked, setPicked] = useState<string | null>(null);
   const [score, setScore] = useState(0);
   const [typed, setTyped] = useState("");
   const [typedResult, setTypedResult] = useState<{ ok: boolean; answer: string } | null>(null);
+  const [started, setStarted] = useState(false);
+  const inputRef = useRef<HTMLInputElement>(null);
 
-  if (script !== "hiragana" && script !== "katakana") return null;
-  const toggleFilter = (f: DrillFilter) =>
-    setFilters((s) => (s.includes(f) ? s.filter((x) => x !== f) : [...s, f]));
-  const start = () => {
-    const pool = drillPool(script, filters.length ? filters : ["gojuon", "dakuten", "yoon"]);
-    setQs(buildDrill(pool, dir));
+  const q = qs[qi];
+  const isTyping = mode === "drill" && dir === "ketik";
+  const revealed = isTyping ? typedResult !== null : picked !== null;
+  const correct = isTyping ? (typedResult?.ok ?? false) : picked === q?.answer;
+  const modeLabel = mode === "trap" ? "Jebakan mirip" : "Drill acak";
+
+  // Buka overlay = mulai dari layar pilih mode lagi (sesi lama tidak nyangkut).
+  useEffect(() => {
+    if (!open) return;
+    setMode(initialMode);
+    setStarted(false);
+    setQs([]);
     setQi(0);
     setPicked(null);
     setScore(0);
     setTyped("");
     setTypedResult(null);
+  }, [open, initialMode]);
+
+  const start = (m: KanaDrillMode) => {
+    if (m === "trap") {
+      const romaji = romajiMapFor(script);
+      setQs(
+        buildTrapQuiz(groups, romaji).map((t) => {
+          const g = groups.find((x) => x.members.includes(t.kana));
+          return {
+            ask: t.kana,
+            askIsKana: true,
+            answer: t.answer,
+            options: t.options,
+            note: g ? { rule: g.rule, mnemonic: g.mnemonic } : undefined,
+          };
+        }),
+      );
+    } else {
+      const pool = drillPool(script, filters.length ? filters : ["gojuon", "dakuten", "yoon"]);
+      setQs(buildDrill(pool, dir));
+    }
+    setMode(m);
+    setQi(0);
+    setPicked(null);
+    setScore(0);
+    setTyped("");
+    setTypedResult(null);
+    setStarted(true);
   };
 
-  if (qs.length === 0) {
-    return (
-      <div className="card space-y-3 p-4">
-        <div>
-          <p className="font-semibold">Drill Acak {script === "hiragana" ? "Hiragana" : "Katakana"}</p>
-          <p className="text-xs text-zinc-500">10 soal acak — dua arah, baris bisa dikombinasi.</p>
-        </div>
-        <div>
-          <p className="label mb-1.5">Baris</p>
-          <div className="flex flex-wrap gap-1.5">
-            {DRILL_FILTERS.map((f) => (
-              <button
-                key={f.id}
-                className={`chip min-h-8 px-2.5 text-[11px] ${filters.includes(f.id) ? "chip-active" : ""}`}
-                onClick={() => toggleFilter(f.id)}
-                aria-pressed={filters.includes(f.id)}
-              >
-                {f.label}
-              </button>
-            ))}
-          </div>
-        </div>
-        <div>
-          <p className="label mb-1.5">Arah</p>
-          <div className="flex flex-wrap gap-1.5">
-            {DRILL_DIRS.map((d) => (
-              <button
-                key={d.id}
-                className={`chip min-h-8 px-2.5 text-[11px] ${dir === d.id ? "chip-active" : ""}`}
-                onClick={() => setDir(d.id)}
-              >
-                {d.label}
-              </button>
-            ))}
-          </div>
-        </div>
-        <button className="btn-primary w-full" onClick={start}>
-          Mulai drill
-        </button>
-      </div>
-    );
-  }
+  const next = () => {
+    setQi((i) => i + 1);
+    setPicked(null);
+    setTyped("");
+    setTypedResult(null);
+  };
 
-  const q = qs[qi];
-  const done = qi >= qs.length;
-  if (!q || done) {
-    return (
-      <div className="card space-y-2 p-4 text-center">
-        <p className="font-bold">Skor {score}/{qs.length}</p>
-        <p className="text-xs text-zinc-500">
-          {score === qs.length ? "Sempurna!" : "Yang salah tandain — masuk mode mirip kalau ketuker."}
-        </p>
-        <div className="flex justify-center gap-2">
-          <button className="btn-secondary text-sm" onClick={() => setQs([])}>
-            Ganti setelan
-          </button>
-          <button className="btn-primary text-sm" onClick={start}>
-            Acak lagi
-          </button>
-        </div>
-      </div>
-    );
-  }
+  const pick = (opt: string) => {
+    if (!q || picked !== null) return;
+    setPicked(opt);
+    if (opt === q.answer) setScore((s) => s + 1);
+    else speak(q.askIsKana ? q.ask : opt, "ja-JP");
+  };
+
+  const check = () => {
+    if (!q || !typed.trim()) return;
+    const ok = q.askIsKana
+      ? typed.trim().toLowerCase() === q.answer.toLowerCase()
+      : typed.trim() === q.answer;
+    setTypedResult({ ok, answer: q.answer });
+    if (ok) setScore((s) => s + 1);
+    else speak(q.askIsKana ? q.ask : q.answer, "ja-JP");
+  };
+
+  // Autofocus input free-response tiap soal baru.
+  useEffect(() => {
+    if (open && started && isTyping && q && typedResult === null) {
+      const t = setTimeout(() => inputRef.current?.focus(), 100);
+      return () => clearTimeout(t);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [open, started, qi, isTyping]);
+
+  // Keyboard: 1–4 pilih opsi, Enter/Space lanjut, Esc tutup.
+  useEffect(() => {
+    if (!open) return;
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === "Escape") {
+        onClose();
+        return;
+      }
+      if (!started || !q) return;
+      if (e.target instanceof HTMLInputElement) return;
+      if (!revealed && ["1", "2", "3", "4"].includes(e.key)) {
+        const opt = q.options[Number(e.key) - 1];
+        if (opt) {
+          e.preventDefault();
+          pick(opt);
+        }
+        return;
+      }
+      if (revealed && (e.key === "Enter" || e.key === " ")) {
+        e.preventDefault();
+        next();
+      }
+    };
+    const prevOverflow = document.body.style.overflow;
+    document.body.style.overflow = "hidden";
+    window.addEventListener("keydown", onKey);
+    return () => {
+      document.body.style.overflow = prevOverflow;
+      window.removeEventListener("keydown", onKey);
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [open, started, qi, picked, typedResult, q, revealed]);
+
+  if (!open) return null;
+
+  const pct = qs.length ? Math.round((Math.min(qi, qs.length) / qs.length) * 100) : 0;
+  const prompt = isTyping
+    ? q?.askIsKana
+      ? "Ketik bacanya (romaji)"
+      : "Ketik kananya"
+    : q?.askIsKana
+      ? "Bacanya yang mana?"
+      : "Kananya yang mana?";
+  const verdict =
+    score === qs.length
+      ? "Sempurna — grup mirip takluk!"
+      : score >= qs.length * 0.8
+        ? "Bagus. Ulangi sekali lagi biar nempel."
+        : "Yang salah itu yang paling berharga — ulangi sampai sempurna.";
 
   return (
-    <div className="card space-y-3 p-4 text-center">
-      <p className="text-[11px] uppercase tracking-wide text-zinc-400">
-        Soal {qi + 1}/{qs.length} · benar {score}
-      </p>
-      <p className={q.askIsKana ? "text-5xl font-bold" : "text-3xl font-bold"}>{q.ask}</p>
-      <p className="text-xs text-zinc-400">
-        {dir === "ketik"
-          ? q.askIsKana
-            ? "Ketik bacanya (romaji)"
-            : "Ketik kananya"
-          : q.askIsKana
-            ? "Bacanya yang mana?"
-            : "Kananya yang mana?"}
-      </p>
-      {dir === "ketik" ? (
-        <>
-          <input
-            key={qi}
-            className="input-area mt-4 text-center text-lg"
-            placeholder={q.askIsKana ? "Ketik romaji…" : "Ketik kana…"}
-            value={typed}
-            autoFocus
-            disabled={typedResult !== null}
-            onChange={(e) => setTyped(e.target.value)}
-            onKeyDown={(e) => {
-              if (e.key === "Enter") {
-                if (typedResult !== null) {
-                  setQi((i) => i + 1);
-                  setPicked(null);
-                  setTyped("");
-                  setTypedResult(null);
-                } else if (typed.trim()) {
-                  const ok = q.askIsKana
-                    ? typed.trim().toLowerCase() === q.answer.toLowerCase()
-                    : typed.trim() === q.answer;
-                  setTypedResult({ ok, answer: q.answer });
-                  if (ok) setScore((s) => s + 1);
-                  else speak(q.askIsKana ? q.ask : q.answer, "ja-JP");
-                }
-              }
-            }}
-          />
-          {typedResult ? (
-            <p
-              className={`mt-2 rounded-xl px-3 py-2 text-center text-sm font-medium ${
-                typedResult.ok
-                  ? "bg-teal-50 text-teal-700 dark:bg-teal-950 dark:text-teal-300"
-                  : "bg-amber-50 text-amber-700 dark:bg-amber-950 dark:text-amber-300"
-              }`}
-            >
-              {typedResult.ok ? "✓ Tepat!" : `✗ Jawaban: ${typedResult.answer}`}
-            </p>
-          ) : null}
-          {typedResult !== null ? (
-            <button
-              className="btn-primary mt-3 w-full"
-              onClick={() => {
-                setQi((i) => i + 1);
-                setPicked(null);
-                setTyped("");
-                setTypedResult(null);
-              }}
-            >
-              Lanjut →
-            </button>
-          ) : (
-            <button
-              className="btn-primary mt-3 w-full"
-              onClick={() => {
-                if (!typed.trim()) return;
-                const ok = q.askIsKana
-                  ? typed.trim().toLowerCase() === q.answer.toLowerCase()
-                  : typed.trim() === q.answer;
-                setTypedResult({ ok, answer: q.answer });
-                if (ok) setScore((s) => s + 1);
-                else speak(q.askIsKana ? q.ask : q.answer, "ja-JP");
-              }}
-              disabled={!typed.trim()}
-            >
-              Periksa
-            </button>
-          )}
-        </>
-      ) : (
-        <div className="grid grid-cols-2 gap-1.5">
-          {q.options.map((opt) => {
-            const isAnswer = opt === q.answer;
-            const isPicked = picked === opt;
-            let cls = "btn-secondary justify-center";
-            if (picked !== null) {
-              if (isAnswer) cls += " !border-teal-500 !bg-teal-50 !text-teal-800 dark:!bg-teal-950 dark:!text-teal-300";
-              else if (isPicked) cls += " !border-red-300 !bg-red-50 !text-red-700 dark:!bg-red-950 dark:!text-red-300";
-              else cls += " opacity-50";
-            }
-            return (
-              <button
-                key={opt}
-                className={`${cls} ${q.askIsKana ? "" : "text-2xl"}`}
-                disabled={picked !== null}
-                onClick={() => {
-                  setPicked(opt);
-                  if (isAnswer) setScore((s) => s + 1);
-                  else speak(q.askIsKana ? q.ask : opt, "ja-JP");
-                }}
-              >
-                {opt}
-              </button>
-            );
-          })}
+    <div
+      className="fixed inset-0 z-50 flex flex-col bg-zinc-50 dark:bg-zinc-950"
+      role="dialog"
+      aria-modal="true"
+      aria-label={`Drill ${label}`}
+    >
+      <div className="flex items-center gap-2 border-b border-zinc-200/70 px-4 py-2.5 dark:border-zinc-800/70">
+        <div className="min-w-0 flex-1">
+          <p className="text-[10px] font-medium uppercase tracking-wider text-zinc-400">
+            Drill {label}
+          </p>
+          <p className="truncate text-sm font-semibold">
+            {started && q ? `${modeLabel} · ${qi + 1} / ${qs.length}` : modeLabel}
+          </p>
         </div>
-      )}
-      {picked !== null && dir !== "ketik" ? (
         <button
-          className="btn-primary w-full"
-          onClick={() => {
-            setQi((i) => i + 1);
-            setPicked(null);
-            setTyped("");
-            setTypedResult(null);
-          }}
+          onClick={onClose}
+          aria-label="Tutup drill"
+          className="btn-ghost min-h-9 min-w-9 justify-center px-2"
         >
-          Lanjut
+          <X className="h-4 w-4" />
         </button>
-      ) : null}
+      </div>
+      <div className="h-1 w-full bg-zinc-200 dark:bg-zinc-800">
+        <div
+          className="h-full bg-teal-500 transition-[width] duration-300"
+          style={{ width: `${started ? pct : 0}%` }}
+        />
+      </div>
+
+      <div className="flex-1 overflow-y-auto overscroll-contain px-4 py-4">
+        {/* Layar pilih mode mulai dari atas; sesi & ringkasan di tengah. */}
+        <div
+          className={`mx-auto flex min-h-full w-full max-w-md flex-col ${started ? "justify-center" : "justify-start"}`}
+        >
+          {!started ? (
+            <div className="space-y-4">
+              <div className="grid grid-cols-2 gap-2">
+                {KANA_MODE_META.map((m) => {
+                  const active = mode === m.id;
+                  const disabled = m.id === "trap" && groups.length === 0;
+                  return (
+                    <button
+                      key={m.id}
+                      onClick={() => setMode(m.id)}
+                      aria-pressed={active}
+                      disabled={disabled}
+                      className={`rounded-2xl border p-3 text-left transition-colors disabled:opacity-40 ${
+                        active
+                          ? "border-teal-500 bg-teal-50 dark:bg-teal-950/50"
+                          : "border-zinc-200 bg-white dark:border-zinc-800 dark:bg-zinc-900"
+                      }`}
+                    >
+                      <p
+                        className={`text-sm font-semibold ${
+                          active ? "text-teal-700 dark:text-teal-300" : ""
+                        }`}
+                      >
+                        {m.label}
+                      </p>
+                      <p className="mt-0.5 text-[11px] leading-snug text-zinc-500">{m.desc}</p>
+                    </button>
+                  );
+                })}
+              </div>
+
+              {mode === "drill" ? (
+                <div className="space-y-2.5">
+                  <div>
+                    <p className="label mb-1.5">Baris</p>
+                    <div className="flex flex-wrap gap-1.5">
+                      {DRILL_FILTERS.map((f) => (
+                        <button
+                          key={f.id}
+                          className={`chip min-h-8 px-2.5 text-[11px] ${filters.includes(f.id) ? "chip-active" : ""}`}
+                          onClick={() =>
+                            setFilters((s) =>
+                              s.includes(f.id) ? s.filter((x) => x !== f.id) : [...s, f.id],
+                            )
+                          }
+                          aria-pressed={filters.includes(f.id)}
+                        >
+                          {f.label}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+                  <div>
+                    <p className="label mb-1.5">Arah</p>
+                    <div className="flex flex-wrap gap-1.5">
+                      {DRILL_DIRS.map((d) => (
+                        <button
+                          key={d.id}
+                          className={`chip min-h-8 px-2.5 text-[11px] ${dir === d.id ? "chip-active" : ""}`}
+                          onClick={() => setDir(d.id)}
+                          aria-pressed={dir === d.id}
+                        >
+                          {d.label}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+                </div>
+              ) : (
+                <p className="text-[11px] leading-relaxed text-zinc-500">
+                  {groups.length} grup jebakan. Pilihan jawaban selalu dari grup yang sama, jadi kamu
+                  benar-benar melatih bedanya — bukan menebak. Aturan + mnemoniknya muncul setelah
+                  jawab.
+                </p>
+              )}
+
+              <button className="btn-primary w-full justify-center" onClick={() => start(mode)}>
+                <Play className="h-4 w-4" /> Mulai {mode === "trap" ? "jebakan" : "drill"}
+              </button>
+            </div>
+          ) : !q ? (
+            <div className="space-y-4 text-center">
+              <p className="text-5xl font-bold tabular-nums">
+                {score}
+                <span className="text-xl font-medium text-zinc-400">/{qs.length}</span>
+              </p>
+              <p className="text-xs leading-relaxed text-zinc-500">{verdict}</p>
+              <div className="grid grid-cols-2 gap-2">
+                <button className="btn-secondary justify-center" onClick={() => setStarted(false)}>
+                  Ganti setelan
+                </button>
+                <button className="btn-primary justify-center" onClick={() => start(mode)}>
+                  <RotateCcw className="h-4 w-4" /> Ulangi
+                </button>
+              </div>
+            </div>
+          ) : (
+            <div className="space-y-3">
+              <div className="card flex min-h-[170px] flex-col items-center justify-center gap-2 p-5 text-center">
+                <p
+                  className={
+                    q.askIsKana ? "font-jp text-6xl font-bold leading-none" : "text-3xl font-bold"
+                  }
+                >
+                  {q.ask}
+                </p>
+                <p className="text-xs text-zinc-400">{prompt}</p>
+                {revealed ? (
+                  <p
+                    className={`text-sm font-medium ${
+                      correct
+                        ? "text-teal-700 dark:text-teal-300"
+                        : "text-amber-700 dark:text-amber-300"
+                    }`}
+                  >
+                    {correct ? "Tepat!" : `Jawaban: ${q.answer}`}
+                  </p>
+                ) : null}
+                {q.askIsKana ? (
+                  <SpeakButton
+                    text={q.ask}
+                    lang="ja-JP"
+                    className="h-3.5 w-3.5"
+                    buttonClassName="shrink-0 rounded-lg p-1 text-zinc-400 transition-colors hover:text-teal-600 dark:text-zinc-500 dark:hover:text-teal-400"
+                    title="Dengarkan kana"
+                  />
+                ) : null}
+              </div>
+
+              {isTyping ? (
+                <>
+                  <input
+                    ref={inputRef}
+                    key={qi}
+                    className="input-area text-center text-lg"
+                    placeholder={q.askIsKana ? "Ketik romaji…" : "Ketik kana…"}
+                    value={typed}
+                    disabled={typedResult !== null}
+                    onChange={(e) => setTyped(e.target.value)}
+                    onKeyDown={(e) => {
+                      if (e.key !== "Enter") return;
+                      if (typedResult !== null) next();
+                      else check();
+                    }}
+                  />
+                  {typedResult === null ? (
+                    <button
+                      className="btn-primary w-full justify-center"
+                      onClick={check}
+                      disabled={!typed.trim()}
+                    >
+                      Periksa
+                    </button>
+                  ) : null}
+                </>
+              ) : (
+                <div className="grid grid-cols-2 gap-1.5">
+                  {q.options.map((opt, i) => {
+                    const isAnswer = opt === q.answer;
+                    const isPicked = picked === opt;
+                    const cls =
+                      picked === null
+                        ? "border-zinc-200 bg-white text-zinc-700 hover:bg-zinc-100 dark:border-zinc-800 dark:bg-zinc-900 dark:text-zinc-300 dark:hover:bg-zinc-800"
+                        : isAnswer
+                          ? "border-teal-500 bg-teal-50 text-teal-800 dark:bg-teal-950 dark:text-teal-300"
+                          : isPicked
+                            ? "border-red-300 bg-red-50 text-red-700 dark:bg-red-950 dark:text-red-300"
+                            : "border-zinc-200 bg-white text-zinc-400 opacity-50 dark:border-zinc-800 dark:bg-zinc-900";
+                    return (
+                      <button
+                        key={opt}
+                        onClick={() => pick(opt)}
+                        disabled={picked !== null}
+                        className={`flex min-h-12 items-center justify-center gap-2 rounded-xl border px-3 font-medium transition-colors ${cls} ${
+                          q.askIsKana ? "text-base" : "font-jp text-2xl"
+                        }`}
+                      >
+                        <span className="text-[10px] text-zinc-400">{i + 1}</span>
+                        {opt}
+                      </button>
+                    );
+                  })}
+                </div>
+              )}
+
+              {revealed && q.note ? (
+                <div className="rounded-xl border border-amber-200 bg-amber-50 px-3 py-2 text-left dark:border-amber-900/60 dark:bg-amber-950/40">
+                  <p className="text-[11px] font-semibold text-amber-800 dark:text-amber-200">
+                    {q.note.rule}
+                  </p>
+                  <p className="mt-0.5 text-[11px] leading-relaxed text-amber-700 dark:text-amber-300">
+                    {q.note.mnemonic}
+                  </p>
+                </div>
+              ) : null}
+
+              {revealed ? (
+                <button className="btn-primary w-full justify-center" onClick={next}>
+                  Lanjut
+                </button>
+              ) : null}
+            </div>
+          )}
+        </div>
+      </div>
     </div>
   );
 }
@@ -747,6 +851,8 @@ export default function AksaraPage() {
   // daftar 100+ kanji, jadi ikut nempel di band sticky (bukan di dasar halaman).
   const [query, setQuery] = useState("");
   const [drillOpen, setDrillOpen] = useState(false);
+  // Drill kana: satu overlay, dua pintu masuk (drill acak / jebakan mirip).
+  const [kanaDrill, setKanaDrill] = useState<"drill" | "trap" | null>(null);
   const selGroup = similarOn && selKana
     ? (confusables ?? []).find((g) => g.members.includes(selKana)) ?? null
     : null;
@@ -777,6 +883,25 @@ export default function AksaraPage() {
             </button>
           ))}
         </div>
+        {script !== "kanji" ? (
+          <div className="grid grid-cols-2 gap-1.5">
+            <button
+              onClick={() => setKanaDrill("drill")}
+              className="btn-primary min-h-10 gap-1.5 px-3 text-sm"
+            >
+              <Play className="h-4 w-4" aria-hidden />
+              Drill
+            </button>
+            <button
+              onClick={() => setKanaDrill("trap")}
+              disabled={(confusables ?? []).length === 0}
+              className="btn-secondary min-h-10 gap-1.5 px-3 text-sm"
+            >
+              <TriangleAlert className="h-4 w-4" aria-hidden />
+              Jebakan
+            </button>
+          </div>
+        ) : null}
         {script === "kanji" ? (
           <div className="flex items-center gap-1.5">
             <div className="relative min-w-0 flex-1">
@@ -858,8 +983,6 @@ export default function AksaraPage() {
               </button>
             </div>
           ) : null}
-          <KanaTrapQuiz script={script} groups={confusables ?? []} />
-          <KanaDrillQuiz script={script} />
           {KANA_SECTIONS.map((sec, si) => {
             const rows = KANA_TABLES[script].slice(sec.slice[0], sec.slice[1]);
             if (rows.length === 0) return null;
@@ -966,6 +1089,15 @@ export default function AksaraPage() {
               ? "Hiragana = bunyi asli bahasa Jepang: partikel & infleksi selalu pakai ini."
               : "Katakana = kata serapan asing & onomatope, mis. コーヒー (koohii)."}
           </p>
+
+          {/* Drill kana = overlay full-screen, dipicu tombol di band sticky. */}
+          <KanaDrill
+            script={script}
+            groups={confusables ?? []}
+            open={kanaDrill !== null}
+            initialMode={kanaDrill ?? "drill"}
+            onClose={() => setKanaDrill(null)}
+          />
         </div>
       ) : (
         <div className="space-y-4">
