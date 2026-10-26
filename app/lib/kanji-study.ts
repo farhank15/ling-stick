@@ -81,6 +81,16 @@ export function parseReading(raw: string): ReadingPart {
   return { stem, okurigana, affix, raw: value };
 }
 
+/** Katakana → hiragana — untuk mencocokkan bacaan on dengan reading vocab. */
+export function toHiragana(text: string): string {
+  return [...text]
+    .map((c) => {
+      const cp = c.codePointAt(0)!;
+      return cp >= 0x30a1 && cp <= 0x30f6 ? String.fromCodePoint(cp - 0x60) : c;
+    })
+    .join("");
+}
+
 /** Varian tampilan radikal klasik → bentuk yang dikenal (辵 → 辶). */
 const RADICAL_DISPLAY: Record<string, string> = {
   辵: "辶",

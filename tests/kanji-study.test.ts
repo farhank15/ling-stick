@@ -11,6 +11,7 @@ import {
   STUDY_THEMES,
   studyEntry,
   themeOf,
+  toHiragana,
 } from "../app/lib/kanji-study";
 
 const chars = n5.kanji.map((k) => k.char);
@@ -49,6 +50,14 @@ describe("parseReading (notasi KANJIDIC2)", () => {
       affix: null,
       raw: "ニチ",
     });
+  });
+});
+
+describe("toHiragana", () => {
+  it("mengubah katakana jadi hiragana untuk pencocokan vocab", () => {
+    expect(toHiragana("ニチ")).toBe("にち");
+    expect(toHiragana("ひ")).toBe("ひ");
+    expect(toHiragana("ジツ")).toBe("じつ");
   });
 });
 

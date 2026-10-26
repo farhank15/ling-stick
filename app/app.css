@@ -6,6 +6,11 @@
   --font-sans:
     ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue",
     Arial, "Noto Sans", sans-serif;
+  /* Jepang: Hiragino/Yu Gothic (macOS) → Noto JP (Android/Linux). Kana lebih
+   * lega & glif kanji tidak jatuh ke font Latin. */
+  --font-jp:
+    "Hiragino Kaku Gothic ProN", "Hiragino Sans", "Yu Gothic", "Noto Sans JP",
+    "Noto Sans CJK JP", sans-serif;
   /* Satu warna aksen: teal */
   --color-accent: oklch(0.7 0.12 195);
   --color-accent-strong: oklch(0.55 0.12 195);
