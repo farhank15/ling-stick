@@ -1,6 +1,13 @@
 import { and, eq, inArray, sql } from "drizzle-orm";
 import { db } from "~/lib/db/client.server";
-import { kanji, kanjiCards, kanjiComponents, kanjiReadings, kanjiVocab } from "~/lib/db/schema";
+import {
+  kanji,
+  kanjiCards,
+  kanjiComponents,
+  kanjiKnown,
+  kanjiReadings,
+  kanjiVocab,
+} from "~/lib/db/schema";
 import { applyRating, type CardRow } from "~/lib/fsrs.server";
 
 /**
@@ -222,12 +229,34 @@ export async function rateKanjiCard(kanjiChar: string, mode: KanjiMode, rating: 
   return { ok: true as const, due: next.due };
 }
 
-/** Progres "x/y N5" per mode — buat header latihan. */
+/**
+ * Progres "dikenali" satu level = kanji yang pernah dinilai di drill Kenali
+ * ATAU ditandai manual dari sheet detail. Dua sumber digabung supaya angka
+ * tidak mundur kalau user menandai manual lebih dulu.
+ */
 export async function getKanjiProgress(jlpt = 5) {
-  const [total, done] = await Promise.all([
+  const [total, drilled, marked] = await Promise.all([
     db.select({ char: kanji.char }).from(kanji).where(eq(kanji.jlpt, jlpt)),
     db.select({ kanji: kanjiCards.kanji }).from(kanjiCards).where(eq(kanjiCards.mode, "recognition")),
+    db.select({ kanji: kanjiKnown.kanji }).from(kanjiKnown),
   ]);
-  const doneSet = new Set(done.map((d) => d.kanji));
-  return { total: total.length, done: total.filter((t) => doneSet.has(t.char)).length };
+  const knownSet = new Set([
+    ...drilled.map((d) => d.kanji),
+    ...marked.map((m) => m.kanji),
+  ]);
+  const known = total.filter((t) => knownSet.has(t.char)).map((t) => t.char);
+  return { total: total.length, done: known.length, known };
+}
+
+/** Tandai / batalkan tanda "sudah dikenal" (manual, dari sheet detail). */
+export async function setKanjiKnown(char: string, known: boolean) {
+  if (known) {
+    await db
+      .insert(kanjiKnown)
+      .values({ kanji: char, markedAt: Date.now() })
+      .onConflictDoUpdate({ target: kanjiKnown.kanji, set: { markedAt: Date.now() } });
+  } else {
+    await db.delete(kanjiKnown).where(eq(kanjiKnown.kanji, char));
+  }
+  return { ok: true as const, known };
 }

@@ -2,6 +2,7 @@ import type { LoaderFunctionArgs, MetaFunction } from "react-router";
 import { Link, redirect, useLoaderData, useSearchParams } from "react-router";
 import { useEffect, useRef, useState } from "react";
 import {
+  Check,
   Eye,
   Loader2,
   Play,
@@ -197,7 +198,7 @@ export async function loader({ request }: LoaderFunctionArgs) {
     readings: string[];
   }[] = [];
   let kanjiComponents: { component: string; count: number }[] = [];
-  let kanjiProgress: { total: number; done: number } | null = null;
+  let kanjiProgress: { total: number; done: number; known: string[] } | null = null;
   let savedKanji: { id: number; char: string; meaningId: string | null }[] = [];
   if (script === "kanji") {
     const jlptNum = Number(level.slice(1)) || 5;
@@ -986,6 +987,7 @@ export default function AksaraPage() {
           </div>
 
           <KanjiRef
+            key={level}
             list={kanjiList ?? []}
             components={kanjiComponents ?? []}
             progress={kanjiProgress}
@@ -1213,11 +1215,14 @@ function KanjiRef({
 }: {
   list: KanjiRow[];
   components: { component: string; count: number }[];
-  progress: { total: number; done: number } | null;
+  progress: { total: number; done: number; known: string[] } | null;
   level: string;
   query: string;
 }) {
   const [compFilter, setCompFilter] = useState<string | null>(null);
+  // "Dikenal" dipegang di state lokal biar grid langsung hijau tanpa reload;
+  // sumber awalnya union drill + tanda manual dari loader.
+  const [known, setKnown] = useState<string[]>(progress?.known ?? []);
   const [filterOpen, setFilterOpen] = useState(false);
   const [order, setOrder] = useState<"freq" | "theme" | "pattern">("freq");
   const [openChar, setOpenChar] = useState<string | null>(null);
@@ -1229,14 +1234,31 @@ function KanjiRef({
   const shown = compFilter ? searched.filter((k) => k.components.includes(compFilter)) : searched;
   const groups =
     order === "theme" ? groupByTheme(shown) : order === "pattern" ? groupByRadical(shown) : [];
+  const knownSet = new Set(known);
   const progressPct =
-    progress && progress.total > 0 ? Math.round((progress.done / progress.total) * 100) : 0;
+    progress && progress.total > 0 ? Math.round((known.length / progress.total) * 100) : 0;
   const orderHint =
     order === "freq"
       ? "Paling sering dipakai tampil dulu."
       : order === "theme"
         ? "Kelompok makna (angka, waktu, alam…) — hafalan nyambung."
         : "Berbagi radikal — hafal satu bentuk, sisanya lebih mudah.";
+
+  // Tandai/batalkan "dikenal" — optimistis, di-rollback kalau request gagal.
+  const toggleKnown = async (char: string) => {
+    const next = !knownSet.has(char);
+    setKnown((list) => (next ? [...list, char] : list.filter((c) => c !== char)));
+    try {
+      const r = await fetch("/api/kanji", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ kanji: char, known: next }),
+      });
+      if (!r.ok) throw new Error("gagal");
+    } catch {
+      setKnown((list) => (next ? list.filter((c) => c !== char) : [...list, char]));
+    }
+  };
 
   const open = async (char: string) => {
     if (openChar === char) {
@@ -1280,7 +1302,7 @@ function KanjiRef({
               <div className="mb-1 flex justify-between text-[10px] text-zinc-500">
                 <span>dikenali</span>
                 <span className="font-medium text-zinc-700 dark:text-zinc-300">
-                  {progress.done}/{progress.total}
+                  {known.length}/{progress.total}
                 </span>
               </div>
               <div className="h-1.5 overflow-hidden rounded-full bg-zinc-100 dark:bg-zinc-800">
@@ -1370,7 +1392,7 @@ function KanjiRef({
           </p>
         </div>
       ) : order === "freq" ? (
-        <KanjiGrid list={shown} openChar={openChar} onOpen={open} />
+        <KanjiGrid list={shown} openChar={openChar} onOpen={open} known={knownSet} />
       ) : groups.length > 0 ? (
         <div className="space-y-4">
           {groups.map((g) => (
@@ -1383,7 +1405,7 @@ function KanjiRef({
                 </span>
               </div>
               <p className="px-1 pl-3.5 text-[10px] leading-relaxed text-zinc-400">{g.hint}</p>
-              <KanjiGrid list={g.rows} openChar={openChar} onOpen={open} />
+              <KanjiGrid list={g.rows} openChar={openChar} onOpen={open} known={knownSet} />
             </section>
           ))}
         </div>
@@ -1406,10 +1428,24 @@ function KanjiRef({
               matcha: sm:rounded-3xl + m-auto = celah backdrop di bawah sheet. */}
           <div className="absolute inset-x-0 bottom-0 mx-auto max-h-[85dvh] w-full overflow-y-auto overscroll-contain rounded-t-3xl bg-white p-4 pb-[max(1rem,env(safe-area-inset-bottom))] shadow-2xl sm:max-w-2xl dark:bg-zinc-900">
             <div className="mx-auto mb-3 h-1 w-10 rounded-full bg-zinc-300 sm:hidden dark:bg-zinc-700" />
-            <div className="mb-2 flex items-center justify-between">
-              <p className="font-jp text-2xl font-bold">{openChar}</p>
+            <div className="mb-2 flex items-center justify-between gap-2">
+              <div className="flex min-w-0 items-center gap-2">
+                <p className="font-jp text-2xl font-bold">{openChar}</p>
+                <button
+                  className={`chip min-h-7 shrink-0 gap-1 px-2 text-[11px] ${
+                    knownSet.has(openChar)
+                      ? "border-emerald-500 bg-emerald-50 text-emerald-700 hover:border-emerald-600 hover:text-emerald-800 dark:border-emerald-500/60 dark:bg-emerald-950/50 dark:text-emerald-300"
+                      : ""
+                  }`}
+                  onClick={() => void toggleKnown(openChar)}
+                  aria-pressed={knownSet.has(openChar)}
+                >
+                  <Check className="h-3 w-3" aria-hidden />
+                  {knownSet.has(openChar) ? "Dikenal" : "Tandai dikenal"}
+                </button>
+              </div>
               <button
-                className="btn-ghost min-h-9 px-3 text-xs"
+                className="btn-ghost min-h-9 shrink-0 px-3 text-xs"
                 onClick={() => {
                   setOpenChar(null);
                   setDetail(null);
@@ -1432,11 +1468,12 @@ function KanjiRef({
 
 /** Grid kanji — menerima baris yang sudah difilter/dikelompokkan. */
 function KanjiGrid({
-  list, openChar, onOpen,
+  list, openChar, onOpen, known,
 }: {
   list: KanjiRow[];
   openChar: string | null;
   onOpen: (char: string) => void;
+  known: Set<string>;
 }) {
   return (
     <div className="grid grid-cols-5 gap-1.5 sm:grid-cols-8">
@@ -1444,11 +1481,13 @@ function KanjiGrid({
         <button
           key={k.char}
           onClick={() => onOpen(k.char)}
-          title={`${k.char} — ${k.meaningId}`}
+          title={`${k.char} — ${k.meaningId}${known.has(k.char) ? " · sudah dikenal" : ""}`}
           className={`flex aspect-square flex-col items-center justify-center rounded-xl border font-jp text-lg font-bold transition-colors ${
             openChar === k.char
               ? "border-teal-500 bg-teal-50 text-teal-700 dark:bg-teal-950/60 dark:text-teal-300"
-              : "border-zinc-200 bg-white hover:border-teal-300 dark:border-zinc-800 dark:bg-zinc-900"
+              : known.has(k.char)
+                ? "border-emerald-400/70 bg-emerald-50 text-emerald-900 hover:border-emerald-500 dark:border-emerald-500/40 dark:bg-emerald-950/40 dark:text-emerald-100"
+                : "border-zinc-200 bg-white hover:border-teal-300 dark:border-zinc-800 dark:bg-zinc-900"
           }`}
         >
           {k.char}

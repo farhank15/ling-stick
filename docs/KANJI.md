@@ -71,6 +71,20 @@ npm run kanji:import  # validasi total → upsert DB (butuh DB reachable)
   sebagai **overlay full-screen** dari tombol di band sticky; shortcut Space =
   buka jawaban, 1–4 = nilai, Esc = tutup.
 
+## Tanda "dikenal" (2026-10-26)
+
+Header referensi menampilkan `dikenali x/total` + progress bar. Angka itu
+gabungan dua sumber:
+
+1. **Drill Kenali** — kanji yang sudah pernah dinilai (`kanji_cards.mode = 'recognition'`).
+2. **Tanda manual** dari sheet detail — tombol `Tandai dikenal` / `Dikenal`
+   (klik lagi untuk membatalkan) → tabel `kanji_known`.
+
+Kanji yang dikenal tampil di grid dengan **border + latar hijau opasitas rendah**,
+jadi sekali lihat langsung kelihatan mana yang sudah beres. Tabel `kanji_known`
+sengaja dipisah dari `kanji_cards` supaya menandai tidak menyentuh jadwal FSRS
+(`due`/`stability`). Endpoint: `POST /api/kanji { kanji, known: true|false }`.
+
 ## Pencarian kanji (2026-10-26)
 
 Satu kotak cari (sticky bareng tab aksara) menerima 4 jenis input — semuanya

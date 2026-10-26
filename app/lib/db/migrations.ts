@@ -182,6 +182,11 @@ export const MIGRATIONS: string[] = [
     last_review INTEGER,
     PRIMARY KEY (kanji, mode)
   );
+  -- Tanda "sudah dikenal" manual dari sheet detail (bukan FSRS).
+  CREATE TABLE IF NOT EXISTS kanji_known (
+    kanji     TEXT PRIMARY KEY,
+    marked_at INTEGER NOT NULL
+  );
 
   CREATE TABLE IF NOT EXISTS quiz_sets (
     id         INTEGER PRIMARY KEY,

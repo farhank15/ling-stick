@@ -1,6 +1,13 @@
 import type { ActionFunctionArgs, LoaderFunctionArgs } from "react-router";
 import { requireUser } from "~/lib/auth.server";
-import { getKanjiCardDetail, getKanjiDetail, getKanjiQueue, rateKanjiCard, type KanjiMode } from "~/lib/kanji.server";
+import {
+  getKanjiCardDetail,
+  getKanjiDetail,
+  getKanjiQueue,
+  rateKanjiCard,
+  setKanjiKnown,
+  type KanjiMode,
+} from "~/lib/kanji.server";
 
 /**
  * GET /api/kanji?mode=recognition → antrean flashcard kanji N5
@@ -41,8 +48,14 @@ export async function action({ request }: ActionFunctionArgs) {
     kanji?: string;
     mode?: string;
     rating?: number;
+    known?: boolean;
   };
   const kanji = (body.kanji ?? "").trim();
+  // Tanda "dikenal" manual dari sheet detail — jalur terpisah dari rating FSRS.
+  if (typeof body.known === "boolean") {
+    if (!kanji) return Response.json({ error: "kanji wajib" }, { status: 400 });
+    return Response.json(await setKanjiKnown(kanji, body.known));
+  }
   const mode = body.mode as KanjiMode;
   const rating = Number(body.rating);
   if (!kanji || !MODES.includes(mode as (typeof MODES)[number]) || ![1, 2, 3, 4].includes(rating)) {

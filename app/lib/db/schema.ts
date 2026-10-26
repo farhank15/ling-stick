@@ -259,6 +259,15 @@ export const kanjiCards = sqliteTable(
   },
   (t) => [primaryKey({ columns: [t.kanji, t.mode] })],
 );
+/**
+ * Tanda "sudah dikenal" yang di-set manual dari sheet detail — bukan hasil
+ * FSRS. Dipisah dari kanji_cards supaya menandai tidak mengacaukan jadwal
+ * ulang kartu (due/stability).
+ */
+export const kanjiKnown = sqliteTable("kanji_known", {
+  kanji: text("kanji").primaryKey(),
+  markedAt: integer("marked_at").notNull(),
+});
 export const routeNotes = sqliteTable(
   "route_notes",
   {
