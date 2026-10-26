@@ -59,13 +59,33 @@ npm run kanji:import  # validasi total → upsert DB (butuh DB reachable)
 - `scripts/kanji-import.ts` — `ensureDbReady()` + validasi + upsert idempoten.
 - `data/kanji-n5.json` + `data/kanji-n4.json` ikut ke-commit (sumber review + repro).
 
-## Flashcard khusus kanji (3 mode, 1 fakta per kartu)
+## Flashcard khusus kanji (4 mode, 1 fakta per kartu)
 
 - **Kenali** (`recognition`): kanji → arti + bacaan.
 - **Ingat** (`recall`): arti → bayangkan/tulis kanji → cek.
 - **Baca** (`reading`): kata (furigana disembunyi) → bacaan.
-- API: `GET /api/kanji?mode=` antrean, `?detail=` detail, `POST` nilai 1–4.
-- UI: tab Kanji di `/aksara` (grid + filter komponen + detail SVG + sesi flash).
+- **Produksi** (`production`): arti + bacaan → ketik kanji (free-response).
+- API: `GET /api/kanji?mode=&level=` antrean, `?detail=` detail, `POST` nilai 1–4.
+  `level` wajib dikirim dari tab aktif — tanpa itu antrean selalu N5.
+- UI: tab Kanji di `/aksara` (grid + filter komponen + detail SVG). Drill dibuka
+  sebagai **overlay full-screen** dari tombol di band sticky; shortcut Space =
+  buka jawaban, 1–4 = nilai, Esc = tutup.
+
+## Pencarian kanji (2026-10-26)
+
+Satu kotak cari (sticky bareng tab aksara) menerima 4 jenis input — semuanya
+dicocokkan di klien, tanpa query DB tambahan:
+
+| Input | Contoh | Sumber |
+|-------|--------|--------|
+| Karakter kanji | `学` | kolom `char` |
+| Arti Indonesia | `belajar`, `ilmu` | kolom `meaning_id` |
+| Kana (on/kun) | `がく`, `ガク`, `まなぶ` | tabel `kanji_readings` |
+| Romaji | `gaku`, `manabu` | diturunkan dari kana (`kanaToRomaji`) |
+
+`listKanji` mengambil bacaan lewat **satu query batch** (`inArray`) bersama
+komponen — bukan N+1. Notasi KANJIDIC (`.` okurigana, `-` afiks) dibuang saat
+normalisasi (`normalizeQuery`), jadi `まな.ぶ` tetap match `まなぶ`.
 
 ## Cara lanjut
 

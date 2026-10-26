@@ -29,7 +29,10 @@ export async function loader({ request }: LoaderFunctionArgs) {
   if (!MODES.includes(mode as (typeof MODES)[number])) {
     return Response.json({ error: "mode tidak dikenal" }, { status: 400 });
   }
-  return Response.json({ cards: await getKanjiQueue(mode) });
+  // Level dari tab aktif (N5..N1) — tanpa ini drill selalu menarik N5.
+  const lvl = Number((url.searchParams.get("level") ?? "N5").replace(/^N/i, ""));
+  const jlpt = Number.isInteger(lvl) && lvl >= 1 && lvl <= 5 ? lvl : 5;
+  return Response.json({ cards: await getKanjiQueue(mode, 20, jlpt) });
 }
 
 export async function action({ request }: ActionFunctionArgs) {

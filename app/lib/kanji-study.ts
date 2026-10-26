@@ -182,3 +182,94 @@ export function groupByRadical<T extends { char: string; strokes?: number }>(
   }
   return groups;
 }
+
+/* ── Pencarian kanji ──────────────────────────────────────────────────────
+ * Satu kotak cari harus bisa menerima 4 jenis input: karakter kanji, arti
+ * Indonesia, kana, dan romaji. Romaji diturunkan dari bacaan (Hepburn
+ * sederhana) supaya user yang mengetik di keyboard Latin tetap dapat hasil.
+ * matcha: tanpa romaji, "gakkou" tak match apa pun — user harus hafal kana.
+ */
+
+/** Hiragana → romaji Hepburn sederhana (cukup untuk pencarian, bukan furigana). */
+const ROMAJI_TABLE: Record<string, string> = {
+  あ: "a", い: "i", う: "u", え: "e", お: "o",
+  か: "ka", き: "ki", く: "ku", け: "ke", こ: "ko",
+  が: "ga", ぎ: "gi", ぐ: "gu", げ: "ge", ご: "go",
+  さ: "sa", し: "shi", す: "su", せ: "se", そ: "so",
+  ざ: "za", じ: "ji", ず: "zu", ぜ: "ze", ぞ: "zo",
+  た: "ta", ち: "chi", つ: "tsu", て: "te", と: "to",
+  だ: "da", ぢ: "ji", づ: "zu", で: "de", ど: "do",
+  な: "na", に: "ni", ぬ: "nu", ね: "ne", の: "no",
+  は: "ha", ひ: "hi", ふ: "fu", へ: "he", ほ: "ho",
+  ば: "ba", び: "bi", ぶ: "bu", べ: "be", ぼ: "bo",
+  ぱ: "pa", ぴ: "pi", ぷ: "pu", ぺ: "pe", ぽ: "po",
+  ま: "ma", み: "mi", む: "mu", め: "me", も: "mo",
+  や: "ya", ゆ: "yu", よ: "yo",
+  ら: "ra", り: "ri", る: "ru", れ: "re", ろ: "ro",
+  わ: "wa", ゐ: "i", ゑ: "e", を: "o", ん: "n",
+  ぁ: "a", ぃ: "i", ぅ: "u", ぇ: "e", ぉ: "o",
+  ゔ: "vu",
+};
+
+/** Yōon: kana i-kolom + ゃ/ゅ/ょ kecil = satu bunyi (きゃ → kya). */
+const YOON: Record<string, [string, string, string]> = {
+  き: ["kya", "kyu", "kyo"], ぎ: ["gya", "gyu", "gyo"],
+  し: ["sha", "shu", "sho"], じ: ["ja", "ju", "jo"],
+  ち: ["cha", "chu", "cho"],
+  に: ["nya", "nyu", "nyo"], ひ: ["hya", "hyu", "hyo"],
+  び: ["bya", "byu", "byo"], ぴ: ["pya", "pyu", "pyo"],
+  み: ["mya", "myu", "myo"], り: ["rya", "ryu", "ryo"],
+};
+const SMALL_YOON = ["ゃ", "ゅ", "ょ"];
+
+export function kanaToRomaji(kana: string): string {
+  const chars = [...toHiragana(kana)];
+  let out = "";
+  for (let i = 0; i < chars.length; i++) {
+    const c = chars[i]!;
+    const next = chars[i + 1];
+    if (c === "っ") {
+      // Sokuon: gandakan konsonan berikutnya (がっこう → gakkou).
+      const after = ROMAJI_TABLE[next ?? ""] ?? "";
+      if (!after) continue;
+      out += after.startsWith("ch") ? "t" : after[0];
+      continue;
+    }
+    if (c === "ー") {
+      out += out.slice(-1);
+      continue;
+    }
+    const yoonIdx = next ? SMALL_YOON.indexOf(next) : -1;
+    const yoon = YOON[c];
+    if (yoon && yoonIdx >= 0) {
+      out += yoon[yoonIdx];
+      i++;
+      continue;
+    }
+    out += ROMAJI_TABLE[c] ?? c;
+  }
+  return out;
+}
+
+export type KanjiSearchRow = {
+  char: string;
+  meaningId: string;
+  readings?: readonly string[];
+};
+
+/** Buang notasi KANJIDIC (titik/strip), NFKC, dan samakan katakana → hiragana. */
+export function normalizeQuery(raw: string): string {
+  return toHiragana(raw.trim().toLowerCase().normalize("NFKC").replace(/[.\-\s]/g, ""));
+}
+
+/** Cocokkan satu baris kanji dengan kata kunci (char / arti / kana / romaji). */
+export function matchesKanji(row: KanjiSearchRow, rawQuery: string): boolean {
+  const q = normalizeQuery(rawQuery);
+  if (!q) return true;
+  if (row.char === q) return true;
+  if (row.meaningId.toLowerCase().includes(q)) return true;
+  return (row.readings ?? []).some((reading) => {
+    const kana = normalizeQuery(reading);
+    return kana.includes(q) || kanaToRomaji(kana).includes(q);
+  });
+}

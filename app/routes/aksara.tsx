@@ -4,8 +4,12 @@ import { useEffect, useRef, useState } from "react";
 import {
   Eye,
   Loader2,
+  Play,
   RotateCcw,
+  Search,
+  SlidersHorizontal,
   Volume2,
+  X,
 } from "lucide-react";
 import { requireUser } from "~/lib/auth.server";
 import { getTargetLang } from "~/lib/lang.server";
@@ -15,6 +19,7 @@ import kanaConfusables from "../../data/kana-confusables.json";
 import {
   groupByRadical,
   groupByTheme,
+  matchesKanji,
   parseReading,
   radicalLabel,
   studyEntry,
@@ -182,7 +187,15 @@ export async function loader({ request }: LoaderFunctionArgs) {
 
   // Referensi kanji kanonis (seed dataset) + progres flashcard — khusus tab kanji.
   // Daftar kosakata wordbank lama sudah dihapus (dobel dengan sistem baru).
-  let kanjiList: { char: string; meaningId: string; strokes: number; jlpt: number | null; freq: number | null; components: string[] }[] = [];
+  let kanjiList: {
+    char: string;
+    meaningId: string;
+    strokes: number;
+    jlpt: number | null;
+    freq: number | null;
+    components: string[];
+    readings: string[];
+  }[] = [];
   let kanjiComponents: { component: string; count: number }[] = [];
   let kanjiProgress: { total: number; done: number } | null = null;
   let savedKanji: { id: number; char: string; meaningId: string | null }[] = [];
@@ -729,6 +742,10 @@ export default function AksaraPage() {
   // Mode mirip: tap kana = grupnya nyala + kartu rule/mnemonik. Tanpa ini tap = bunyi.
   const [similarOn, setSimilarOn] = useState(false);
   const [selKana, setSelKana] = useState<string | null>(null);
+  // Pencarian kanji + drill overlay. Dua kontrol ini dipakai sambil scroll
+  // daftar 100+ kanji, jadi ikut nempel di band sticky (bukan di dasar halaman).
+  const [query, setQuery] = useState("");
+  const [drillOpen, setDrillOpen] = useState(false);
   const selGroup = similarOn && selKana
     ? (confusables ?? []).find((g) => g.members.includes(selKana)) ?? null
     : null;
@@ -740,8 +757,9 @@ export default function AksaraPage() {
   // Tabel kana: batas 2xl biar sel ga jadi raksasa di desktop.
   return (
     <div className="mx-auto w-full max-w-2xl space-y-4">
-      {/* Tab aksara — sticky di bawah header app biar gampang pindah tab. */}
-      <div className="sticky top-14 z-30 -mx-4 border-b border-zinc-200/70 bg-zinc-50/95 px-4 py-2 backdrop-blur-md dark:border-zinc-800/70 dark:bg-zinc-950/95">
+      {/* Tab aksara + pencarian kanji — sticky di bawah header app biar
+          pindah tab & cari kanji bisa kapan saja tanpa scroll ke atas. */}
+      <div className="sticky top-14 z-30 -mx-4 space-y-2 border-b border-zinc-200/70 bg-zinc-50/95 px-4 py-2 backdrop-blur-md dark:border-zinc-800/70 dark:bg-zinc-950/95">
         <div className="grid grid-cols-3 gap-1.5">
           {SCRIPTS.map((s) => (
             <button
@@ -758,6 +776,41 @@ export default function AksaraPage() {
             </button>
           ))}
         </div>
+        {script === "kanji" ? (
+          <div className="flex items-center gap-1.5">
+            <div className="relative flex-1">
+              <Search
+                className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-zinc-400"
+                aria-hidden
+              />
+              <input
+                type="search"
+                inputMode="search"
+                value={query}
+                onChange={(e) => setQuery(e.target.value)}
+                placeholder="Cari kanji, arti, atau bacaan…"
+                aria-label="Cari kanji"
+                className="input min-h-10 w-full pl-9 pr-9 text-sm [&::-webkit-search-cancel-button]:hidden"
+              />
+              {query ? (
+                <button
+                  onClick={() => setQuery("")}
+                  aria-label="Hapus pencarian"
+                  className="absolute right-1.5 top-1/2 flex h-7 w-7 -translate-y-1/2 items-center justify-center rounded-lg text-zinc-400 hover:bg-zinc-100 hover:text-zinc-600 dark:hover:bg-zinc-800"
+                >
+                  <X className="h-3.5 w-3.5" />
+                </button>
+              ) : null}
+            </div>
+            <button
+              onClick={() => setDrillOpen(true)}
+              className="btn-primary min-h-10 shrink-0 gap-1.5 px-3 text-sm"
+            >
+              <Play className="h-4 w-4" aria-hidden />
+              Drill
+            </button>
+          </div>
+        ) : null}
       </div>
 
       {script !== "kanji" ? (
@@ -937,6 +990,7 @@ export default function AksaraPage() {
             components={kanjiComponents ?? []}
             progress={kanjiProgress}
             level={level}
+            query={query}
           />
 
           {(savedKanji ?? []).length > 0 ? (
@@ -969,6 +1023,9 @@ export default function AksaraPage() {
             Data kanji: KANJIDIC2 © EDRDG (CC BY-SA 4.0) · goresan: KanjiVG © Ulrich Apel (CC BY-SA
             3.0) · contoh: JMdict via Jisho. Level JLPT patokan komunitas (tak resmi sejak 2010).
           </p>
+
+          {/* Drill = overlay full-screen, dipicu tombol di band sticky. */}
+          <KanjiFlash level={level} open={drillOpen} onClose={() => setDrillOpen(false)} />
         </div>
       )}
     </div>
@@ -976,7 +1033,15 @@ export default function AksaraPage() {
 }
 
 /* ── Referensi kanji kanonis (seed dataset, bukan generate) ── */
-type KanjiRow = { char: string; meaningId: string; strokes: number; jlpt: number | null; freq: number | null; components: string[] };
+type KanjiRow = {
+  char: string;
+  meaningId: string;
+  strokes: number;
+  jlpt: number | null;
+  freq: number | null;
+  components: string[];
+  readings: string[];
+};
 type KanjiReading = { text: string; primary: boolean };
 type KanjiDetail = {
   char: string; meaningId: string; strokes: number; grade: number | null;
@@ -1144,25 +1209,34 @@ function CompactReadings({ on, kun }: { on: KanjiReading[]; kun: KanjiReading[] 
 }
 
 function KanjiRef({
-  list, components, progress, level,
+  list, components, progress, level, query,
 }: {
   list: KanjiRow[];
   components: { component: string; count: number }[];
   progress: { total: number; done: number } | null;
   level: string;
+  query: string;
 }) {
   const [compFilter, setCompFilter] = useState<string | null>(null);
+  const [filterOpen, setFilterOpen] = useState(false);
   const [order, setOrder] = useState<"freq" | "theme" | "pattern">("freq");
   const [openChar, setOpenChar] = useState<string | null>(null);
   const [detail, setDetail] = useState<KanjiDetail | null>(null);
   const [detailBusy, setDetailBusy] = useState(false);
 
-  // Filter komponen dulu, baru dikelompokkan — grup kosong otomatis hilang.
-  const shown = compFilter ? list.filter((k) => k.components.includes(compFilter)) : list;
+  // Urutan pipeline: cari → filter komponen → kelompokkan. Grup kosong hilang.
+  const searched = query.trim() ? list.filter((k) => matchesKanji(k, query)) : list;
+  const shown = compFilter ? searched.filter((k) => k.components.includes(compFilter)) : searched;
   const groups =
     order === "theme" ? groupByTheme(shown) : order === "pattern" ? groupByRadical(shown) : [];
   const progressPct =
     progress && progress.total > 0 ? Math.round((progress.done / progress.total) * 100) : 0;
+  const orderHint =
+    order === "freq"
+      ? "Paling sering dipakai tampil dulu."
+      : order === "theme"
+        ? "Kelompok makna (angka, waktu, alam…) — hafalan nyambung."
+        : "Berbagi radikal — hafal satu bentuk, sisanya lebih mudah.";
 
   const open = async (char: string) => {
     if (openChar === char) {
@@ -1186,16 +1260,20 @@ function KanjiRef({
 
   return (
     <div className="space-y-3">
-      <div className="card space-y-3 p-4">
+      <div className="card space-y-2.5 p-3.5">
         <div className="flex items-start justify-between gap-3">
           <div className="min-w-0">
-            <p className="text-[10px] font-medium uppercase tracking-wider text-zinc-400">
-              Referensi kanonis
-            </p>
-            <h2 className="text-lg font-semibold leading-tight">
+            <h2 className="text-base font-semibold leading-tight">
               Kanji {level}
-              <span className="ml-1.5 text-sm font-normal text-zinc-400">{list.length} kanji</span>
+              <span className="ml-1.5 text-xs font-normal text-zinc-400">
+                {shown.length === list.length
+                  ? `${list.length} kanji`
+                  : `${shown.length} dari ${list.length}`}
+              </span>
             </h2>
+            <p className="mt-0.5 text-[10px] leading-relaxed text-zinc-400">
+              JLPT tak resmi (patokan komunitas) · bacaan &amp; goresan kanonis
+            </p>
           </div>
           {progress ? (
             <div className="w-24 shrink-0 pt-0.5">
@@ -1214,9 +1292,6 @@ function KanjiRef({
             </div>
           ) : null}
         </div>
-        <p className="-mt-1.5 text-[11px] leading-relaxed text-zinc-400">
-          Daftar JLPT tak resmi (patokan komunitas). Bacaan &amp; goresan dari dataset kanonis.
-        </p>
 
         <div className="grid grid-cols-3 gap-1 rounded-xl bg-zinc-100 p-1 dark:bg-zinc-800/80">
           {(
@@ -1229,6 +1304,7 @@ function KanjiRef({
             <button
               key={id}
               onClick={() => setOrder(id)}
+              aria-pressed={order === id}
               className={`min-h-9 rounded-lg px-2 text-xs font-medium transition-colors ${
                 order === id
                   ? "bg-white text-teal-700 shadow-sm dark:bg-zinc-900 dark:text-teal-300"
@@ -1239,27 +1315,23 @@ function KanjiRef({
             </button>
           ))}
         </div>
-        <p className="-mt-1 text-[10px] leading-relaxed text-zinc-400">
-          {order === "freq"
-            ? "Frekuensi: kanji yang paling sering dipakai tampil dulu."
-            : order === "theme"
-              ? "Tema: kelompok makna (angka, waktu, alam…) — enak buat hafalan yang nyambung."
-              : "Pola: kanji yang berbagi radikal — hafal satu bentuk, sisanya lebih mudah."}
-        </p>
 
-        {components.length > 0 ? (
+        <div className="flex items-start gap-2">
+          <p className="min-w-0 flex-1 text-[10px] leading-relaxed text-zinc-400">{orderHint}</p>
+          {components.length > 0 ? (
+            <button
+              className={`chip min-h-7 shrink-0 gap-1 px-2 text-[11px] ${compFilter ? "chip-active" : ""}`}
+              onClick={() => setFilterOpen((v) => !v)}
+              aria-expanded={filterOpen}
+            >
+              <SlidersHorizontal className="h-3 w-3" aria-hidden />
+              {compFilter ? `Komponen ${compFilter}` : "Filter"}
+            </button>
+          ) : null}
+        </div>
+
+        {filterOpen && components.length > 0 ? (
           <div className="space-y-1.5">
-            <div className="flex items-center justify-between">
-              <span className="label">Filter komponen</span>
-              {compFilter ? (
-                <button
-                  className="text-[11px] font-medium text-teal-700 dark:text-teal-300"
-                  onClick={() => setCompFilter(null)}
-                >
-                  Reset
-                </button>
-              ) : null}
-            </div>
             <div className="no-scrollbar -mx-1 flex gap-1.5 overflow-x-auto px-1 pb-0.5">
               <button
                 className={`chip min-h-8 shrink-0 px-2.5 text-[11px] ${compFilter === null ? "chip-active" : ""}`}
@@ -1281,7 +1353,23 @@ function KanjiRef({
           </div>
         ) : null}
       </div>
-      {order === "freq" ? (
+      {list.length === 0 ? (
+        <div className="card p-4 text-center">
+          <p className="font-medium">Kanji {level} belum di-seed</p>
+          <p className="mt-1 text-xs text-zinc-500">
+            Level ini belum masuk database. Jalankan <code>npm run kanji:import</code> untuk
+            memuat dataset.
+          </p>
+        </div>
+      ) : shown.length === 0 ? (
+        <div className="card space-y-1 p-6 text-center">
+          <p className="text-sm font-medium">Tidak ada kanji yang cocok</p>
+          <p className="text-xs leading-relaxed text-zinc-500">
+            Coba arti Indonesia, kana, atau romaji — mis. <em>sekolah</em>, <em>がく</em>,{" "}
+            <em>gakkou</em>.
+          </p>
+        </div>
+      ) : order === "freq" ? (
         <KanjiGrid list={shown} openChar={openChar} onOpen={open} />
       ) : groups.length > 0 ? (
         <div className="space-y-4">
@@ -1302,15 +1390,6 @@ function KanjiRef({
       ) : (
         <p className="px-1 text-xs text-zinc-400">Tidak ada kanji untuk filter ini.</p>
       )}
-      {list.length === 0 ? (
-        <div className="card p-4 text-center">
-          <p className="font-medium">Kanji {level} belum di-seed</p>
-          <p className="mt-1 text-xs text-zinc-500">
-            Level ini belum masuk database. Jalankan <code>npm run kanji:import</code> untuk
-            memuat dataset.
-          </p>
-        </div>
-      ) : null}
       {/* Sheet detail: bottom-sheet di HP, panel tengah di desktop.
           matcha: detail inline di bawah grid = scroll jauh + konteks grid hilang. */}
       {openChar ? (
@@ -1347,7 +1426,6 @@ function KanjiRef({
           </div>
         </div>
       ) : null}
-      <KanjiFlash level={level} />
     </div>
   );
 }
@@ -1447,7 +1525,43 @@ const K_MODE_META: { id: KMode; label: string; desc: string }[] = [
   { id: "production", label: "Produksi", desc: "arti + bacaan → ketik kanji" },
 ];
 
-function KanjiFlash({ level }: { level: string }) {
+const K_RATINGS = [
+  {
+    v: 1 as const,
+    label: "Lupa",
+    cls: "border-rose-200 bg-rose-50 text-rose-700 dark:border-rose-900/60 dark:bg-rose-950/40 dark:text-rose-300",
+  },
+  {
+    v: 2 as const,
+    label: "Susah",
+    cls: "border-amber-200 bg-amber-50 text-amber-700 dark:border-amber-900/60 dark:bg-amber-950/40 dark:text-amber-300",
+  },
+  {
+    v: 3 as const,
+    label: "Pas",
+    cls: "border-teal-200 bg-teal-50 text-teal-700 dark:border-teal-900/60 dark:bg-teal-950/40 dark:text-teal-300",
+  },
+  {
+    v: 4 as const,
+    label: "Gampang",
+    cls: "border-sky-200 bg-sky-50 text-sky-700 dark:border-sky-900/60 dark:bg-sky-950/40 dark:text-sky-300",
+  },
+];
+
+/**
+ * Drill kanji = overlay full-screen, bukan kartu di dasar halaman.
+ * Tiga layar: pilih mode → sesi kartu → ringkasan. Rating bar selalu di
+ * posisi sama (nggak muncul-hilang) biar layout nggak melompat tiap reveal.
+ */
+function KanjiFlash({
+  level,
+  open,
+  onClose,
+}: {
+  level: string;
+  open: boolean;
+  onClose: () => void;
+}) {
   const [mode, setMode] = useState<KMode>("recognition");
   const [cards, setCards] = useState<KCard[]>([]);
   const [idx, setIdx] = useState(0);
@@ -1459,36 +1573,11 @@ function KanjiFlash({ level }: { level: string }) {
   const [typedResult, setTypedResult] = useState<{ ok: boolean; answer: string } | null>(null);
   const inputRef = useRef<HTMLInputElement>(null);
 
-  // Autofocus keyboard tiap kartu baru (mobile langsung kebuka).
-  useEffect(() => {
-    if (started && mode === "production" && card) {
-      const t = setTimeout(() => inputRef.current?.focus(), 100);
-      return () => clearTimeout(t);
-    }
-  }, [started, idx, mode]);
-
-  const start = async (m: KMode) => {
-    setMode(m);
-    setBusy(true);
-    setReveal(false);
-    setFull(null);
-    requeues.current.clear();
-    setTyped("");
-    setTypedResult(null);
-    try {
-      const r = await fetch(`/api/kanji?mode=${m}`);
-      const d = await r.json();
-      setCards(d.cards ?? []);
-      setIdx(0);
-      setStarted(true);
-    } catch {
-      /* diam */
-    } finally {
-      setBusy(false);
-    }
-  };
-
   const card = cards[idx];
+  const meta = K_MODE_META.find((m) => m.id === mode)!;
+  // Production pakai hasil ketik sebagai "reveal" — bukan tombol terpisah.
+  const revealed = mode === "production" ? typedResult !== null : reveal;
+
   // Requeue sesi ala flashcard umum: Lupa/Susah balik ±5 posisi (maks 2x per
   // kartu) — tapi hormati due FSRS (masih cooldown = ditahan, lanjut lain).
   // matcha: kartu gagal hilang sampai besok.
@@ -1507,19 +1596,27 @@ function KanjiFlash({ level }: { level: string }) {
       return next;
     });
   };
-  useEffect(() => {
-    if (!started || !card) return;
+
+  const start = async (m: KMode) => {
+    setMode(m);
+    setBusy(true);
+    setReveal(false);
     setFull(null);
-    if (mode !== "recognition") {
-      void fetch(`/api/kanji?detail=${encodeURIComponent(card.kanji)}`)
-        .then((r) => r.json())
-        .then((d) => {
-          if (d.detail) setFull(d.detail as KanjiDetail);
-        })
-        .catch(() => {});
+    requeues.current.clear();
+    setTyped("");
+    setTypedResult(null);
+    try {
+      const r = await fetch(`/api/kanji?mode=${m}&level=${level}`);
+      const d = await r.json();
+      setCards(d.cards ?? []);
+      setIdx(0);
+      setStarted(true);
+    } catch {
+      /* diam */
+    } finally {
+      setBusy(false);
     }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [started, idx, mode]);
+  };
 
   const rate = async (rating: 1 | 2 | 3 | 4) => {
     if (!card) return;
@@ -1540,177 +1637,273 @@ function KanjiFlash({ level }: { level: string }) {
     }
   };
 
-  if (!started) {
-    return (
-      <div className="card space-y-3 p-4">
-        <div>
-          <p className="font-semibold">Drill Kanji {level}</p>
-          <p className="text-xs text-zinc-500">Flashcard + ketik — 1 fakta per kartu + jadwal FSRS.</p>
-        </div>
-        <div>
-          <p className="label mb-1.5">Mode</p>
-          <div className="flex flex-wrap gap-1.5">
-            {K_MODE_META.map((m) => (
-              <button
-                key={m.id}
-                className={`chip min-h-8 px-2.5 text-[11px] ${mode === m.id ? "chip-active" : ""}`}
-                onClick={() => setMode(m.id)}
-                title={m.desc}
-                aria-pressed={mode === m.id}
-              >
-                {m.label}
-              </button>
-            ))}
-          </div>
-          <p className="mt-1.5 text-[11px] text-zinc-400">
-            {K_MODE_META.find((m) => m.id === mode)?.desc}
-          </p>
-        </div>
-        <button className="btn-primary w-full" onClick={() => void start(mode)} disabled={busy}>
-          Mulai drill
-        </button>
-      </div>
-    );
-  }
+  const check = () => {
+    if (!card || !typed.trim()) return;
+    setTypedResult({ ok: typed.trim() === card.kanji, answer: card.kanji });
+    setReveal(true);
+  };
 
-  if (!card) {
-    return (
-      <div className="card space-y-2 p-4 text-center">
-        <p className="font-medium">Sesi selesai — {cards.length} kartu</p>
-        <div className="flex justify-center gap-2">
-          <button className="btn-secondary" onClick={() => setStarted(false)}>
-            Ganti mode
-          </button>
-          <button className="btn-primary" onClick={() => void start(mode)}>
-            <RotateCcw className="h-4 w-4" /> Lagi
-          </button>
-        </div>
-      </div>
-    );
-  }
+  // Autofocus keyboard tiap kartu baru (mobile langsung kebuka).
+  useEffect(() => {
+    if (open && started && mode === "production" && card) {
+      const t = setTimeout(() => inputRef.current?.focus(), 100);
+      return () => clearTimeout(t);
+    }
+  }, [open, started, idx, mode]);
+
+  useEffect(() => {
+    if (!open || !started || !card) return;
+    setFull(null);
+    if (mode !== "recognition") {
+      void fetch(`/api/kanji?detail=${encodeURIComponent(card.kanji)}`)
+        .then((r) => r.json())
+        .then((d) => {
+          if (d.detail) setFull(d.detail as KanjiDetail);
+        })
+        .catch(() => {});
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [open, started, idx, mode]);
+
+  // Shortcut keyboard: Space/Enter = buka jawaban, 1–4 = nilai.
+  useEffect(() => {
+    if (!open || !started || !card) return;
+    const onKey = (e: KeyboardEvent) => {
+      if (e.target instanceof HTMLInputElement) return;
+      if (e.key === " " || e.key === "Enter") {
+        e.preventDefault();
+        if (!revealed) setReveal(true);
+        return;
+      }
+      if (revealed && ["1", "2", "3", "4"].includes(e.key)) {
+        e.preventDefault();
+        void rate(Number(e.key) as 1 | 2 | 3 | 4);
+      }
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [open, started, idx, mode, revealed, card]);
+
+  // Esc = tutup overlay + kunci scroll halaman di belakang selama drill.
+  useEffect(() => {
+    if (!open) return;
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === "Escape") onClose();
+    };
+    const prevOverflow = document.body.style.overflow;
+    document.body.style.overflow = "hidden";
+    window.addEventListener("keydown", onKey);
+    return () => {
+      document.body.style.overflow = prevOverflow;
+      window.removeEventListener("keydown", onKey);
+    };
+  }, [open, onClose]);
+
+  if (!open) return null;
+
+  const pct = cards.length ? Math.round((Math.min(idx, cards.length) / cards.length) * 100) : 0;
 
   return (
-    <div className="space-y-3">
-      <div className="card space-y-2 p-3">
-        <p className="label">Drill Kanji {level} · {idx + 1}/{cards.length}</p>
-        <div className="flex flex-wrap gap-1.5">
-          {K_MODE_META.map((m) => (
-            <button
-              key={m.id}
-              className={`chip min-h-8 px-2.5 text-[11px] ${mode === m.id ? "chip-active" : ""}`}
-              disabled={busy}
-              onClick={() => void start(m.id)}
-              title={m.desc}
-              aria-pressed={mode === m.id}
-            >
-              {m.label}
-            </button>
-          ))}
+    <div
+      className="fixed inset-0 z-50 flex flex-col bg-zinc-50 dark:bg-zinc-950"
+      role="dialog"
+      aria-modal="true"
+      aria-label={`Drill kanji ${level}`}
+    >
+      <div className="flex items-center gap-2 border-b border-zinc-200/70 px-4 py-2.5 dark:border-zinc-800/70">
+        <div className="min-w-0 flex-1">
+          <p className="text-[10px] font-medium uppercase tracking-wider text-zinc-400">
+            Drill kanji {level}
+          </p>
+          <p className="truncate text-sm font-semibold">
+            {started && card ? `${meta.label} · ${idx + 1} / ${cards.length}` : meta.label}
+          </p>
         </div>
+        <button
+          onClick={onClose}
+          aria-label="Tutup drill"
+          className="btn-ghost min-h-9 min-w-9 justify-center px-2"
+        >
+          <X className="h-4 w-4" />
+        </button>
       </div>
-      <div className="card space-y-3 p-4 text-center">
-      {mode === "recognition" ? (
-        <>
-          <p className="font-jp text-6xl font-bold">{card.kanji}</p>
-          {!reveal ? (
-            <button className="btn-secondary mx-auto" onClick={() => setReveal(true)}>
-              <Eye className="h-4 w-4" /> Arti + bacaan?
-            </button>
+      <div className="h-1 w-full bg-zinc-200 dark:bg-zinc-800">
+        <div
+          className="h-full bg-teal-500 transition-[width] duration-300"
+          style={{ width: `${started ? pct : 0}%` }}
+        />
+      </div>
+
+      <div className="flex-1 overflow-y-auto overscroll-contain px-4 py-4">
+        <div className="mx-auto w-full max-w-md">
+          {!started ? (
+            <div className="space-y-4">
+              <div className="grid grid-cols-2 gap-2">
+                {K_MODE_META.map((m) => {
+                  const active = mode === m.id;
+                  return (
+                    <button
+                      key={m.id}
+                      onClick={() => setMode(m.id)}
+                      aria-pressed={active}
+                      className={`rounded-2xl border p-3 text-left transition-colors ${
+                        active
+                          ? "border-teal-500 bg-teal-50 dark:bg-teal-950/50"
+                          : "border-zinc-200 bg-white dark:border-zinc-800 dark:bg-zinc-900"
+                      }`}
+                    >
+                      <p
+                        className={`text-sm font-semibold ${
+                          active ? "text-teal-700 dark:text-teal-300" : ""
+                        }`}
+                      >
+                        {m.label}
+                      </p>
+                      <p className="mt-0.5 text-[11px] leading-snug text-zinc-500">{m.desc}</p>
+                    </button>
+                  );
+                })}
+              </div>
+              <p className="text-center text-[11px] leading-relaxed text-zinc-400">
+                Tiap kartu dinilai 1–4 lalu dijadwalkan FSRS. Kartu yang lupa muncul lagi ±5 kartu
+                kemudian.
+              </p>
+              <button
+                className="btn-primary w-full justify-center gap-1.5"
+                onClick={() => void start(mode)}
+                disabled={busy}
+              >
+                {busy ? (
+                  <Loader2 className="h-4 w-4 animate-spin" />
+                ) : (
+                  <Play className="h-4 w-4" />
+                )}
+                {busy ? "Menyiapkan…" : `Mulai ${meta.label.toLowerCase()}`}
+              </button>
+            </div>
+          ) : !card ? (
+            <div className="space-y-4 pt-8 text-center">
+              <p className="text-lg font-semibold">Sesi selesai</p>
+              <p className="text-xs text-zinc-500">
+                {cards.length} kartu · mode {meta.label}
+              </p>
+              <div className="grid grid-cols-2 gap-2">
+                <button className="btn-secondary justify-center" onClick={() => setStarted(false)}>
+                  Ganti mode
+                </button>
+                <button className="btn-primary justify-center" onClick={() => void start(mode)}>
+                  <RotateCcw className="h-4 w-4" /> Ulangi
+                </button>
+              </div>
+            </div>
           ) : (
-            <KanjiAnswer kanji={card.kanji} />
-          )}
-        </>
-      ) : mode === "recall" ? (
-        <>
-          <p className="text-lg font-semibold">{card.meaningId}</p>
-          <p className="text-xs text-zinc-400">Bayangkan / tulis kanjinya, lalu cek</p>
-          {!reveal ? (
-            <button className="btn-secondary mx-auto" onClick={() => setReveal(true)}>
-              <Eye className="h-4 w-4" /> Lihat kanji
-            </button>
-          ) : (
-            <div className="space-y-2">
-              <p className="font-jp text-6xl font-bold text-teal-700 dark:text-teal-300">{card.kanji}</p>
-              {full ? (
-                <CompactReadings on={full.on} kun={full.kun} />
-              ) : null}
+            <div className="space-y-3">
+              <div className="card flex min-h-[260px] flex-col items-center justify-center gap-3 p-5 text-center">
+                {mode === "recognition" ? (
+                  <>
+                    <p className="font-jp text-7xl font-bold leading-none">{card.kanji}</p>
+                    {reveal ? (
+                      <KanjiAnswer kanji={card.kanji} />
+                    ) : (
+                      <p className="text-xs text-zinc-400">Arti &amp; bacaan apa?</p>
+                    )}
+                  </>
+                ) : mode === "recall" ? (
+                  <>
+                    <p className="text-2xl font-semibold">{card.meaningId}</p>
+                    {reveal ? (
+                      <>
+                        <p className="font-jp text-7xl font-bold leading-none text-teal-700 dark:text-teal-300">
+                          {card.kanji}
+                        </p>
+                        {full ? <CompactReadings on={full.on} kun={full.kun} /> : null}
+                      </>
+                    ) : (
+                      <p className="text-xs text-zinc-400">Bayangkan / tulis kanjinya dulu</p>
+                    )}
+                  </>
+                ) : mode === "reading" ? (
+                  <>
+                    <p className="font-jp text-3xl font-bold">
+                      {full?.vocab[0]?.word ?? card.meaningId}
+                    </p>
+                    {reveal ? (
+                      <>
+                        <p className="font-jp text-xl font-semibold text-teal-700 dark:text-teal-300">
+                          {full?.vocab[0]?.reading ?? "—"}
+                        </p>
+                        <p className="text-xs text-zinc-500">{full?.vocab[0]?.gloss ?? ""}</p>
+                      </>
+                    ) : (
+                      <p className="text-xs text-zinc-400">Bagaimana bacanya?</p>
+                    )}
+                  </>
+                ) : (
+                  <>
+                    <p className="text-2xl font-semibold">{card.meaningId}</p>
+                    {full ? <CompactReadings on={full.on} kun={full.kun} /> : null}
+                    <input
+                      ref={inputRef}
+                      className="input-area w-full text-center font-jp text-4xl"
+                      placeholder="漢字"
+                      aria-label="Ketik kanji"
+                      value={typed}
+                      disabled={typedResult !== null}
+                      onChange={(e) => setTyped(e.target.value)}
+                      onKeyDown={(e) => {
+                        if (e.key === "Enter") check();
+                      }}
+                    />
+                    {typedResult ? (
+                      <p
+                        className={`text-sm font-medium ${
+                          typedResult.ok
+                            ? "text-teal-700 dark:text-teal-300"
+                            : "text-amber-700 dark:text-amber-300"
+                        }`}
+                      >
+                        {typedResult.ok ? "Tepat!" : `Jawaban: ${typedResult.answer}`}
+                      </p>
+                    ) : (
+                      <p className="text-xs text-zinc-400">Ketik kanjinya, lalu Enter</p>
+                    )}
+                  </>
+                )}
+              </div>
+
+              {revealed ? (
+                <div className="grid grid-cols-4 gap-1.5">
+                  {K_RATINGS.map((r) => (
+                    <button
+                      key={r.v}
+                      onClick={() => void rate(r.v)}
+                      className={`flex flex-col items-center justify-center rounded-xl border py-2 transition-colors ${r.cls}`}
+                    >
+                      <span className="text-sm font-semibold">{r.label}</span>
+                      <span className="text-[10px] opacity-60">{r.v}</span>
+                    </button>
+                  ))}
+                </div>
+              ) : mode === "production" ? (
+                <button
+                  className="btn-primary w-full justify-center"
+                  onClick={check}
+                  disabled={!typed.trim()}
+                >
+                  Periksa
+                </button>
+              ) : (
+                <button
+                  className="btn-secondary w-full justify-center"
+                  onClick={() => setReveal(true)}
+                >
+                  <Eye className="h-4 w-4" /> Tampilkan jawaban
+                </button>
+              )}
             </div>
           )}
-        </>
-      ) : mode === "reading" ? (
-        <>
-          <p className="font-jp text-2xl font-bold">{full?.vocab[0]?.word ?? card.meaningId}</p>
-          <p className="text-xs text-zinc-400">Bagaimana bacanya?</p>
-          {!reveal ? (
-            <button className="btn-secondary mx-auto" onClick={() => setReveal(true)}>
-              <Eye className="h-4 w-4" /> Lihat bacaan
-            </button>
-          ) : (
-            <div className="space-y-1">
-              <p className="text-lg font-semibold text-teal-700 dark:text-teal-300">{full?.vocab[0]?.reading ?? "—"}</p>
-              <p className="text-xs text-zinc-500">{full?.vocab[0]?.gloss ?? ""}</p>
-            </div>
-          )}
-        </>
-      ) : (
-        <>
-          <p className="text-lg font-semibold">{card.meaningId}</p>
-          {full ? <CompactReadings on={full.on} kun={full.kun} /> : null}
-          <p className="text-xs text-zinc-400">Ketik kanjinya (free-response, bukan pilihan ganda)</p>
-          <input
-            ref={inputRef}
-            className="input-area mt-2 text-center text-3xl"
-            placeholder="Ketik kanji…"
-            value={typed}
-            disabled={typedResult !== null}
-            onChange={(e) => setTyped(e.target.value)}
-            onKeyDown={(e) => {
-              if (e.key === "Enter" && typed.trim()) {
-                const ok = typed.trim() === card.kanji;
-                setTypedResult({ ok, answer: card.kanji });
-                setReveal(true);
-              }
-            }}
-          />
-          {typedResult ? (
-            <p className={`mt-2 text-center text-sm font-medium ${typedResult.ok ? "text-teal-700 dark:text-teal-300" : "text-amber-700 dark:text-amber-300"}`}>
-              {typedResult.ok ? "Tepat!" : `Jawaban: ${typedResult.answer}`}
-            </p>
-          ) : (
-            <button
-              className="btn-primary mt-2 w-full"
-              onClick={() => {
-                if (!typed.trim()) return;
-                const ok = typed.trim() === card.kanji;
-                setTypedResult({ ok, answer: card.kanji });
-                setReveal(true);
-              }}
-              disabled={!typed.trim()}
-            >
-              Periksa
-            </button>
-          )}
-        </>
-      )}
-      {reveal ? (
-        <div className="grid grid-cols-1 gap-1.5 sm:grid-cols-4">
-          {(
-            [
-              [1, "Lupa"],
-              [2, "Susah"],
-              [3, "Pas"],
-              [4, "Gampang"],
-            ] as const
-          ).map(([v, label]) => (
-            <button key={v} className="btn-secondary justify-center gap-0.5 py-2.5 text-sm" onClick={() => void rate(v)}>
-              {label}
-            </button>
-          ))}
         </div>
-      ) : null}
-      <button className="btn-ghost mx-auto text-xs" onClick={() => setStarted(false)}>
-        Berhenti
-      </button>
       </div>
     </div>
   );

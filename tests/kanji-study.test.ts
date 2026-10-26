@@ -6,6 +6,9 @@ import study from "../data/kanji-study-n5.json";
 import {
   groupByRadical,
   groupByTheme,
+  kanaToRomaji,
+  matchesKanji,
+  normalizeQuery,
   parseReading,
   radicalLabel,
   STUDY_THEMES,
@@ -183,5 +186,61 @@ describe("themeOf", () => {
   it("mengembalikan tema lengkap", () => {
     expect(themeOf("牛")?.label).toBe("Makanan & hewan");
     expect(themeOf("鬱")).toBeNull();
+  });
+});
+
+describe("kanaToRomaji", () => {
+  it("memetakan gojūon + dakuten", () => {
+    expect(kanaToRomaji("がく")).toBe("gaku");
+    expect(kanaToRomaji("せい")).toBe("sei");
+    expect(kanaToRomaji("ばしょ")).toBe("basho");
+  });
+
+  it("menangani sokuon dan yōon", () => {
+    expect(kanaToRomaji("がっこう")).toBe("gakkou");
+    expect(kanaToRomaji("きょう")).toBe("kyou");
+    expect(kanaToRomaji("しゃしん")).toBe("shashin");
+    expect(kanaToRomaji("まっちゃ")).toBe("matcha");
+  });
+
+  it("menerima katakana (on-yomi)", () => {
+    expect(kanaToRomaji("ガク")).toBe("gaku");
+    expect(kanaToRomaji("キョウ")).toBe("kyou");
+  });
+});
+
+describe("matchesKanji", () => {
+  const gaku = { char: "学", meaningId: "belajar; ilmu", readings: ["ガク", "まな.ぶ"] };
+
+  it("cocok lewat karakter kanji", () => {
+    expect(matchesKanji(gaku, "学")).toBe(true);
+  });
+
+  it("cocok lewat arti Indonesia", () => {
+    expect(matchesKanji(gaku, "belajar")).toBe(true);
+    expect(matchesKanji(gaku, "ILMU")).toBe(true);
+  });
+
+  it("cocok lewat kana, katakana, dan romaji", () => {
+    expect(matchesKanji(gaku, "がく")).toBe(true);
+    expect(matchesKanji(gaku, "ガク")).toBe(true);
+    expect(matchesKanji(gaku, "gaku")).toBe(true);
+    expect(matchesKanji(gaku, "manabu")).toBe(true);
+  });
+
+  it("abaikan notasi KANJIDIC (titik & strip)", () => {
+    expect(normalizeQuery("まな.ぶ")).toBe("まなぶ");
+    expect(normalizeQuery("-び")).toBe("び");
+    expect(matchesKanji(gaku, "まな.ぶ")).toBe(true);
+  });
+
+  it("kata kunci kosong = semua lolos", () => {
+    expect(matchesKanji(gaku, "")).toBe(true);
+    expect(matchesKanji(gaku, "   ")).toBe(true);
+  });
+
+  it("tidak cocok kalau memang tidak ada", () => {
+    expect(matchesKanji(gaku, "zzz")).toBe(false);
+    expect(matchesKanji({ char: "日", meaningId: "hari" }, "gaku")).toBe(false);
   });
 });

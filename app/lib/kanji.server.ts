@@ -51,25 +51,38 @@ export async function listKanji(opts: { jlpt?: number; component?: string; limit
     .where(conds.length ? and(...conds) : undefined)
     .orderBy(sql`CASE WHEN ${kanji.freq} IS NULL THEN 1 ELSE 0 END`, kanji.freq, kanji.strokes)
     .limit(opts.limit ?? 200);
-  // Komponen per kanji — 1 query (bukan N+1) buat filter "mengandung X".
-  const compRows = rows.length
-    ? await db
-        .select({ kanji: kanjiComponents.kanji, component: kanjiComponents.component })
-        .from(kanjiComponents)
-        .where(
-          inArray(
-            kanjiComponents.kanji,
-            rows.map((r) => r.char),
-          ),
-        )
-    : [];
+  // Komponen + bacaan per kanji — 2 query batch (bukan N+1) buat filter
+  // "mengandung X" dan pencarian kana/romaji di klien.
+  const chars = rows.map((r) => r.char);
+  const [compRows, readRows] = chars.length
+    ? await Promise.all([
+        db
+          .select({ kanji: kanjiComponents.kanji, component: kanjiComponents.component })
+          .from(kanjiComponents)
+          .where(inArray(kanjiComponents.kanji, chars)),
+        db
+          .select({ kanji: kanjiReadings.kanji, reading: kanjiReadings.reading })
+          .from(kanjiReadings)
+          .where(inArray(kanjiReadings.kanji, chars)),
+      ])
+    : [[], []];
   const compMap = new Map<string, string[]>();
   for (const c of compRows) {
     const arr = compMap.get(c.kanji) ?? [];
     arr.push(c.component);
     compMap.set(c.kanji, arr);
   }
-  return rows.map((r) => ({ ...r, components: compMap.get(r.char) ?? [] }));
+  const readMap = new Map<string, string[]>();
+  for (const r of readRows) {
+    const arr = readMap.get(r.kanji) ?? [];
+    arr.push(r.reading);
+    readMap.set(r.kanji, arr);
+  }
+  return rows.map((r) => ({
+    ...r,
+    components: compMap.get(r.char) ?? [],
+    readings: readMap.get(r.char) ?? [],
+  }));
 }
 
 /** Komponen yang muncul di kanji level ini — buat filter "mengandung X". */
