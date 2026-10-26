@@ -77,3 +77,42 @@ npm run kanji:import  # validasi total → upsert DB (butuh DB reachable)
 - **Mnemonik AI**: belum ada — kalau dibuat, simpan terpisah + label AI,
   jangan campur ke tabel kanonis.
 - **Radikal Kangxi**: belum ada tabel sendiri (tercakup `kanji_components`).
+
+## Urutan belajar: tema & pola (2026-10-26)
+
+Tidak ada API publik yang menyediakan **urutan pedagogis** atau **taksonomi tema**
+untuk kanji JLPT. Riset: `.agents/research/kanji-theme-radical-jlpt-sources.md`.
+Yang ada hanya level (kanjiapi.dev → tanos/Waller) dan `wk_level` (WaniKani,
+bukan JLPT). Jadi urutan/tema **dikurasi in-repo**:
+
+- `data/kanji-study-n5.json` — sumber kebenaran urutan N5: 11 tema
+  (angka, waktu, alam, orang, sekolah, tempat, makan, arah, sifat, aksi, tanya),
+  urutan di dalam tema, dan radikal per kanji.
+- Radikal diambil dari `data/kanji-levels.json` (KANJIDIC/OpenJLPT) + override
+  lima kanji batas N4 (田文道暑寒) yang tidak ada di daftar level.
+- Mode **Pola** di UI mengelompokkan kanji berbagi radikal (bukan etimologi —
+  labelnya "pola bentuk"). Keluarga ≥2 tampil dulu; sisanya digabung.
+- Tema bersifat kurasi subjektif: ubah JSON, jalankan test, tidak perlu migrasi DB.
+  Test `tests/kanji-study.test.ts` memastikan 116/116 kanji N5 punya tema + radikal.
+
+## Notasi bacaan (KANJIDIC2)
+
+Sumber primer: KANJIDIC2 DTD v1.6, <https://www.edrdg.org/pub/Nihongo/kanjidic2.xml.gz>:
+
+> `ja_on` — the "on" Japanese reading of the kanji, in katakana.
+> `ja_kun` — the "kun" Japanese reading of the kanji, usually in hiragana.
+> Where relevant the okurigana is also included separated by a ".". Readings
+> associated with prefixes and suffixes are marked with a "-".
+
+Arti untuk UI (`app/lib/kanji-study.ts` → `parseReading`):
+
+| Notasi | Arti | Contoh |
+|---|---|---|
+| `.` | batas okurigana; bagian setelah titik ditulis kana | `ひと.つ` → 一つ = ひと + つ |
+| `-` di kanan | awalan, menempel di depan kanji lain | `ひと-` → 一休み = ひとやすみ |
+| `-` di kiri | akhiran, menempel di belakang kanji lain | `-び` → 日曜日 = にちようび |
+| `・` | pemisah antar bacaan buatan UI, **bukan** bagian bacaan | ニチ・ジツ |
+| `●` | penanda bacaan inti (`primary_pick`), **bukan** bagian bacaan | ●ひ |
+
+On = katakana, kun = hiragana (konvensi KANJIDIC) — ini yang membedakan tanpa label.
+

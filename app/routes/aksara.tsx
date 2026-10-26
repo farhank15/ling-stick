@@ -12,6 +12,13 @@ import { getTargetLang } from "~/lib/lang.server";
 import { ttsLang } from "~/lib/utils.shared";
 import { SpeakButton } from "~/components/SpeakButton";
 import kanaConfusables from "../../data/kana-confusables.json";
+import {
+  groupByRadical,
+  groupByTheme,
+  parseReading,
+  radicalLabel,
+  studyEntry,
+} from "~/lib/kanji-study";
 
 type ConfusableGroup = {
   id: string;
@@ -974,8 +981,9 @@ type KanjiDetail = {
   vocab: { word: string; reading: string; gloss: string }[];
 };
 
-/** Deretan bacaan jadi chip: on (katakana) vs kun (hiragana) beda warna,
- *  bacaan inti tebal + titik. matcha: teks ・・・ susah di-scan. */
+/** Deretan bacaan jadi chip: on (katakana) vs kun (hiragana) beda warna.
+ *  Notasi KANJIDIC dipecah: stem tebal, okurigana pudar, afiks diberi label.
+ *  matcha: teks "ひと.つ" mentah bikin titik & strip tidak terbaca sebagai aturan. */
 function ReadingChips({ kind, items }: { kind: "on" | "kun"; items: KanjiReading[] }) {
   if (items.length === 0) return null;
   const chip =
@@ -984,20 +992,90 @@ function ReadingChips({ kind, items }: { kind: "on" | "kun"; items: KanjiReading
       : "bg-violet-100 text-violet-800 dark:bg-violet-950/70 dark:text-violet-200";
   return (
     <div className="flex flex-wrap items-center gap-1.5">
-      <span className="label w-7 shrink-0">{kind === "on" ? "On" : "Kun"}</span>
-      {items.map((r) => (
-        <span
-          key={r.text}
-          title={r.primary ? "Bacaan inti — hafalkan ini dulu" : undefined}
-          className={`inline-flex items-center gap-1 rounded-lg px-2 py-1 text-[13px] ${chip} ${
-            r.primary ? "font-bold ring-1 ring-current" : "opacity-80"
-          }`}
-        >
-          {r.primary ? <span className="h-1.5 w-1.5 rounded-full bg-current" aria-hidden /> : null}
-          {r.text}
-        </span>
-      ))}
+      <span
+        className="label w-7 shrink-0"
+        title={kind === "on" ? "Bacaan on — biasanya katakana" : "Bacaan kun — biasanya hiragana"}
+      >
+        {kind === "on" ? "On" : "Kun"}
+      </span>
+      {items.map((r) => {
+        const p = parseReading(r.text);
+        return (
+          <span
+            key={r.text}
+            title={r.primary ? "Bacaan inti — hafalkan ini dulu" : undefined}
+            className={`inline-flex items-center gap-1 rounded-lg px-2 py-1 text-[13px] ${chip} ${
+              r.primary ? "font-bold ring-1 ring-current" : "opacity-80"
+            }`}
+          >
+            {r.primary ? <span className="h-1.5 w-1.5 rounded-full bg-current" aria-hidden /> : null}
+            <span>{p.stem}</span>
+            {p.okurigana ? (
+              <span
+                className="font-normal opacity-60"
+                title="Okurigana — bagian ini ditulis dengan kana saat kanji dipakai"
+              >
+                {p.okurigana}
+              </span>
+            ) : null}
+            {p.affix ? (
+              <span
+                className="rounded bg-white/50 px-1 text-[9px] font-medium dark:bg-black/30"
+                title={
+                  p.affix === "prefix"
+                    ? "Awalan — dipakai menempel di depan kanji lain (contoh: 一休み = ひとやすみ)"
+                    : "Akhiran — dipakai menempel di belakang kanji lain (contoh: 日曜日 = にちようび)"
+                }
+              >
+                {p.affix === "prefix" ? "awalan" : "akhiran"}
+              </span>
+            ) : null}
+          </span>
+        );
+      })}
     </div>
+  );
+}
+
+/** Legenda notasi — collapsible supaya tidak makan ruang di layar kecil. */
+function ReadingLegend() {
+  return (
+    <details className="rounded-xl bg-zinc-50 px-3 py-2 text-[11px] leading-relaxed text-zinc-600 dark:bg-zinc-800/60 dark:text-zinc-300">
+      <summary className="cursor-pointer font-medium text-zinc-700 dark:text-zinc-200">
+        Cara baca notasi
+      </summary>
+      <ul className="mt-1.5 space-y-1">
+        <li>
+          <b>On</b> = katakana (ニチ) · <b>Kun</b> = hiragana (ひ) — beda warna chip.
+        </li>
+        <li>
+          <b>ひと.つ</b> — titik memisah okurigana; <span className="opacity-60">つ</span> ditulis
+          pakai kana. 一つ = ひと + つ.
+        </li>
+        <li>
+          <b>ひと-</b> = awalan (一休み) · <b>-び</b> = akhiran (日曜日) — hanya dipakai menempel.
+        </li>
+        <li>
+          <b>●</b> = bacaan inti, hafalkan dulu. <b>・</b> = pemisah antar bacaan, bukan bagian
+          bacaan.
+        </li>
+      </ul>
+    </details>
+  );
+}
+
+/** Baris bacaan ringkas untuk flashcard (tanpa chip penuh). */
+function CompactReadings({ on, kun }: { on: KanjiReading[]; kun: KanjiReading[] }) {
+  const fmt = (items: KanjiReading[]) => items.slice(0, 2).map((r) => r.text).join("・") || "—";
+  return (
+    <p className="flex flex-wrap items-center justify-center gap-x-2 gap-y-0.5 text-xs text-zinc-500">
+      <span>
+        <span className="font-semibold text-sky-600 dark:text-sky-400">On</span> {fmt(on)}
+      </span>
+      <span>
+        <span className="font-semibold text-violet-600 dark:text-violet-400">Kun</span> {fmt(kun)}
+      </span>
+    </p>
   );
 }
 
@@ -1010,9 +1088,15 @@ function KanjiRef({
   level: string;
 }) {
   const [compFilter, setCompFilter] = useState<string | null>(null);
+  const [order, setOrder] = useState<"freq" | "theme" | "pattern">("freq");
   const [openChar, setOpenChar] = useState<string | null>(null);
   const [detail, setDetail] = useState<KanjiDetail | null>(null);
   const [detailBusy, setDetailBusy] = useState(false);
+
+  // Filter komponen dulu, baru dikelompokkan — grup kosong otomatis hilang.
+  const shown = compFilter ? list.filter((k) => k.components.includes(compFilter)) : list;
+  const groups =
+    order === "theme" ? groupByTheme(shown) : order === "pattern" ? groupByRadical(shown) : [];
 
   const open = async (char: string) => {
     if (openChar === char) {
@@ -1051,6 +1135,34 @@ function KanjiRef({
           Daftar JLPT tak resmi (patokan komunitas). Data bacaan & goresan dari dataset kanonis —
           bukan generate AI.
         </p>
+        <div className="flex flex-wrap items-center gap-1.5">
+          <span className="text-[10px] uppercase tracking-wide text-zinc-400">Urut</span>
+          {(
+            [
+              ["freq", "Frekuensi"],
+              ["theme", "Tema"],
+              ["pattern", "Pola"],
+            ] as const
+          ).map(([id, label]) => (
+            <button
+              key={id}
+              className={`chip min-h-7 px-2 text-[11px] ${order === id ? "chip-active" : ""}`}
+              onClick={() => setOrder(id)}
+            >
+              {label}
+            </button>
+          ))}
+        </div>
+        {order === "theme" ? (
+          <p className="text-[10px] text-zinc-400">
+            Tema = kurasi manual (angka, waktu, alam…). Urutan di dalam tema sudah pedagogis.
+          </p>
+        ) : order === "pattern" ? (
+          <p className="text-[10px] text-zinc-400">
+            Pola = kanji yang berbagi radikal. Hafal satu bentuk, sisanya lebih mudah ditebak.
+          </p>
+        ) : null}
+        <ReadingLegend />
         {components.length > 0 ? (
           <div className="no-scrollbar -mx-1 flex gap-1.5 overflow-x-auto px-1 py-1">
             <button
@@ -1072,12 +1184,29 @@ function KanjiRef({
           </div>
         ) : null}
       </div>
-      <KanjiGrid list={list} compFilter={compFilter} openChar={openChar} onOpen={open} />
+      {order === "freq" ? (
+        <KanjiGrid list={shown} openChar={openChar} onOpen={open} />
+      ) : groups.length > 0 ? (
+        <div className="space-y-4">
+          {groups.map((g) => (
+            <section key={g.key} className="space-y-1.5">
+              <div className="flex items-baseline justify-between gap-2 px-1">
+                <p className="text-xs font-semibold text-zinc-700 dark:text-zinc-200">{g.label}</p>
+                <span className="text-[10px] text-zinc-400">{g.rows.length}</span>
+              </div>
+              <p className="px-1 text-[10px] text-zinc-400">{g.hint}</p>
+              <KanjiGrid list={g.rows} openChar={openChar} onOpen={open} />
+            </section>
+          ))}
+        </div>
+      ) : (
+        <p className="px-1 text-xs text-zinc-400">Tidak ada kanji untuk filter ini.</p>
+      )}
       {list.length === 0 ? (
         <div className="card p-4 text-center">
           <p className="font-medium">Kanji {level} belum di-seed</p>
           <p className="mt-1 text-xs text-zinc-500">
-            N5 sudah lengkap (107 kanji). N4+ menyusul dengan pola seed yang sama — lihat docs/KANJI.md.
+            N5 sudah lengkap. N4+ menyusul dengan pola seed yang sama — lihat docs/KANJI.md.
           </p>
         </div>
       ) : null}
@@ -1122,19 +1251,17 @@ function KanjiRef({
   );
 }
 
-/** Grid kanji — filter komponen instan (komponen ikut list dari server). */
+/** Grid kanji — menerima baris yang sudah difilter/dikelompokkan. */
 function KanjiGrid({
-  list, compFilter, openChar, onOpen,
+  list, openChar, onOpen,
 }: {
   list: KanjiRow[];
-  compFilter: string | null;
   openChar: string | null;
   onOpen: (char: string) => void;
 }) {
-  const shown = compFilter ? list.filter((k) => k.components.includes(compFilter)) : list;
   return (
     <div className="grid grid-cols-5 gap-1.5 sm:grid-cols-8">
-      {shown.map((k) => (
+      {list.map((k) => (
         <button
           key={k.char}
           onClick={() => onOpen(k.char)}
@@ -1154,6 +1281,7 @@ function KanjiGrid({
 }
 
 export function KanjiDetailView({ detail }: { detail: KanjiDetail }) {
+  const radical = studyEntry(detail.char)?.radical;
   return (
     <div className="space-y-3">
       <div className="flex items-start gap-4">
@@ -1177,7 +1305,15 @@ export function KanjiDetailView({ detail }: { detail: KanjiDetail }) {
         <div className="space-y-1.5">
           <ReadingChips kind="on" items={detail.on} />
           <ReadingChips kind="kun" items={detail.kun} />
+          <ReadingLegend />
         </div>
+      ) : null}
+      {radical ? (
+        <p className="text-xs text-zinc-500">
+          <span className="label mr-2">Radikal</span>
+          {radicalLabel(radical)}
+          <span className="ml-1 text-zinc-400">— pola yang sama dipakai kanji lain</span>
+        </p>
       ) : null}
       {detail.components.length > 0 ? (
         <p className="text-xs text-zinc-500">
@@ -1401,9 +1537,7 @@ function KanjiFlash({ level }: { level: string }) {
             <div className="space-y-2">
               <p className="text-6xl font-bold text-teal-700 dark:text-teal-300">{card.kanji}</p>
               {full ? (
-                <p className="text-xs text-zinc-500">
-                  on: {full.on.slice(0, 2).map((r) => r.text).join("・") || "—"} · kun: {full.kun.slice(0, 2).map((r) => r.text).join("・") || "—"}
-                </p>
+                <CompactReadings on={full.on} kun={full.kun} />
               ) : null}
             </div>
           )}
@@ -1426,11 +1560,7 @@ function KanjiFlash({ level }: { level: string }) {
       ) : (
         <>
           <p className="text-lg font-semibold">{card.meaningId}</p>
-          {full ? (
-            <p className="text-xs text-zinc-500">
-              on: {full.on.slice(0, 2).map((r) => r.text).join("・") || "—"} · kun: {full.kun.slice(0, 2).map((r) => r.text).join("・") || "—"}
-            </p>
-          ) : null}
+          {full ? <CompactReadings on={full.on} kun={full.kun} /> : null}
           <p className="text-xs text-zinc-400">Ketik kanjinya (free-response, bukan pilihan ganda)</p>
           <input
             ref={inputRef}
@@ -1509,9 +1639,11 @@ function KanjiAnswer({ kanji }: { kanji: string }) {
   return (
     <div className="space-y-1">
       <p className="font-semibold">{d.meaningId}</p>
-      <p className="text-xs text-zinc-500">
-        on: {d.on.slice(0, 2).join("・") || "—"} · kun: {d.kun.slice(0, 2).join("・") || "—"}
-      </p>
+      <div className="flex flex-wrap justify-center gap-1.5">
+        <ReadingChips kind="on" items={d.on} />
+        <ReadingChips kind="kun" items={d.kun} />
+      </div>
+      <ReadingLegend />
       {d.vocab[0] ? (
         <p className="text-xs text-zinc-400">
           {d.vocab[0].word} ({d.vocab[0].reading}) — {d.vocab[0].gloss}
