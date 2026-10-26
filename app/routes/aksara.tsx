@@ -740,21 +740,24 @@ export default function AksaraPage() {
   // Tabel kana: batas 2xl biar sel ga jadi raksasa di desktop.
   return (
     <div className="mx-auto w-full max-w-2xl space-y-4">
-      {/* Tab aksara */}
-      <div className="grid grid-cols-3 gap-1.5">
-        {SCRIPTS.map((s) => (
-          <button
-            key={s}
-            onClick={() => go({ script: s })}
-            className={`rounded-xl border px-3 py-2 text-sm font-semibold transition-colors ${
-              script === s
-                ? "border-teal-500 bg-teal-50 text-teal-700 dark:bg-teal-950/60 dark:text-teal-300"
-                : "border-zinc-200 text-zinc-500 dark:border-zinc-800 dark:text-zinc-400"
-            }`}
-          >
-            {SCRIPT_LABEL[s]}
-          </button>
-        ))}
+      {/* Tab aksara — sticky di bawah header app biar gampang pindah tab. */}
+      <div className="sticky top-14 z-30 -mx-4 border-b border-zinc-200/70 bg-zinc-50/95 px-4 py-2 backdrop-blur-md dark:border-zinc-800/70 dark:bg-zinc-950/95">
+        <div className="grid grid-cols-3 gap-1.5">
+          {SCRIPTS.map((s) => (
+            <button
+              key={s}
+              onClick={() => go({ script: s })}
+              aria-current={script === s ? "page" : undefined}
+              className={`rounded-xl border px-3 py-2 text-sm font-semibold transition-colors ${
+                script === s
+                  ? "border-teal-500 bg-teal-50 text-teal-700 dark:bg-teal-950/60 dark:text-teal-300"
+                  : "border-zinc-200 bg-white text-zinc-500 dark:border-zinc-800 dark:bg-zinc-900 dark:text-zinc-400"
+              }`}
+            >
+              {SCRIPT_LABEL[s]}
+            </button>
+          ))}
+        </div>
       </div>
 
       {script !== "kanji" ? (
