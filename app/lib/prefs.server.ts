@@ -72,6 +72,21 @@ export async function setFsrsSettings(input: Partial<FsrsSettings>): Promise<Fsr
   return next;
 }
 
+const KANJI_WIDGET_LEVEL_KEY = 'kanjiWidgetLevel';
+export const KANJI_WIDGET_LEVEL_DEFAULT = 5;
+
+export async function getKanjiWidgetLevel(): Promise<number> {
+  const [row] = await db
+    .select({ value: settings.value })
+    .from(settings)
+    .where(eq(settings.key, KANJI_WIDGET_LEVEL_KEY))
+    .limit(1);
+  const n = Number(row?.value);
+  if (!Number.isFinite(n)) return KANJI_WIDGET_LEVEL_DEFAULT;
+  return Math.min(5, Math.max(1, Math.round(n)));
+}
+
+export async function setKanjiWidgetLevel(n: number): Promise<number> { const num = Number(n); let v = Math.round(num); if (!Number.isFinite(v)) v = 0; const clean = Math.min(5, Math.max(1, v)); await writeSetting(KANJI_WIDGET_LEVEL_KEY, String(clean)); return clean; }
 export async function getNewCardsPerDay(): Promise<number> {
   const [row] = await db
     .select({ value: settings.value })
