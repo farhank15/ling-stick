@@ -18,7 +18,7 @@ import { Highlight } from "~/components/Highlight";
 import { KanjiDraw, type DrawStroke } from "~/components/KanjiDraw";
 import { KanjiRadical } from "~/components/KanjiRadical";
 import { KanjiSheet } from '~/components/KanjiSheet';
-import { buildRefPatternsAll, recognize, type KanjiPattern, type Stroke } from "~/lib/kanji-match2";
+import { buildRefPatternsAll, recognize, type KanjiPattern } from "~/lib/kanji-match2";
 import type { KanjiDetail } from "~/lib/kanji.server";
 import { useToast } from "~/components/Toast";
 import { ttsLang } from "~/lib/utils.shared";
@@ -221,49 +221,56 @@ export default function Translate() {
         setSelDetail(d.detail as KanjiDetail);
         return;
       }
-      // Fallback: kanji tidak di DB (template N5-N3, DB cuma N5) → bangun detail minimal dari template + kanjiapi.dev
-      const mod = await import("../../data/kanji-strokes.json");
-      const tpl = (mod.default as unknown as Record<string, Stroke[]>)[char];
-      if (tpl) {
-        const strokes = tpl.length;
-        // Coba ambil dari kanjiapi.dev (public, no key)
-        let meaningId = "";
-        let on: { text: string; primary: boolean }[] = [];
-        let kun: { text: string; primary: boolean }[] = [];
-        let grade: number | null = null;
-        let freq: number | null = null;
-        let jlpt: number | null = null;
-        try {
-          const api = await fetch(`https://kanjiapi.dev/v1/kanji/${encodeURIComponent(char)}`);
-          if (api.ok) {
-            const j = await api.json();
-            meaningId = j.meanings?.join(", ") ?? "";
-            on = (j.on_readings ?? []).map((r: string, i: number) => ({ text: r, primary: i === 0 }));
-            kun = (j.kun_readings ?? []).map((r: string, i: number) => ({ text: r, primary: i === 0 }));
-            grade = j.grade ?? null;
-            freq = j.freq ?? null;
-            jlpt = j.jlpt ?? null;
-          }
-        } catch {
-          /* offline / gagal — pakai data minimal */
+      // Fallback: kanji tidak ada di tabel referensi -> bangun detail dari
+      // jumlah goresan (server, 2380 kanji) + kanjiapi.dev.
+      let strokes = 0;
+      try {
+        const sr = await fetch('/api/kanji?strokes=' + encodeURIComponent(char));
+        if (sr.ok) {
+          const sd = await sr.json();
+          if (Array.isArray(sd.strokes)) strokes = sd.strokes.length;
         }
-        if (!meaningId) meaningId = `(kanji U+${char.codePointAt(0)!.toString(16).toUpperCase().padStart(5, "0")})`;
-        setSelDetail({
-          char,
-          meaningId,
-          strokes,
-          grade,
-          freq,
-          jlpt,
-          svg: null,
-          on,
-          kun,
-          components: [],
-          vocab: [],
-        } as KanjiDetail);
-      } else {
-        toast("Kanji tak dikenal");
+      } catch {
+        // offline — biarkan 0
       }
+      if (!strokes) {
+        toast('Kanji tak dikenal');
+        return;
+      }
+      let meaningId = '';
+      let on: { text: string; primary: boolean }[] = [];
+      let kun: { text: string; primary: boolean }[] = [];
+      let grade: number | null = null;
+      let freq: number | null = null;
+      let jlpt: number | null = null;
+      try {
+        const api = await fetch('https://kanjiapi.dev/v1/kanji/' + encodeURIComponent(char));
+        if (api.ok) {
+          const j = await api.json();
+          meaningId = j.meanings?.join(', ') ?? '';
+          on = (j.on_readings ?? []).map((r: string, i: number) => ({ text: r, primary: i === 0 }));
+          kun = (j.kun_readings ?? []).map((r: string, i: number) => ({ text: r, primary: i === 0 }));
+          grade = j.grade ?? null;
+          freq = j.freq ?? null;
+          jlpt = j.jlpt ?? null;
+        }
+      } catch {
+        // offline / gagal — pakai data minimal
+      }
+      if (!meaningId) meaningId = '(kanji U+' + char.codePointAt(0)!.toString(16).toUpperCase().padStart(5, '0') + ')';
+      setSelDetail({
+        char,
+        meaningId,
+        strokes,
+        grade,
+        freq,
+        jlpt,
+        svg: null,
+        on,
+        kun,
+        components: [],
+        vocab: [],
+      } as KanjiDetail);
     } catch {
       toast("Gagal muat detail kanji");
     }
