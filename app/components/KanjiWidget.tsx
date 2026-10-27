@@ -1,8 +1,7 @@
-import { useEffect, useState } from 'react';
+import { useState } from 'react';
 import { useFetcher } from 'react-router';
-import { X } from 'lucide-react';
 import type { KanjiDetail } from '~/lib/kanji.server';
-import { KanjiDetailView } from '~/components/KanjiDetailView';
+import { KanjiSheet } from '~/components/KanjiSheet';
 
 const LEVELS = [5, 4, 3, 2, 1] as const;
 
@@ -84,43 +83,5 @@ export function KanjiWidget({ detail, level, available }: Props) {
 
       {open && detail ? <KanjiSheet detail={detail} onClose={() => setOpen(false)} /> : null}
     </>
-  );
-}
-
-function KanjiSheet({ detail, onClose }: { detail: KanjiDetail; onClose: () => void }) {
-  useEffect(() => {
-    const onKey = (e: KeyboardEvent) => {
-      if (e.key === 'Escape') onClose();
-    };
-    window.addEventListener('keydown', onKey);
-    return () => window.removeEventListener('keydown', onKey);
-  }, [onClose]);
-
-  return (
-    <div
-      className='fixed inset-0 z-50 flex items-end justify-center bg-zinc-900/50 p-4 backdrop-blur-[2px] sm:items-center'
-      onClick={onClose}
-      role='presentation'
-    >
-      <div
-        className='card max-h-[85vh] w-full max-w-sm overflow-y-auto p-4'
-        onClick={(e) => e.stopPropagation()}
-        role='dialog'
-        aria-modal='true'
-        aria-label={detail.char}
-      >
-        <div className='mb-1 flex justify-end'>
-          <button
-            type='button'
-            onClick={onClose}
-            className='rounded-lg p-1 text-zinc-400 hover:bg-zinc-100 hover:text-zinc-700 dark:hover:bg-zinc-800'
-            aria-label='Tutup'
-          >
-            <X className='h-5 w-5' />
-          </button>
-        </div>
-        <KanjiDetailView detail={detail} />
-      </div>
-    </div>
   );
 }

@@ -17,7 +17,7 @@ import { JaText, hasJa } from "~/components/JaText";
 import { Highlight } from "~/components/Highlight";
 import { KanjiDraw, type DrawStroke } from "~/components/KanjiDraw";
 import { KanjiRadical } from "~/components/KanjiRadical";
-import { KanjiDetailView } from '~/components/KanjiDetailView';
+import { KanjiSheet } from '~/components/KanjiSheet';
 import { buildRefPatterns, recognize, type KanjiPattern, type Stroke } from "~/lib/kanji-match2";
 import type { KanjiDetail } from "~/lib/kanji.server";
 import { useToast } from "~/components/Toast";
@@ -502,24 +502,23 @@ export default function Translate() {
             </div>
           ) : null}
           {selDetail ? (
-            <div className="space-y-2 border-t border-zinc-100 pt-3 dark:border-zinc-800">
-              <KanjiDetailView detail={selDetail} />
+            <KanjiSheet detail={selDetail} onClose={() => setSelDetail(null)}>
               <button
-                className="btn-primary w-full"
+                className='btn-primary w-full'
                 disabled={savingKanji || savedKanji === selDetail.char}
                 onClick={() => void saveKanji()}
               >
                 {savedKanji === selDetail.char ? (
                   <>
-                    <BookmarkCheck className="h-4 w-4" /> Tersimpan
+                    <BookmarkCheck className='h-4 w-4' /> Tersimpan
                   </>
                 ) : (
                   <>
-                    <Bookmark className="h-4 w-4" /> Simpan ke list kanji
+                    <Bookmark className='h-4 w-4' /> Simpan ke list kanji
                   </>
                 )}
               </button>
-            </div>
+            </KanjiSheet>
           ) : null}
           <div className="border-t border-zinc-100 pt-3 dark:border-zinc-800">
             <KanjiRadical onPick={(c) => void pickKanji(c)} />
