@@ -7,11 +7,25 @@ export type DrawStroke = { x: number; y: number }[];
  * Papan coret kanji — pointer events + HiDPI, undo + hapus.
  * matcha: touch-event terpisah = bug palm/mouse; pointer events satu jalur.
  */
-export function KanjiDraw({ onChange }: { onChange: (strokes: DrawStroke[]) => void }) {
+export function KanjiDraw({
+  onChange,
+  guide,
+}: {
+  onChange: (strokes: DrawStroke[]) => void;
+  /** Bentuk samar di belakang canvas (mis. kanji target) — kanvas tetap transparan. */
+  guide?: React.ReactNode;
+}) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const wrapRef = useRef<HTMLDivElement>(null);
   const [strokes, setStrokes] = useState<DrawStroke[]>([]);
   const drawing = useRef<DrawStroke | null>(null);
+  /**
+   * matcha:explain sumber kebenaran goresan ada di ref, bukan state.
+   * `fit` berjalan dari effect ber-dep `[]` (listener resize), jadi closure-nya
+   * memegang `strokes` render pertama. Dulu itu membuat goresan hilang total
+   * setiap resize — termasuk saat toolbar Safari mobile menyusut waktu scroll.
+   */
+  const strokesRef = useRef<DrawStroke[]>([]);
 
   // Ukuran canvas ikut wadah × dpr (tajam di HP).
   useEffect(() => {
@@ -58,7 +72,7 @@ export function KanjiDraw({ onChange }: { onChange: (strokes: DrawStroke[]) => v
     ctx.lineWidth = 4;
     ctx.lineCap = "round";
     ctx.lineJoin = "round";
-    for (const s of (list ?? strokes)) {
+    for (const s of list ?? strokesRef.current) {
       if (s.length === 0) continue;
       ctx.beginPath();
       ctx.moveTo(s[0]!.x, s[0]!.y);
@@ -80,6 +94,7 @@ export function KanjiDraw({ onChange }: { onChange: (strokes: DrawStroke[]) => v
   };
 
   const push = (next: DrawStroke[]) => {
+    strokesRef.current = next;
     setStrokes(next);
     onChange(next);
   };
@@ -88,11 +103,19 @@ export function KanjiDraw({ onChange }: { onChange: (strokes: DrawStroke[]) => v
     <div className="space-y-2">
       <div
         ref={wrapRef}
-        className="overflow-hidden rounded-2xl border border-zinc-200 bg-white text-zinc-800 dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-100"
+        className="relative overflow-hidden rounded-2xl border border-zinc-200 bg-white text-zinc-800 dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-100"
       >
+        {guide ? (
+          <span
+            aria-hidden
+            className="pointer-events-none absolute inset-0 flex items-center justify-center text-[9rem] leading-none font-bold text-zinc-200 select-none dark:text-zinc-800"
+          >
+            {guide}
+          </span>
+        ) : null}
         <canvas
           ref={canvasRef}
-          className="block touch-none select-none"
+          className="relative block touch-none select-none"
           style={{ touchAction: "none" }}
           onPointerDown={(e) => {
             e.preventDefault();
@@ -103,13 +126,19 @@ export function KanjiDraw({ onChange }: { onChange: (strokes: DrawStroke[]) => v
             if (!drawing.current) return;
             e.preventDefault();
             drawing.current.push(pos(e));
-            repaint([...strokes, drawing.current]);
+            repaint([...strokesRef.current, drawing.current]);
           }}
-          onPointerUp={() => {
+          onPointerUp={(e) => {
             if (!drawing.current) return;
+            // matcha:explain browser menggabungkan pointermove — titik `pointerup`
+            // bisa beberapa piksel setelah move terakhir. Tanpa segmen penutup,
+            // ekor goresan terlihat memendek tepat saat pena diangkat.
+            const up = pos(e);
+            const tail = drawing.current[drawing.current.length - 1]!;
+            if (Math.hypot(up.x - tail.x, up.y - tail.y) > 0.5) drawing.current.push(up);
             const done = drawing.current.filter((p, i, a) => i === 0 || Math.hypot(p.x - a[i - 1]!.x, p.y - a[i - 1]!.y) > 2);
             drawing.current = null;
-            if (done.length >= 2) push([...strokes, done]);
+            if (done.length >= 2) push([...strokesRef.current, done]);
             else repaint();
           }}
           onPointerCancel={() => {

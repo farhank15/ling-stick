@@ -14,7 +14,15 @@ export async function action({ request }: ActionFunctionArgs) {
   const body = (await request.json().catch(() => ({}))) as {
     lang?: string;
     newCardsPerDay?: number;
+    retention?: number;
+    maxInterval?: number;
   };
+
+  if (typeof body.retention === "number" || typeof body.maxInterval === "number") {
+    const { setFsrsSettings } = await import("~/lib/prefs.server");
+    const saved = await setFsrsSettings({ retention: body.retention, maxInterval: body.maxInterval });
+    return Response.json({ ok: true, ...saved });
+  }
 
   if (typeof body.newCardsPerDay === "number") {
     const { setNewCardsPerDay } = await import("~/lib/prefs.server");

@@ -1,4 +1,4 @@
-import { and, eq, inArray, sql } from "drizzle-orm";
+import { and, eq, inArray, notInArray, sql } from "drizzle-orm";
 import { db } from "~/lib/db/client.server";
 import {
   kanji,
@@ -155,7 +155,14 @@ export async function getKanjiQueue(mode: KanjiMode, limit = 20, jlpt = 5) {
     })
     .from(kanji)
     .leftJoin(kanjiCards, and(eq(kanjiCards.kanji, kanji.char), eq(kanjiCards.mode, mode)))
-    .where(eq(kanji.jlpt, jlpt))
+    // Kanji yang ditandai "dikenal" dari sheet detail tidak masuk antrean lagi —
+    // kalau tetap muncul, tombol tandai terasa tidak berpengaruh.
+    .where(
+      and(
+        eq(kanji.jlpt, jlpt),
+        notInArray(kanji.char, db.select({ char: kanjiKnown.kanji }).from(kanjiKnown)),
+      ),
+    )
     .limit(200);
   const due = rows
     .filter((r) => r.reps !== null && (r.due ?? 0) <= now)
@@ -169,7 +176,24 @@ export async function getKanjiQueue(mode: KanjiMode, limit = 20, jlpt = 5) {
     if (fi < fresh.length && queue.length % 3 === 0) queue.push(fresh[fi++]!);
   }
   while (fi < fresh.length && queue.length < limit) queue.push(fresh[fi++]!);
-  return queue.slice(0, limit);
+  const picked = queue.slice(0, limit);
+  return withReadings(picked);
+}
+
+/** Bacaan on/kun untuk satu batch kartu — 1 query, bukan N+1. */
+async function withReadings<T extends { kanji: string }>(rows: T[]) {
+  if (rows.length === 0) return rows.map((r) => ({ ...r, readings: [] as string[] }));
+  const readRows = await db
+    .select({ kanji: kanjiReadings.kanji, reading: kanjiReadings.reading })
+    .from(kanjiReadings)
+    .where(inArray(kanjiReadings.kanji, rows.map((r) => r.kanji)));
+  const map = new Map<string, string[]>();
+  for (const r of readRows) {
+    const arr = map.get(r.kanji) ?? [];
+    arr.push(r.reading);
+    map.set(r.kanji, arr);
+  }
+  return rows.map((r) => ({ ...r, readings: map.get(r.kanji) ?? [] }));
 }
 
 /** Detail penuh untuk kartu (bacaan + 1 vocab). */
@@ -208,7 +232,7 @@ export async function rateKanjiCard(kanjiChar: string, mode: KanjiMode, rating: 
     .from(kanjiCards)
     .where(and(eq(kanjiCards.kanji, kanjiChar), eq(kanjiCards.mode, mode)))
     .limit(1);
-  const next = applyRating(toRow(kanjiChar, mode, existing), rating);
+  const next = await applyRating(toRow(kanjiChar, mode, existing), rating);
   await db
     .insert(kanjiCards)
     .values({

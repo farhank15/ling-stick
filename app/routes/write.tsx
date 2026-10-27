@@ -1,242 +1,214 @@
 import type { LoaderFunctionArgs, MetaFunction } from "react-router";
 import { Link, useLoaderData } from "react-router";
-import { useCallback, useEffect, useRef, useState } from "react";
-import { ArrowRight, Eraser, Eye, EyeOff, PencilLine, Type } from "lucide-react";
+import { useEffect, useRef, useState } from "react";
+import { ArrowRight, Check, Eye, EyeOff, Loader2, PencilLine, X } from "lucide-react";
 import { requireUser } from "~/lib/auth.server";
-import { db } from "~/lib/db/client.server";
-import { cards, items, wordbank } from "~/lib/db/schema";
-import { getTargetLang } from "~/lib/lang.server";
-import { JaText } from "~/components/JaText";
-import { and, eq, ne, sql } from "drizzle-orm";
+import { getKanjiQueue } from "~/lib/kanji.server";
+import { KanjiDraw, type DrawStroke } from "~/components/KanjiDraw";
+import type { KanjiPattern } from "~/lib/kanji-match2";
 
 export const meta: MetaFunction = () => [{ title: "Latihan Nulis — LingStick" }];
 export const handle = { title: "Latihan Nulis" };
 
-/** Kosakata aktif (dipelajari, punya arti) untuk latihan menulis. */
-async function writeTargets(lang: string) {
-  return db
-    .select({ id: items.id, text: items.text, reading: items.reading, meaningId: items.meaningId })
-    .from(items)
-    .innerJoin(cards, eq(cards.itemId, items.id))
-    .where(and(eq(items.status, "learning"), eq(items.lang, lang), sql`${items.meaningId} IS NOT NULL`))
-    .orderBy(sql`${cards.reps} ASC, ${items.createdAt} DESC`)
-    .limit(50);
+const LEVELS = ["N5", "N4", "N3", "N2", "N1"] as const;
+type Level = (typeof LEVELS)[number];
+
+function isLevel(v: string | null): v is Level {
+  return v !== null && (LEVELS as readonly string[]).includes(v);
 }
 
-/** Target dari Bank per level JLPT (?level=N5) — latihan kanji langsung dari katalog. */
-async function writeTargetsBank(level: string) {
-  return db
-    .select({ id: wordbank.id, text: wordbank.text, reading: wordbank.reading, meaningId: wordbank.meaningId })
-    .from(wordbank)
-    .where(
-      and(
-        eq(wordbank.lang, "ja"),
-        eq(wordbank.cefr, level),
-        ne(wordbank.type, "kana"),
-        sql`${wordbank.meaningId} IS NOT NULL`,
-      ),
-    )
-    .orderBy(wordbank.id)
-    .limit(50);
-}
-
+/**
+ * Latihan produksi: arti → tulis kanji → mesin menilai bentuk coretan.
+ * Rating FSRS masuk ke kartu `production` (tabel kanji_cards), terpisah dari
+ * mode Kenali/Baca supaya jadwal menulis tidak menutupi jadwal mengenali.
+ */
 export async function loader({ request }: LoaderFunctionArgs) {
   await requireUser(request);
-  const lang = await getTargetLang();
-  const level = new URL(request.url).searchParams.get("level");
-  const useBank = lang === "ja" && !!level && /^N[1-5]$/.test(level);
-  const targets = useBank ? await writeTargetsBank(level!) : await writeTargets(lang);
-  return { lang, level: useBank ? level : null, targets };
+  const raw = new URL(request.url).searchParams.get("level");
+  const level: Level = isLevel(raw) ? raw : "N5";
+  const cards = await getKanjiQueue("production", 20, Number(level.slice(1)));
+  return { level, cards };
 }
 
-type Stroke = { x: number; y: number };
+type Verdict = { rank: number; score: number | null; top: { char: string; score: number }[] };
 
 export default function WritePage() {
-  const { lang, level, targets } = useLoaderData<typeof loader>();
+  const { level, cards } = useLoaderData<typeof loader>();
   const [idx, setIdx] = useState(0);
-  const [showGuide, setShowGuide] = useState(true); // bentuk samar di background
-  const [showRomaji, setShowRomaji] = useState(false); // romaji hidden by default (belajar baca)
-  const [strokes, setStrokes] = useState(0);
-  const canvasRef = useRef<HTMLCanvasElement | null>(null);
-  const drawing = useRef(false);
-  const last = useRef<Stroke | null>(null);
+  const [strokes, setStrokes] = useState<DrawStroke[]>([]);
+  const [showGuide, setShowGuide] = useState(false);
+  const [checking, setChecking] = useState(false);
+  const [verdict, setVerdict] = useState<Verdict | null>(null);
+  const [saving, setSaving] = useState(false);
+  const [done, setDone] = useState(0);
+  /** Satu promise referensi untuk seluruh sesi — prefetch + Periksa memakai yang sama. */
+  const refsPromise = useRef<Promise<KanjiPattern[]> | null>(null);
 
-  const target = targets[idx];
+  const loadRefs = () => {
+    refsPromise.current ??= import("~/lib/kanji-match2").then((m) => m.buildRefPatternsAll());
+    return refsPromise.current;
+  };
 
-  const clearCanvas = useCallback(() => {
-    const cv = canvasRef.current;
-    if (!cv) return;
-    const ctx = cv.getContext("2d");
-    ctx?.clearRect(0, 0, cv.width, cv.height);
-    setStrokes(0);
+  // Data template 3 MB — muat di latar setelah paint pertama biar Periksa tak nunggu.
+  useEffect(() => {
+    const t = setTimeout(() => void loadRefs().catch(() => {}), 1200);
+    return () => clearTimeout(t);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  useEffect(() => {
-    clearCanvas();
-  }, [idx, clearCanvas]);
+  const target = cards[idx];
 
-  const pos = (e: React.PointerEvent<HTMLCanvasElement>): Stroke => {
-    const cv = canvasRef.current!;
-    const rect = cv.getBoundingClientRect();
-    return {
-      x: ((e.clientX - rect.left) / rect.width) * cv.width,
-      y: ((e.clientY - rect.top) / rect.height) * cv.height,
-    };
+  const reset = () => {
+    setStrokes([]);
+    setVerdict(null);
+    setShowGuide(false);
   };
 
-  const start = (e: React.PointerEvent<HTMLCanvasElement>) => {
-    e.preventDefault();
-    drawing.current = true;
-    last.current = pos(e);
-    const ctx = canvasRef.current?.getContext("2d");
-    ctx?.beginPath();
+  const advance = () => {
+    reset();
+    setIdx((i) => (i + 1) % cards.length);
   };
 
-  const move = (e: React.PointerEvent<HTMLCanvasElement>) => {
-    if (!drawing.current) return;
-    e.preventDefault();
-    const ctx = canvasRef.current?.getContext("2d");
-    const p = pos(e);
-    if (!ctx || !last.current) return;
-    ctx.strokeStyle = "#0d9488"; // teal-600
-    ctx.lineWidth = 10;
-    ctx.lineCap = "round";
-    ctx.lineJoin = "round";
-    ctx.beginPath();
-    ctx.moveTo(last.current.x, last.current.y);
-    ctx.lineTo(p.x, p.y);
-    ctx.stroke();
-    last.current = p;
-    setStrokes((n) => n + 1);
+  const check = async () => {
+    if (!target || strokes.length === 0) return;
+    setChecking(true);
+    try {
+      const [{ evaluateDrawing }, patterns] = await Promise.all([
+        import("~/lib/kanji-match2"),
+        loadRefs(),
+      ]);
+      setVerdict(evaluateDrawing(strokes, patterns, target.kanji));
+    } finally {
+      setChecking(false);
+    }
   };
 
-  const end = () => {
-    drawing.current = false;
-    last.current = null;
+  const rate = async (rating: 1 | 3) => {
+    if (!target || saving) return;
+    setSaving(true);
+    try {
+      await fetch("/api/kanji", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ kanji: target.kanji, mode: "production", rating }),
+      });
+      setDone((n) => n + 1);
+      advance();
+    } finally {
+      setSaving(false);
+    }
   };
 
   if (!target) {
     return (
       <div className="py-16 text-center">
         <PencilLine className="mx-auto h-10 w-10 text-teal-600 dark:text-teal-400" strokeWidth={1.5} />
-        <p className="mt-3 font-medium">Belum ada kosakata buat dilatih</p>
+        <p className="mt-3 font-medium">Belum ada kanji buat level ini</p>
         <p className="mt-1 text-sm text-zinc-500">
-          {level
-            ? `Bank belum punya kosakata level ${level} — generate dulu di Bank Kata.`
-            : lang === "ja"
-              ? "Simpan kosakata Jepang dulu dari Tambah atau Bank Kata."
-              : "Latihan nulis paling cocok buat kosakata Jepang — ganti bahasa target di Pengaturan."}
+          Jalankan seed katalog kanji dulu, atau pilih level lain di atas.
         </p>
-        <Link to="/bank" className="btn-secondary mt-4 inline-flex">
-          Buka Bank Kata <ArrowRight className="h-4 w-4" />
+        <Link to="/aksara" className="btn-secondary mt-4 inline-flex">
+          Buka Aksara <ArrowRight className="h-4 w-4" />
         </Link>
       </div>
     );
   }
 
-  // Panduan samar per karakter — kata multi-kanji (学校) dapat 2 kotak, bukan cuma kanji pertama.
-  const chars = [...target.text];
-  const guideSize =
-    chars.length <= 2 ? "text-[8rem]" : chars.length <= 4 ? "text-[4rem]" : "text-[2.5rem]";
+  const good = verdict?.rank === 0;
 
   return (
-    <>
-      {/* Sesi canvas: sempit tengah di desktop. */}
-      <div className="mx-auto w-full max-w-xl space-y-4">
-      {level ? (
+    <div className="mx-auto w-full max-w-xl space-y-4">
+      <div className="flex flex-wrap items-center justify-between gap-2">
+        <div className="flex gap-1">
+          {LEVELS.map((lv) => (
+            <Link
+              key={lv}
+              to={`/write?level=${lv}`}
+              className={`chip ${lv === level ? "chip-active" : ""}`}
+              aria-current={lv === level ? "page" : undefined}
+            >
+              {lv}
+            </Link>
+          ))}
+        </div>
+        <span className="text-xs text-zinc-400">
+          {idx + 1}/{cards.length}
+          {done > 0 ? ` · ${done} dinilai` : ""}
+        </span>
+      </div>
+
+      <div className="card space-y-1">
+        <p className="label">Tulis kanji untuk</p>
+        <p className="text-lg font-semibold">{target.meaningId}</p>
         <p className="text-xs text-zinc-400">
-          Target dari Bank Kata level <span className="font-semibold">{level}</span>
+          {target.strokes} goresan · urutan & arah tetap dinilai
         </p>
-      ) : null}
-      <p className="text-sm text-zinc-500 dark:text-zinc-400">
-        Coret karakternya di kotak pakai jari/stylus. Bentuk samar di belakang = panduan —
-        matikan kalau udah mulai hafal.
-      </p>
+      </div>
+
+      <KanjiDraw
+        key={`${target.kanji}-${idx}`}
+        onChange={setStrokes}
+        guide={showGuide ? target.kanji : undefined}
+      />
 
       <div className="flex items-center justify-between">
-        <span className="text-xs text-zinc-400">
-          Kartu {idx + 1} / {targets.length} · {strokes > 0 ? `${strokes} goresan` : "belum dicoret"}
-        </span>
-        <span className="flex gap-1">
-          <button
-            className="btn-ghost min-h-8 min-w-8 p-1.5"
-            onClick={() => setShowGuide((v) => !v)}
-            title={showGuide ? "Panduan nyala — klik buat matiin" : "Panduan mati — klik buat nyalain"}
-            aria-label={showGuide ? "Matikan panduan samar" : "Nyalakan panduan samar"}
-          >
-            {showGuide ? <Eye className="h-4 w-4" /> : <EyeOff className="h-4 w-4" />}
-          </button>
-          {lang === "ja" ? (
-            <button
-              className="btn-ghost min-h-8 min-w-8 p-1.5"
-              onClick={() => setShowRomaji((v) => !v)}
-              title={showRomaji ? "Romaji nyala — klik buat matiin" : "Tampilkan romaji (buat yang gagap)"}
-              aria-label={showRomaji ? "Matikan romaji" : "Nyalakan romaji"}
-            >
-              <Type className={`h-4 w-4 ${showRomaji ? "text-teal-600 dark:text-teal-400" : ""}`} />
-            </button>
-          ) : null}
-        </span>
-      </div>
-
-      <div className="flex justify-center">
-        <div className="relative">
-          {/* Panduan samar di belakang canvas — tiap karakter kotaknya sendiri (genkō yōshi) */}
-          {showGuide ? (
-            <span
-              aria-hidden
-              className="pointer-events-none absolute inset-0 flex items-center justify-center text-zinc-200 select-none dark:text-zinc-800"
-            >
-              {chars.map((ch, i) => (
-                <span key={i} className={`${guideSize} flex-1 text-center leading-none font-bold`}>
-                  {ch}
-                </span>
-              ))}
-            </span>
-          ) : null}
-          <canvas
-            ref={canvasRef}
-            width={300}
-            height={300}
-            className="touch-none rounded-2xl border-2 border-dashed border-zinc-300 bg-white dark:border-zinc-700 dark:bg-zinc-950"
-            onPointerDown={start}
-            onPointerMove={move}
-            onPointerUp={end}
-            onPointerLeave={end}
-          />
-        </div>
-      </div>
-
-      <div className="text-center">
-        {/* Format sama dgn Bank/Aksara: kanji + furigana hiragana kecil redup di atasnya */}
-        <p className="text-2xl font-bold">
-          <JaText
-            text={target.text}
-            reading={target.reading}
-            romajiToggle={false}
-            kanjiClassName="text-teal-700 dark:text-teal-400"
-            className="text-2xl font-bold"
-          />
-        </p>
-        {/* Romaji lewat toggle icon di header (showRomaji) — full "かな (romaji)" */}
-        {showRomaji && target.reading ? (
-          <p className="mt-0.5 text-sm text-zinc-400 dark:text-zinc-500">{target.reading}</p>
-        ) : null}
-        <p className="mt-1 text-sm text-zinc-600 dark:text-zinc-400">{target.meaningId}</p>
-      </div>
-
-      <div className="flex gap-2">
-        <button className="btn-secondary flex-1" onClick={clearCanvas}>
-          <Eraser className="h-4 w-4" strokeWidth={1.75} /> Hapus
+        <button
+          className="btn-ghost min-h-8 min-w-8 p-1.5"
+          onClick={() => setShowGuide((v) => !v)}
+          title={showGuide ? "Panduan nyala — klik buat matiin" : "Panduan mati — klik buat nyalain"}
+          aria-label={showGuide ? "Matikan panduan samar" : "Nyalakan panduan samar"}
+        >
+          {showGuide ? <Eye className="h-4 w-4" /> : <EyeOff className="h-4 w-4" />}
         </button>
         <button
-          className="btn-primary flex-1"
-          onClick={() => setIdx((i) => (i + 1) % targets.length)}
+          className="btn-primary"
+          disabled={strokes.length === 0 || checking || verdict !== null}
+          onClick={() => void check()}
         >
-          Lanjut <ArrowRight className="h-4 w-4" strokeWidth={1.75} />
+          {checking ? <Loader2 className="h-4 w-4 animate-spin" /> : <Check className="h-4 w-4" />} Periksa
         </button>
       </div>
-      </div>
-    </>
+
+      {verdict ? (
+        <div
+          className={`card space-y-2 ${
+            good
+              ? "!border-emerald-300 !bg-emerald-50/60 dark:!border-emerald-500/40 dark:!bg-emerald-950/30"
+              : "!border-amber-300 !bg-amber-50/60 dark:!border-amber-500/40 dark:!bg-amber-950/30"
+          }`}
+        >
+          <p className="flex items-center gap-2 font-semibold">
+            {good ? (
+              <>
+                <Check className="h-4 w-4 text-emerald-600" /> Bentuknya cocok
+              </>
+            ) : (
+              <>
+                <X className="h-4 w-4 text-amber-600" /> Belum cocok
+              </>
+            )}
+          </p>
+          <p className="text-sm text-zinc-600 dark:text-zinc-400">
+            {good
+              ? "Goresanmu paling mirip dengan kanji ini."
+              : verdict.top.length === 0
+                ? "Goresanmu belum mirip kanji mana pun — cek jumlah dan arah goresannya."
+                : `Goresanmu paling mirip ${verdict.top[0]!.char} — targetnya ${target.kanji}.`}
+          </p>
+          <div className="flex flex-wrap items-center gap-2 pt-1">
+            <span className="text-4xl font-bold">{target.kanji}</span>
+            <span className="text-sm text-zinc-500">{target.readings.slice(0, 3).join(" · ")}</span>
+          </div>
+          <div className="flex gap-2 pt-1">
+            <button className="btn-secondary flex-1" disabled={saving} onClick={() => void rate(1)}>
+              <X className="h-4 w-4" /> Salah
+            </button>
+            <button className="btn-primary flex-1" disabled={saving} onClick={() => void rate(3)}>
+              <Check className="h-4 w-4" /> Benar
+            </button>
+          </div>
+        </div>
+      ) : null}
+    </div>
   );
 }

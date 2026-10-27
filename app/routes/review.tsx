@@ -488,7 +488,7 @@ function ModePicker({
         <div className="min-w-0 flex-1">
           <p className="font-semibold">Latihan Nulis</p>
           <p className="line-clamp-2 text-xs text-zinc-500">
-            Coret kanji &amp; kana di canvas — panduan samar bisa dimatikan
+            Tulis kanji dari artinya — bentuk coretan dinilai, hasilnya masuk jadwal ulang
           </p>
         </div>
         <ArrowRight className="h-4 w-4 shrink-0 text-zinc-400" />

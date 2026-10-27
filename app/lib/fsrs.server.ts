@@ -11,12 +11,35 @@ import {
  * Wrapper ts-fsrs — BLUEPRINT §5. Semua state kartu disimpan di tabel cards.
  */
 
-const params = generatorParameters({
-  request_retention: 0.9,
-  enable_fuzz: true,
-});
+/**
+ * Scheduler dibuat ulang hanya saat preferensi retensi/interval berubah.
+ * matcha:explain dibaca dari tabel settings (bukan env) supaya user bisa
+ * mengatur sendiri; cache 60 detik menghindari 1 query per rating.
+ */
+const CONFIG_TTL_MS = 60_000;
+let scheduler = fsrs(generatorParameters({ request_retention: 0.9, enable_fuzz: true }));
+let schedulerKey = "0.9|36500";
+let configAt = 0;
 
-const scheduler = fsrs(params);
+async function getScheduler() {
+  if (Date.now() - configAt > CONFIG_TTL_MS) {
+    const { getFsrsSettings } = await import("~/lib/prefs.server");
+    const cfg = await getFsrsSettings();
+    const key = `${cfg.retention}|${cfg.maxInterval}`;
+    if (key !== schedulerKey) {
+      scheduler = fsrs(
+        generatorParameters({
+          request_retention: cfg.retention,
+          maximum_interval: cfg.maxInterval,
+          enable_fuzz: true,
+        }),
+      );
+      schedulerKey = key;
+    }
+    configAt = Date.now();
+  }
+  return scheduler;
+}
 
 export type CardRow = {
   itemId: number;
@@ -68,16 +91,15 @@ function fromFsrsCard(itemId: number, card: Card): CardRow {
 }
 
 /** Jadwal berikutnya untuk 4 rating, tanpa mengubah kartu. */
-export function previewGrades(row: CardRow): Record<Grade, RecordLogItem> {
-  return scheduler.repeat(toFsrsCard(row), new Date());
+export async function previewGrades(row: CardRow): Promise<Record<Grade, RecordLogItem>> {
+  const s = await getScheduler();
+  return s.repeat(toFsrsCard(row), new Date());
 }
 
 /** Terapkan rating (1..4) → baris kartu baru + log. */
-export function applyRating(
-  row: CardRow,
-  rating: 1 | 2 | 3 | 4,
-): CardRow {
-  const result = scheduler.next(toFsrsCard(row), new Date(), rating as Grade);
+export async function applyRating(row: CardRow, rating: 1 | 2 | 3 | 4): Promise<CardRow> {
+  const s = await getScheduler();
+  const result = s.next(toFsrsCard(row), new Date(), rating as Grade);
   return fromFsrsCard(row.itemId, result.card);
 }
 

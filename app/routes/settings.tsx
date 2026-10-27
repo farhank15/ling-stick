@@ -9,7 +9,18 @@ import { llmUsage } from "~/lib/db/schema";
 import { env } from "~/lib/env.server";
 import { getTargetLang, setTargetLang, isTargetLang, type TargetLang } from "~/lib/lang.server";
 import { laraStatus } from "~/lib/lara.server";
-import { getNewCardsPerDay, setNewCardsPerDay, NEW_CARDS_MIN, NEW_CARDS_MAX } from "~/lib/prefs.server";
+import {
+  getFsrsSettings,
+  getNewCardsPerDay,
+  setFsrsSettings,
+  setNewCardsPerDay,
+  MAX_INTERVAL_MAX,
+  MAX_INTERVAL_MIN,
+  NEW_CARDS_MAX,
+  NEW_CARDS_MIN,
+  RETENTION_MAX,
+  RETENTION_MIN,
+} from "~/lib/prefs.server";
 import { eq } from "drizzle-orm";
 import { todayStr } from "~/lib/utils.shared";
 import { llmConfigured } from "~/lib/llm.server";
@@ -26,10 +37,11 @@ const LANG_META: Record<TargetLang, { label: string; desc: string }> = {
 export async function loader({ request }: LoaderFunctionArgs) {
   await requireUser(request);
   // Paralel — hemat 1 round-trip Turso (dulu berurutan).
-  const [[usage], lara, targetLang] = await Promise.all([
+  const [[usage], lara, targetLang, fsrs] = await Promise.all([
     db.select().from(llmUsage).where(eq(llmUsage.day, todayStr())).limit(1),
     laraStatus(),
     getTargetLang(),
+    getFsrsSettings(),
   ]);
   return {
     lara,
@@ -45,13 +57,28 @@ export async function loader({ request }: LoaderFunctionArgs) {
     newCardsPerDay: await getNewCardsPerDay(),
     newCardsMin: NEW_CARDS_MIN,
     newCardsMax: NEW_CARDS_MAX,
+    fsrs,
+    retentionMin: RETENTION_MIN,
+    retentionMax: RETENTION_MAX,
+    maxIntervalMin: MAX_INTERVAL_MIN,
+    maxIntervalMax: MAX_INTERVAL_MAX,
   };
 }
 
 /** POST action — ganti bahasa target aktif (en/ja) / simpan preferensi review. */
 export async function action({ request }: ActionFunctionArgs) {
   await requireUser(request);
-  const body = (await request.json().catch(() => ({}))) as { lang?: string; newCardsPerDay?: number };
+  const body = (await request.json().catch(() => ({}))) as {
+    lang?: string;
+    newCardsPerDay?: number;
+    retention?: number;
+    maxInterval?: number;
+  };
+
+  if (typeof body.retention === "number" || typeof body.maxInterval === "number") {
+    const saved = await setFsrsSettings({ retention: body.retention, maxInterval: body.maxInterval });
+    return Response.json({ ok: true, ...saved });
+  }
 
   if (typeof body.newCardsPerDay === "number") {
     const saved = await setNewCardsPerDay(body.newCardsPerDay);
@@ -194,6 +221,15 @@ export default function Settings() {
       </section>
 
       <NewCardsSection initial={data.newCardsPerDay} min={data.newCardsMin} max={data.newCardsMax} />
+
+      <FsrsSection
+        retention={data.fsrs.retention}
+        maxInterval={data.fsrs.maxInterval}
+        retentionMin={data.retentionMin}
+        retentionMax={data.retentionMax}
+        maxIntervalMin={data.maxIntervalMin}
+        maxIntervalMax={data.maxIntervalMax}
+      />
 
       <section className="card space-y-2">
         <h2 className="label">Backup & restore</h2>
@@ -511,6 +547,126 @@ function NewCardsSection({ initial, min, max }: { initial: number; min: number; 
       <p className="text-[11px] text-zinc-400">
         Jumlah kata baru yang masuk antrian flashcard &amp; kuis tiap hari. Geser buat ngubah —
         naikin kalau mau nambah kosakata lebih cepat, turunin kalau mulai kewalahan.
+      </p>
+    </section>
+  );
+}
+/** Retensi & jarak ulang maksimum FSRS — dua slider, satu baris simpan. */
+function FsrsSection({
+  retention,
+  maxInterval,
+  retentionMin,
+  retentionMax,
+  maxIntervalMin,
+  maxIntervalMax,
+}: {
+  retention: number;
+  maxInterval: number;
+  retentionMin: number;
+  retentionMax: number;
+  maxIntervalMin: number;
+  maxIntervalMax: number;
+}) {
+  const toast = useToast();
+  const [ret, setRet] = useState(retention);
+  const [maxIv, setMaxIv] = useState(maxInterval);
+  const [saving, setSaving] = useState(false);
+  const savedRef = useRef({ retention, maxInterval });
+
+  const save = async (next: { retention: number; maxInterval: number }) => {
+    if (saving) return;
+    if (next.retention === savedRef.current.retention && next.maxInterval === savedRef.current.maxInterval) return;
+    setSaving(true);
+    try {
+      const res = await fetch("/api/settings", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(next),
+      });
+      const d = (await res.json().catch(() => ({}))) as {
+        ok?: boolean;
+        retention?: number;
+        maxInterval?: number;
+      };
+      if (!res.ok || !d.ok) throw new Error("Gagal menyimpan");
+      savedRef.current = {
+        retention: d.retention ?? next.retention,
+        maxInterval: d.maxInterval ?? next.maxInterval,
+      };
+      toast("Jadwal ulang diperbarui");
+    } catch (e) {
+      toast(e instanceof Error ? e.message : "Gagal menyimpan");
+      setRet(savedRef.current.retention);
+      setMaxIv(savedRef.current.maxInterval);
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const fmtDays = (days: number): string => {
+    if (days < 60) return `${days} hari`;
+    const months = Math.round(days / 30);
+    if (months < 12) return `${months} bln`;
+    const years = days / 365;
+    return `${Number.isInteger(years) ? years : years.toFixed(1)} thn`;
+  };
+
+  return (
+    <section className="card space-y-2">
+      <h2 className="label">Jadwal ulang</h2>
+
+      <div className="flex items-center justify-between gap-2 text-sm">
+        <span className="text-zinc-500 dark:text-zinc-400">Target retensi</span>
+        <span className="inline-flex items-center gap-1 font-medium">
+          {saving ? <CircleCheck className="h-4 w-4 shrink-0 text-teal-600 dark:text-teal-400" /> : null}
+          {Math.round(ret * 100)}%
+        </span>
+      </div>
+      <input
+        type="range"
+        min={retentionMin}
+        max={retentionMax}
+        step={0.01}
+        value={ret}
+        className="w-full accent-teal-600"
+        aria-label="Target retensi"
+        onChange={(e) => setRet(Number(e.target.value))}
+        onPointerUp={() => void save({ retention: ret, maxInterval: maxIv })}
+        onKeyUp={() => void save({ retention: ret, maxInterval: maxIv })}
+        onBlur={() => void save({ retention: ret, maxInterval: maxIv })}
+      />
+      <div className="flex justify-between text-[10px] text-zinc-400">
+        <span>{Math.round(retentionMin * 100)}%</span>
+        <span>{Math.round(retentionMax * 100)}%</span>
+      </div>
+      <p className="text-[11px] text-zinc-400">
+        Peluang kamu masih ingat saat kartu muncul lagi. Naikin kalau sering lupa — kartu bakal
+        lebih sering diulang; turunin kalau mau sesi lebih ringan.
+      </p>
+
+      <div className="flex items-center justify-between gap-2 pt-2 text-sm">
+        <span className="text-zinc-500 dark:text-zinc-400">Jarak ulang maksimum</span>
+        <span className="inline-flex items-center gap-1 font-medium">{fmtDays(maxIv)}</span>
+      </div>
+      <input
+        type="range"
+        min={maxIntervalMin}
+        max={maxIntervalMax}
+        step={30}
+        value={maxIv}
+        className="w-full accent-teal-600"
+        aria-label="Jarak ulang maksimum"
+        onChange={(e) => setMaxIv(Number(e.target.value))}
+        onPointerUp={() => void save({ retention: ret, maxInterval: maxIv })}
+        onKeyUp={() => void save({ retention: ret, maxInterval: maxIv })}
+        onBlur={() => void save({ retention: ret, maxInterval: maxIv })}
+      />
+      <div className="flex justify-between text-[10px] text-zinc-400">
+        <span>{fmtDays(maxIntervalMin)}</span>
+        <span>{fmtDays(maxIntervalMax)}</span>
+      </div>
+      <p className="text-[11px] text-zinc-400">
+        Batas atas jarak antar-ulangan. Kartu yang sudah sangat stabil berhenti menjauh di angka ini.
       </p>
     </section>
   );

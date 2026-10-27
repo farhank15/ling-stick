@@ -59,12 +59,33 @@ npm run kanji:import  # validasi total → upsert DB (butuh DB reachable)
 - `scripts/kanji-import.ts` — `ensureDbReady()` + validasi + upsert idempoten.
 - `data/kanji-n5.json` + `data/kanji-n4.json` ikut ke-commit (sumber review + repro).
 
+## Data goresan (KanjiVG → matcher)
+
+```bash
+npm run kanji:strokes        # → data/kanji-strokes.json      (N5–N3, 638 kanji, normalisasi 0..100 stretch)
+npm run kanji:textbook       # → data/textbook-strokes.json  (N5–N1, 2380 kanji, rasio aspek dijaga)
+npm run kanji:strokes-audit  # silang jumlah goresan vs data/kanji-levels.json — gagal kalau <95%
+```
+
+- Parser tunggal: `scripts/lib/kanjivg.ts`. Mengambil **semua** `<path id="kvg:…-sN">`
+  dari seluruh SVG lalu mengurutkan menurut nomor goresan. Jangan kembali ke regex
+  grup `<g>…</g>` — KanjiVG menyusun subgrup bersarang dan tangkapan non-greedy
+  kehilangan sebagian besar goresan (dulu hanya 7% kanji yang jumlah goresannya benar).
+- Perintah path yang didukung: M L H V C S Q T A Z (absolut + relatif). `S/s`
+  wajib — tanpa itu ekor goresan terpotong.
+- SVG di-cache di `data/kanjivg/` (gitignored) supaya build ulang tanpa jaringan.
+- Audit + `tests/kanji-strokes-data.test.ts` menjaga regresi: 635/638 (99,5%) cocok
+  dengan jumlah goresan resmi. Sisa 3 (僅 謎 餌) beda bentuk varian di KanjiVG.
+
 ## Flashcard khusus kanji (4 mode, 1 fakta per kartu)
 
 - **Kenali** (`recognition`): kanji → arti + bacaan.
 - **Ingat** (`recall`): arti → bayangkan/tulis kanji → cek.
 - **Baca** (`reading`): kata (furigana disembunyi) → bacaan.
 - **Produksi** (`production`): arti + bacaan → ketik kanji (free-response).
+  Halaman `/write` memakai mode yang sama untuk latihan tulis: arti → coret di
+  kanvas → matcher (`app/lib/kanji-match2.ts`) menilai bentuk → tombol
+  Benar/Salah mengirim rating Good/Again ke `kanji_cards.mode = 'production'`.
 - API: `GET /api/kanji?mode=&level=` antrean, `?detail=` detail, `POST` nilai 1–4.
   `level` wajib dikirim dari tab aktif — tanpa itu antrean selalu N5.
 - UI: tab Kanji di `/aksara` (grid + filter komponen + detail SVG). Drill dibuka
@@ -100,6 +121,20 @@ dicocokkan di klien, tanpa query DB tambahan:
 `listKanji` mengambil bacaan lewat **satu query batch** (`inArray`) bersama
 komponen — bukan N+1. Notasi KANJIDIC (`.` okurigana, `-` afiks) dibuang saat
 normalisasi (`normalizeQuery`), jadi `まな.ぶ` tetap match `まなぶ`.
+
+## Jadwal ulang yang bisa diatur (2026-10-26)
+
+Dua preferensi FSRS disimpan di tabel `settings` (bukan env) dan diatur dari
+`/settings` → kartu **Jadwal ulang**:
+
+| Kunci | Rentang | Default | Efek |
+|---|---|---|---|
+| `fsrsRetention` | 0,80–0,95 | 0,90 | target peluang ingat saat kartu muncul lagi |
+| `fsrsMaxInterval` | 30–3650 hari | 3650 | batas atas jarak antar-ulangan |
+
+`app/lib/fsrs.server.ts` membuat ulang scheduler hanya kalau nilai berubah
+(cache 60 detik), jadi tidak ada query tambahan per rating. Karena itu
+`applyRating`/`previewGrades` kini **async** — semua pemanggil wajib `await`.
 
 ## Cara lanjut
 

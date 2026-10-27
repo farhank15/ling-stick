@@ -61,7 +61,7 @@ export async function action({ request }: ActionFunctionArgs) {
     learningSteps: detail.card.learningSteps,
     lastReview: detail.card.lastReview,
   };
-  const next = applyRating(row, rating as 1 | 2 | 3 | 4);
+  const next = await applyRating(row, rating as 1 | 2 | 3 | 4);
   await applyReview(itemId, rating as 1 | 2 | 3 | 4, mode, next);
 
   return Response.json({ ok: true, due: next.due });
