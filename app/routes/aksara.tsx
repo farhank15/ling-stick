@@ -1209,11 +1209,11 @@ export default function AksaraPage() {
                   <button type='button'
                     key={k.id}
                     onClick={() => void openSaved(k)}
-                    className="flex aspect-square flex-col items-center justify-center rounded-xl border border-teal-600/25 bg-teal-50/60 px-1 py-1.5 dark:border-teal-500/25 dark:bg-teal-950/40"
+                    className="flex aspect-square min-w-0 flex-col items-center justify-center overflow-hidden rounded-xl border border-teal-600/25 bg-teal-50/60 px-1 py-1.5 dark:border-teal-500/25 dark:bg-teal-950/40"
                     title={k.meaningId ?? ""}
                   >
                     <span className="text-xl font-bold leading-none">{k.char}</span>
-                    <span className="mt-0.5 max-w-16 truncate text-[9px] text-zinc-500">{k.meaningId}</span>
+                    <span className="mt-0.5 w-full truncate px-0.5 text-center text-[9px] leading-tight text-zinc-500">{shortMeaning(k.meaningId)}</span>
                   </button>
                 ))}
               </div>
@@ -1627,6 +1627,15 @@ function KanjiRef({
 }
 
 /** Grid kanji — menerima baris yang sudah difilter/dikelompokkan. */
+// Arti panjang ("menggantikan; biaya") bikin kartu grid berantakan — ambil
+// arti pertama saja; arti lengkap tetap ada di sheet detail.
+function shortMeaning(text: string | null): string {
+  if (!text) return '';
+  const first = text.split(/[;,]/)[0] ?? '';
+  const clean = first.trim();
+  return clean || text;
+}
+
 function KanjiGrid({
   list, openChar, onOpen, known,
 }: {
@@ -1642,7 +1651,7 @@ function KanjiGrid({
           key={k.char}
           onClick={() => onOpen(k.char)}
           title={`${k.char} — ${k.meaningId}${known.has(k.char) ? " · sudah dikenal" : ""}`}
-          className={`flex aspect-square flex-col items-center justify-center rounded-xl border font-jp text-lg font-bold transition-colors ${
+          className={`flex aspect-square min-w-0 flex-col items-center justify-center overflow-hidden rounded-xl border font-jp text-lg font-bold transition-colors ${
             openChar === k.char
               ? "border-teal-500 bg-teal-50 text-teal-700 dark:bg-teal-950/60 dark:text-teal-300"
               : known.has(k.char)
@@ -1651,7 +1660,7 @@ function KanjiGrid({
           }`}
         >
           {k.char}
-          <span className="max-w-full truncate px-0.5 text-[9px] font-normal text-zinc-400">{k.meaningId}</span>
+          <span className="w-full truncate px-0.5 text-center text-[9px] font-normal text-zinc-400">{shortMeaning(k.meaningId)}</span>
         </button>
       ))}
     </div>
