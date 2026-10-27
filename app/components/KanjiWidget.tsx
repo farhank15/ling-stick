@@ -16,54 +16,56 @@ export function KanjiWidget({ detail, level }: Props) {
   const fetcher = useFetcher();
 
   return (
-    <div className='card flex flex-col gap-3 p-4'>
-      <div className='flex items-center justify-between gap-2'>
-        <p className='label'>Kanji Saat Ini</p>
-        <div className='flex items-center gap-0.5 rounded-lg bg-zinc-100 p-0.5 dark:bg-zinc-800'>
-          {LEVELS.map((lv) => (
-            <button
-              key={lv}
-              type='button'
-              onClick={() => fetcher.submit({ intent: 'setKanjiLevel', level: String(lv) }, { method: 'post' })}
-              className={
-                'rounded-md px-2 py-0.5 text-[11px] font-semibold transition-colors ' +
-                (level === lv
-                  ? 'bg-teal-600 text-white'
-                  : 'text-zinc-500 hover:text-zinc-800 dark:hover:text-zinc-200')
-              }
-            >
-              N{lv}
-            </button>
-          ))}
+    <>
+      <div className='card flex min-w-0 flex-col gap-3 overflow-hidden p-4'>
+        <div className='flex flex-wrap items-center justify-between gap-2'>
+          <p className='label min-w-0'>Kanji Saat Ini</p>
+          <div className='flex items-center gap-0.5 rounded-lg bg-zinc-100 p-0.5 dark:bg-zinc-800'>
+            {LEVELS.map((lv) => (
+              <button
+                key={lv}
+                type='button'
+                onClick={() => fetcher.submit({ intent: 'setKanjiLevel', level: String(lv) }, { method: 'post' })}
+                className={
+                  'rounded-md px-2 py-0.5 text-[11px] font-semibold transition-colors ' +
+                  (level === lv
+                    ? 'bg-teal-600 text-white'
+                    : 'text-zinc-500 hover:text-zinc-800 dark:hover:text-zinc-200')
+                }
+              >
+                N{lv}
+              </button>
+            ))}
+          </div>
         </div>
+
+        <button
+          type='button'
+          onClick={() => setOpen(true)}
+          className='group flex items-center gap-4 rounded-xl p-1 text-left transition-colors hover:bg-zinc-50 dark:hover:bg-zinc-800/60'
+        >
+          <span className='flex h-16 w-16 shrink-0 items-center justify-center rounded-xl bg-teal-50 text-4xl font-bold text-teal-700 dark:bg-teal-950/40 dark:text-teal-300'>
+            {detail.char}
+          </span>
+          <span className='min-w-0'>
+            <span className='block text-sm font-semibold'>{detail.meaningId}</span>
+            <span className='mt-1 flex flex-wrap gap-x-3 gap-y-0.5 text-xs text-muted'>
+              <span>On: {detail.on.filter((o) => o.primary).map((o) => o.text).join(', ') || '—'}</span>
+              <span>Kun: {detail.kun.filter((k) => k.primary).map((k) => k.text).join(', ') || '—'}</span>
+            </span>
+            {detail.vocab[0] ? (
+              <span className='mt-1 block truncate text-xs text-muted'>
+                {detail.vocab[0].word} · {detail.vocab[0].reading} — {detail.vocab[0].gloss}
+              </span>
+            ) : null}
+          </span>
+        </button>
+
+        <p className='text-[11px] text-zinc-400'>Klik kartu untuk detail · ganti level di atas</p>
       </div>
 
-      <button
-        type='button'
-        onClick={() => setOpen(true)}
-        className='group flex items-center gap-4 rounded-xl p-1 text-left transition-colors hover:bg-zinc-50 dark:hover:bg-zinc-800/60'
-      >
-        <span className='flex h-16 w-16 shrink-0 items-center justify-center rounded-xl bg-teal-50 text-4xl font-bold text-teal-700 dark:bg-teal-950/40 dark:text-teal-300'>
-          {detail.char}
-        </span>
-        <span className='min-w-0'>
-          <span className='block text-sm font-semibold'>{detail.meaningId}</span>
-          <span className='mt-1 flex flex-wrap gap-x-3 gap-y-0.5 text-xs text-muted'>
-            <span>On: {detail.on.filter((o) => o.primary).map((o) => o.text).join(', ') || '—'}</span>
-            <span>Kun: {detail.kun.filter((k) => k.primary).map((k) => k.text).join(', ') || '—'}</span>
-          </span>
-          {detail.vocab[0] ? (
-            <span className='mt-1 block truncate text-xs text-muted'>
-              {detail.vocab[0].word} · {detail.vocab[0].reading} — {detail.vocab[0].gloss}
-            </span>
-          ) : null}
-        </span>
-      </button>
-
-      <p className='text-[11px] text-zinc-400'>Klik kartu untuk detail · ganti level di atas</p>
-
       {open ? <KanjiSheet detail={detail} onClose={() => setOpen(false)} /> : null}
-    </div>
+    </>
   );
 }
 
@@ -83,7 +85,7 @@ function KanjiSheet({ detail, onClose }: { detail: KanjiDetail; onClose: () => v
       role='presentation'
     >
       <div
-        className='card w-full max-w-sm space-y-3 p-4'
+        className='card max-h-[85vh] w-full max-w-sm space-y-3 overflow-y-auto p-4'
         onClick={(e) => e.stopPropagation()}
         role='dialog'
         aria-modal='true'

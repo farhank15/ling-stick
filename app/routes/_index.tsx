@@ -124,39 +124,10 @@ export default function Index() {
 
   return (
     <div className='space-y-5'>
-      <div className='grid gap-5 lg:grid-cols-5 lg:items-start'>
-        <div className='space-y-5 lg:col-span-3'>
-          {routeCard ? (
-            <Link
-              to='/rute'
-              prefetch='intent'
-              className='card group flex items-center gap-3 border-teal-200 p-4 transition-all hover:-translate-y-0.5 hover:shadow-lg hover:shadow-teal-500/10 dark:border-teal-900'
-            >
-              <span className='flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-teal-600 text-lg font-extrabold text-white'>
-                {routeCard.order}
-              </span>
-              <span className='min-w-0 flex-1'>
-                <span className='block text-[11px] font-medium uppercase tracking-wide text-teal-700 dark:text-teal-300'>
-                  Rute N5 · {routeCard.segDone}/{routeCard.segTotal} segmen ini · {routeCard.xp} XP
-                </span>
-                <span className='block truncate font-semibold'>Lanjutkan Step {routeCard.order}: {routeCard.title}</span>
-                <span className='mt-1 block h-1.5 overflow-hidden rounded-full bg-zinc-200 dark:bg-zinc-800'>
-                  <span
-                    className='block h-full bg-teal-600 dark:bg-teal-500'
-                    style={{ width: (routeCard.segDone / Math.max(1, routeCard.segTotal)) * 100 + '%' }}
-                  />
-                </span>
-              </span>
-              <ArrowRight className='h-4 w-4 shrink-0 text-zinc-400 transition-transform group-hover:translate-x-0.5' />
-            </Link>
-          ) : null}
-          <QuickTranslate />
-        </div>
-        <div className='lg:col-span-2 lg:sticky lg:top-20'>
-          <RecentItems items={recent} />
-        </div>
-      </div>
+      {/* Aksi utama di atas */}
+      <QuickTranslate />
 
+      {/* Widget JP-only: kanji + cuaca, tepat di bawah terjemah cepat */}
       {lang === 'ja' ? (
         <section className='grid gap-4 sm:grid-cols-2'>
           {kanjiDetail ? <KanjiWidget detail={kanjiDetail} level={kanjiLevel} /> : null}
@@ -164,8 +135,35 @@ export default function Index() {
         </section>
       ) : null}
 
+      {/* Lanjutan rute */}
+      {routeCard ? (
+        <Link
+          to='/rute'
+          prefetch='intent'
+          className='card group flex min-w-0 items-center gap-3 border-teal-200 p-4 transition-all hover:-translate-y-0.5 hover:shadow-lg hover:shadow-teal-500/10 dark:border-teal-900'
+        >
+          <span className='flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-teal-600 text-lg font-extrabold text-white'>
+            {routeCard.order}
+          </span>
+          <span className='min-w-0 flex-1'>
+            <span className='block text-[11px] font-medium uppercase tracking-wide text-teal-700 dark:text-teal-300'>
+              Rute N5 · {routeCard.segDone}/{routeCard.segTotal} segmen ini · {routeCard.xp} XP
+            </span>
+            <span className='block truncate font-semibold'>Lanjutkan Step {routeCard.order}: {routeCard.title}</span>
+            <span className='mt-1 block h-1.5 overflow-hidden rounded-full bg-zinc-200 dark:bg-zinc-800'>
+              <span
+                className='block h-full bg-teal-600 dark:bg-teal-500'
+                style={{ width: (routeCard.segDone / Math.max(1, routeCard.segTotal)) * 100 + '%' }}
+              />
+            </span>
+          </span>
+          <ArrowRight className='h-4 w-4 shrink-0 text-zinc-400 transition-transform group-hover:translate-x-0.5' />
+        </Link>
+      ) : null}
+
+      {/* Aksara + capture */}
       <div className='grid gap-5 lg:grid-cols-5 lg:items-start'>
-        <div className='space-y-5 lg:col-span-3'>
+        <div className='min-w-0 space-y-5 lg:col-span-3'>
           {lang === 'ja' ? (
             <section className='space-y-2'>
               <p className='label px-1'>Aksara Jepang</p>
@@ -187,12 +185,14 @@ export default function Index() {
           ) : null}
           <Capture />
         </div>
-        <div className='lg:col-span-2' />
+        <div className='hidden lg:col-span-2 lg:block' />
       </div>
 
-      <div className='mt-5'>
-        <DashboardStats />
-      </div>
+      {/* Tersimpan terakhir — di bagian bawah */}
+      <RecentItems items={recent} />
+
+      {/* Perkembangan */}
+      <DashboardStats />
     </div>
   );
 }
