@@ -7,6 +7,13 @@ import stylesheet from "./app.css?url";
 
 export const links: LinksFunction = () => [
   { rel: "stylesheet", href: stylesheet },
+  // Noto Sans JP — kana/kanji lebih lega & glif stabil (teks Jepang min 16px).
+  { rel: "preconnect", href: "https://fonts.googleapis.com" },
+  { rel: "preconnect", href: "https://fonts.gstatic.com", crossOrigin: "anonymous" },
+  {
+    rel: "stylesheet",
+    href: "https://fonts.googleapis.com/css2?family=Noto+Sans+JP:wght@400;500;700&display=swap",
+  },
   { rel: "manifest", href: "/manifest.json" },
   { rel: "icon", href: "/lingstick.png", type: "image/png", sizes: "32x32" },
   {

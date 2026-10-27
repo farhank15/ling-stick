@@ -195,8 +195,8 @@ export default function AppLayout() {
           <div className="relative" ref={notifRef}>
             <button
               className="relative rounded-lg px-2 py-1.5 text-zinc-500 hover:bg-zinc-100 hover:text-zinc-700 dark:text-zinc-400 dark:hover:bg-zinc-900 dark:hover:text-zinc-200"
-              title="Notifikasi"
-              aria-label="Notifikasi"
+              title="Notifikasi (latihan hari ini & tes periodik)"
+              aria-label="Notifikasi (latihan hari ini & tes periodik)"
               onClick={onToggleNotif}
             >
               <Bell className="h-5 w-5" strokeWidth={1.75} />
@@ -312,7 +312,7 @@ export default function AppLayout() {
           <div className="relative" ref={langRef}>
             <button
               className="flex h-[34px] min-w-11 items-center justify-center rounded-lg px-2 text-xs font-bold text-zinc-500 hover:bg-zinc-100 hover:text-zinc-700 dark:text-zinc-400 dark:hover:bg-zinc-900 dark:hover:text-zinc-200"
-              title={isJa ? "Bahasa: Jepang — ketuk buat ganti" : "Bahasa: Inggris — ketuk buat ganti"}
+              title={isJa ? "Bahasa target: Jepang (あ) — ketuk buat ganti" : "Bahasa target: Inggris (EN) — ketuk buat ganti"}
               aria-label="Ganti bahasa target"
               aria-expanded={langOpen}
               onClick={() => setLangOpen((o) => !o)}
@@ -339,7 +339,7 @@ export default function AppLayout() {
             to="/translate"
             prefetch="intent"
             className="rounded-lg px-2 py-1.5 text-zinc-500 hover:bg-zinc-100 hover:text-zinc-700 dark:text-zinc-400 dark:hover:bg-zinc-900 dark:hover:text-zinc-200"
-            title="Terjemah"
+            aria-label="Terjemah" title="Terjemah"
           >
             <Languages className="h-5 w-5" strokeWidth={1.75} />
           </Link>
@@ -347,7 +347,7 @@ export default function AppLayout() {
             to="/settings"
             prefetch="intent"
             className="rounded-lg px-2 py-1.5 text-zinc-500 hover:bg-zinc-100 hover:text-zinc-700 dark:text-zinc-400 dark:hover:bg-zinc-900 dark:hover:text-zinc-200"
-            title="Pengaturan"
+            aria-label="Pengaturan" title="Pengaturan"
           >
             <Settings className="h-5 w-5" strokeWidth={1.75} />
           </Link>

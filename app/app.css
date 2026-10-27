@@ -118,6 +118,70 @@ body {
   outline-offset: 2px;
 }
 
+
+/* ── Design tokens tambahan (Task A) ──────────────────────────────────
+ * Particle/keyword colors: は = biru (topik), が = oranye (subjek/fokus).
+ * Dipakai komponen ExampleCard + penjelasan pola. */
+@theme {
+  --color-wa: oklch(0.62 0.15 250);
+  --color-wa-soft: oklch(0.95 0.03 250);
+  --color-wa-strong: oklch(0.5 0.15 250);
+  --color-ga: oklch(0.7 0.16 50);
+  --color-ga-soft: oklch(0.96 0.04 50);
+  --color-ga-strong: oklch(0.55 0.16 50);
+  /* Skala spasi 4px-based — konsisten antar section. */
+  --space-1: 0.25rem;
+  --space-2: 0.5rem;
+  --space-3: 0.75rem;
+  --space-4: 1rem;
+  --space-6: 1.5rem;
+  /* Radius — lembut & tenang. */
+  --radius-card: 1rem;
+  /* Font Jepang: Noto Sans JP (kana/kanji lebih lega, glif stabil). */
+  --font-jp-stack:
+    "Noto Sans JP", "Hiragino Kaku Gothic ProN", "Yu Gothic", "Hiragino Sans",
+    sans-serif;
+}
+
+/* Teks Jepang: Noto Sans JP, min 16px, line-height lega (LH CJK ≈ 1.7). */
+.jp {
+  font-family: var(--font-jp-stack);
+  font-size: 1.05rem;
+  line-height: 1.7;
+  letter-spacing: 0.01em;
+}
+
+/* Warna partikel — kontras AA di light & dark. */
+.text-wa { color: var(--color-wa-strong); }
+.dark .text-wa { color: var(--color-wa); }
+.text-ga { color: var(--color-ga-strong); }
+.dark .text-ga { color: var(--color-ga); }
+.bg-wa-soft { background-color: var(--color-wa-soft); }
+.dark .bg-wa-soft { background-color: oklch(0.25 0.05 250); }
+.bg-ga-soft { background-color: var(--color-ga-soft); }
+.dark .bg-ga-soft { background-color: oklch(0.28 0.06 50); }
+
+/* Teks muted yang lolos WCAG AA (zinc-600 light / zinc-400 dark). */
+.text-muted {
+  @apply text-zinc-600 dark:text-zinc-400;
+}
+/* Label section — kontras diperkuat dari zinc-500 → zinc-600. */
+.label {
+  @apply text-xs font-semibold uppercase tracking-wide text-zinc-600 dark:text-zinc-400;
+}
+
+/* Respect prefers-reduced-motion: matikan animasi non-esensial. */
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.001ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.001ms !important;
+    scroll-behavior: auto !important;
+  }
+}
+
 /* Komponen kecil reusable — tetap minimalis.
    Catatan: Tailwind v4 tidak bisa @apply class custom, jadi utilitas dasar
    (.btn) ditulis ulang di tiap varian. */
