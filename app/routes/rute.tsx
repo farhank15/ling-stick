@@ -146,11 +146,11 @@ export default function Rute() {
                   }
                   navigate(`/rute/${s.step.step_id}`);
                 }}
-                className="card flex min-h-11 flex-1 items-center justify-between gap-3 px-3.5 py-3 text-left transition-colors hover:border-teal-500 disabled:cursor-not-allowed disabled:opacity-70"
+                className="card flex min-h-11 flex-1 items-center justify-between gap-3 overflow-hidden px-3.5 py-3 text-left transition-colors hover:border-teal-500 disabled:cursor-not-allowed disabled:opacity-70"
                 aria-label={locked ? `Terkunci: ${s.step.title_id}` : `Buka ${s.step.title_id}`}
               >
                 <div className="min-w-0">
-                  <p className="truncate font-semibold leading-snug">{s.step.order}. {s.step.title_id}</p>
+                  <p className="truncate text-[15px] font-semibold leading-snug">{s.step.order}. {s.step.title_id}</p>
                   <p className="mt-0.5 text-xs text-muted">~{s.step.est_minutes} mnt</p>
                 </div>
                 <div className="flex shrink-0 items-center gap-1.5">
@@ -200,11 +200,11 @@ export default function Rute() {
                 }
                 void startExam();
               }}
-              className="card flex min-h-11 flex-1 items-center justify-between gap-3 px-3.5 py-3 text-left transition-colors hover:border-amber-500 disabled:cursor-not-allowed disabled:opacity-70"
+              className="card flex min-h-11 flex-1 items-center justify-between gap-3 overflow-hidden px-3.5 py-3 text-left transition-colors hover:border-amber-500 disabled:cursor-not-allowed disabled:opacity-70"
               aria-label={`Ujian segmen ${seg}`}
             >
               <div className="min-w-0">
-                <p className="truncate font-semibold leading-snug">Ujian Segmen {seg}</p>
+                <p className="truncate text-[15px] font-semibold leading-snug">Ujian Segmen {seg}</p>
                 <p className="mt-0.5 text-xs text-muted">{exam.state === "passed" ? "Lulus" : "Kumpulkan semua step dulu"}</p>
               </div>
               <Trophy className="h-4 w-4 shrink-0 text-amber-500" aria-hidden />

@@ -80,7 +80,16 @@ function LangOptRow({ id, label, desc, active, onPick }: { id: "en" | "ja"; labe
   );
 }
 
+function applyStoredTheme() {
+  try {
+    const t = localStorage.getItem("lingstick-theme");
+    if (t && t !== "teal") document.documentElement.dataset.theme = t;
+    else document.documentElement.removeAttribute("data-theme");
+  } catch (e) {}
+}
+
 export default function AppLayout() {
+  applyStoredTheme();
   const location = useLocation();
   const nav = useNavigation();
   const matches = useMatches() as UIMatch[];
