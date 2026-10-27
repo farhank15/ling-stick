@@ -6,7 +6,7 @@ import { requireUser } from '~/lib/auth.server';
 import { getTargetLang } from '~/lib/lang.server';
 import { listItems } from '~/lib/items.server';
 import { getKanjiWidgetLevel, setKanjiWidgetLevel } from '~/lib/prefs.server';
-import { listKanji, getKanjiDetail, type KanjiDetail } from '~/lib/kanji.server';
+import { listKanji, getKanjiDetail, getKanjiLevelsAvailable, type KanjiDetail } from '~/lib/kanji.server';
 import { QuickTranslate } from '~/components/QuickTranslate';
 import { RecentItems } from '~/components/RecentItems';
 import { Capture } from '~/components/Capture';
@@ -38,6 +38,9 @@ export async function loader({ request }: LoaderFunctionArgs) {
   const levelP = lang === 'ja' ? getKanjiWidgetLevel() : Promise.resolve(5);
   const [recent, map, level] = await Promise.all([recentP, routeP, levelP]);
 
+  let levels: number[] = [];
+  if (lang === 'ja') levels = await getKanjiLevelsAvailable();
+
   const kanjiP = lang === 'ja' ? pickKanjiOfTheHour(level) : Promise.resolve(null);
   const weatherP = lang === 'ja' ? fetchSlemanWeather() : Promise.resolve(null);
   const [kanjiDetail, weather] = await Promise.all([kanjiP, weatherP]);
@@ -57,7 +60,7 @@ export async function loader({ request }: LoaderFunctionArgs) {
   } catch {
     // rute opsional, home tetap jalan
   }
-  return { recent, lang, routeCard, kanjiLevel: level, kanjiDetail, weather };
+  return { recent, lang, routeCard, kanjiLevel: level, kanjiDetail, weather, kanjiLevels: levels };
 }
 
 async function pickKanjiOfTheHour(level: number): Promise<KanjiDetail | null> {
@@ -113,7 +116,7 @@ const AKSARA_CARDS = [
 ] as const;
 
 export default function Index() {
-  const { recent, lang, routeCard, kanjiLevel, kanjiDetail, weather } = useLoaderData<typeof loader>();
+  const { recent, lang, routeCard, kanjiLevel, kanjiDetail, weather, kanjiLevels } = useLoaderData<typeof loader>();
   const revalidator = useRevalidator();
 
   useEffect(() => {
@@ -124,18 +127,15 @@ export default function Index() {
 
   return (
     <div className='space-y-5'>
-      {/* Aksi utama di atas */}
       <QuickTranslate />
 
-      {/* Widget JP-only: kanji + cuaca, tepat di bawah terjemah cepat */}
       {lang === 'ja' ? (
         <section className='grid gap-4 sm:grid-cols-2'>
-          {kanjiDetail ? <KanjiWidget detail={kanjiDetail} level={kanjiLevel} /> : null}
+          <KanjiWidget detail={kanjiDetail} level={kanjiLevel} available={kanjiLevels} />
           <WeatherWidget weather={weather} />
         </section>
       ) : null}
 
-      {/* Lanjutan rute */}
       {routeCard ? (
         <Link
           to='/rute'
@@ -161,7 +161,6 @@ export default function Index() {
         </Link>
       ) : null}
 
-      {/* Aksara + capture */}
       <div className='grid gap-5 lg:grid-cols-5 lg:items-start'>
         <div className='min-w-0 space-y-5 lg:col-span-3'>
           {lang === 'ja' ? (
@@ -188,10 +187,8 @@ export default function Index() {
         <div className='hidden lg:col-span-2 lg:block' />
       </div>
 
-      {/* Tersimpan terakhir — di bagian bawah */}
       <RecentItems items={recent} />
 
-      {/* Perkembangan */}
       <DashboardStats />
     </div>
   );

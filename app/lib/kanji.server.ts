@@ -104,6 +104,18 @@ export async function listComponents(jlpt = 5) {
   return [...freq.entries()].sort((a, b) => b[1] - a[1]).map(([component, count]) => ({ component, count }));
 }
 
+// Level JLPT yang punya data kanji di DB; level kosong dinonaktifkan di widget.
+export async function getKanjiLevelsAvailable(): Promise<number[]> {
+  const rows = await db
+    .select({ jlpt: kanji.jlpt, c: sql<number>`count(*)` })
+    .from(kanji)
+    .groupBy(kanji.jlpt);
+  return rows
+    .filter((r) => r.jlpt !== null && Number(r.c) > 0)
+    .map((r) => r.jlpt as number)
+    .sort((a, b) => a - b);
+}
+
 export async function getKanjiDetail(char: string): Promise<KanjiDetail | null> {
   const [k] = await db.select().from(kanji).where(eq(kanji.char, char)).limit(1);
   if (!k) return null;
