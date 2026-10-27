@@ -1204,12 +1204,12 @@ export default function AksaraPage() {
           {(savedKanji ?? []).length > 0 ? (
             <div className="card space-y-2 p-4">
               <p className="label">Simpananku ({savedKanji!.length}) — dari coret kanji</p>
-              <div className="flex flex-wrap gap-1.5">
+              <div className="grid grid-cols-5 gap-1.5 sm:grid-cols-8">
                 {savedKanji!.map((k) => (
                   <button type='button'
                     key={k.id}
                     onClick={() => void openSaved(k)}
-                    className="flex min-h-11 min-w-11 flex-col items-center justify-center rounded-xl border border-teal-600/25 bg-teal-50/60 px-2.5 py-1.5 dark:border-teal-500/25 dark:bg-teal-950/40"
+                    className="flex aspect-square flex-col items-center justify-center rounded-xl border border-teal-600/25 bg-teal-50/60 px-1 py-1.5 dark:border-teal-500/25 dark:bg-teal-950/40"
                     title={k.meaningId ?? ""}
                   >
                     <span className="text-xl font-bold leading-none">{k.char}</span>

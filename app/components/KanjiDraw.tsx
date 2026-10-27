@@ -70,8 +70,10 @@ export function KanjiDraw({
     }
     ctx.strokeStyle = "currentColor";
     ctx.lineWidth = 4;
-    ctx.lineCap = "round";
-    ctx.lineJoin = "round";
+    // Sudut harus tajam (persegi tetap persegi), bukan tumpul karena round join.
+    ctx.lineCap = "square";
+    ctx.lineJoin = "miter";
+    ctx.miterLimit = 10;
     for (const s of list ?? strokesRef.current) {
       if (s.length === 0) continue;
       ctx.beginPath();
@@ -125,18 +127,25 @@ export function KanjiDraw({
           onPointerMove={(e) => {
             if (!drawing.current) return;
             e.preventDefault();
-            drawing.current.push(pos(e));
-            repaint([...strokesRef.current, drawing.current]);
+            const p = pos(e);
+            const last = drawing.current[drawing.current.length - 1];
+            // Simpan tiap ~0.75px: halus, tapi tidak menumpuk ribuan titik.
+            if (!last || Math.hypot(p.x - last.x, p.y - last.y) > 0.75) {
+              drawing.current.push(p);
+              repaint([...strokesRef.current, drawing.current]);
+            }
           }}
           onPointerUp={(e) => {
             if (!drawing.current) return;
             // matcha:explain browser menggabungkan pointermove — titik `pointerup`
             // bisa beberapa piksel setelah move terakhir. Tanpa segmen penutup,
             // ekor goresan terlihat memendek tepat saat pena diangkat.
+            // Selalu tutup dengan titik pointerup persis — tanpa ini ekor goresan
+            // terlihat memendek/bergeser tepat saat pena diangkat.
             const up = pos(e);
             const tail = drawing.current[drawing.current.length - 1]!;
-            if (Math.hypot(up.x - tail.x, up.y - tail.y) > 0.5) drawing.current.push(up);
-            const done = drawing.current.filter((p, i, a) => i === 0 || Math.hypot(p.x - a[i - 1]!.x, p.y - a[i - 1]!.y) > 2);
+            if (Math.hypot(up.x - tail.x, up.y - tail.y) > 0.01) drawing.current.push(up);
+            const done = drawing.current;
             drawing.current = null;
             if (done.length >= 2) push([...strokesRef.current, done]);
             else repaint();

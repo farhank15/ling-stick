@@ -82,7 +82,7 @@ export function KanjiDetailView({ detail }: { detail: KanjiDetail }) {
       <div className='flex items-start gap-4'>
         {detail.svg ? (
           <div
-            className='h-24 w-24 shrink-0 rounded-xl border border-zinc-200 p-1 dark:border-zinc-800 [&>svg]:h-full [&>svg]:w-full'
+            className='kanji-svg h-24 w-24 shrink-0 rounded-xl border border-zinc-200 p-1 dark:border-zinc-800 [&>svg]:h-full [&>svg]:w-full'
             dangerouslySetInnerHTML={{ __html: detail.svg }}
           />
         ) : (

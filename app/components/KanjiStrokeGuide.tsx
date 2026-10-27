@@ -54,7 +54,7 @@ export function KanjiStrokeGuide({ char }: { char: string }) {
                 points={s.map(([x, y]) => x + ',' + y).join(' ')}
                 fill='none'
                 stroke='currentColor'
-                strokeWidth='1.8'
+                strokeWidth='3'
                 strokeLinecap='round'
                 strokeLinejoin='round'
                 strokeOpacity='0.85'
@@ -62,7 +62,7 @@ export function KanjiStrokeGuide({ char }: { char: string }) {
               <text
                 x={s[0][0]}
                 y={s[0][1]}
-                fontSize='7'
+                fontSize='8'
                 fill='#0d9488'
                 fontWeight='700'
                 textAnchor='middle'
