@@ -32,6 +32,8 @@ export type KanjiDetail = {
   kun: { text: string; primary: boolean }[];
   components: string[];
   vocab: { word: string; reading: string; gloss: string }[];
+  // Radikal eksplisit (hasil AI) — untuk kanji di luar data N5/N4.
+  radical?: string | null;
 };
 
 export async function listKanji(opts: { jlpt?: number; component?: string; limit?: number } = {}) {

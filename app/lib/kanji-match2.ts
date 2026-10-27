@@ -284,14 +284,16 @@ function computeWeightedWholeDistance(a: Stroke[], b: Stroke[], map: number[]): 
  * ber-goresan lebih sedikit selalu ikut dinilai walau coretan jelas kurang.
  */
 const STROKE_TOLERANCE = 2;
+/** Batas longgar saat coretan user kelebihan/kekurangan goresan (gabung/pecah). */
+const STROKE_TOLERANCE_MAX = 4;
 
 /** Coarse: endpoint distance on all ref patterns within stroke-count window. */
-export function coarseClassify(input: Stroke[], refs: KanjiPattern[]): { idx: number; score: number }[] {
+export function coarseClassify(input: Stroke[], refs: KanjiPattern[], tol = STROKE_TOLERANCE): { idx: number; score: number }[] {
   const inLen = input.length;
   const out: { idx: number; score: number }[] = [];
   for (let i = 0; i < refs.length; i++) {
     const r = refs[i];
-    if (Math.abs(inLen - r.strokes) > STROKE_TOLERANCE) continue;
+    if (Math.abs(inLen - r.strokes) > tol) continue;
     const map = getMap(r.pattern, input, endpointDist);
     const map2 = completeMap(r.pattern, input, endpointDist, map);
     const dist = computeDistance(r.pattern, input, endpointDist, map2);
@@ -303,14 +305,14 @@ export function coarseClassify(input: Stroke[], refs: KanjiPattern[]): { idx: nu
 }
 
 /** Fine: weighted whole-whole distance on top coarse candidates. */
-export function fineClassify(input: Stroke[], refs: KanjiPattern[], coarse: { idx: number; score: number }[], topN = 20): { char: string; score: number }[] {
+export function fineClassify(input: Stroke[], refs: KanjiPattern[], coarse: { idx: number; score: number }[], topN = 20, tol = STROKE_TOLERANCE): { char: string; score: number }[] {
   const inLen = input.length;
   const out: { char: string; score: number }[] = [];
   const limit = Math.min(coarse.length, 100);
   for (let i = 0; i < limit; i++) {
     const ci = coarse[i].idx;
     const r = refs[ci];
-    if (Math.abs(inLen - r.strokes) > STROKE_TOLERANCE) continue;
+    if (Math.abs(inLen - r.strokes) > tol) continue;
     const map = getMap(r.pattern, input, initialDist);
     const map2 = completeMap(r.pattern, input, wholeWholeDist, map);
     const dist = computeWeightedWholeDistance(r.pattern, input, map2);
@@ -465,6 +467,23 @@ export function recognize(drawn: { x: number; y: number }[][], refs: KanjiPatter
   const norm = momentNormalize(drawn.map(s => s.map(p => [p.x, p.y] as [number, number])));
   const feat = extractFeatures(norm, 20);
   if (!feat.some(s => s.length)) return [];
-  const coarse = coarseClassify(feat, refs);
-  return fineClassify(feat, refs, coarse, topN);
+  const out = fineClassify(feat, refs, coarseClassify(feat, refs), topN);
+  // Pass kedua dengan jendela goresan longgar: pengguna sering menggabung
+  // atau melewatkan lebih dari 2 goresan. Skor tetap mempenalti selisih
+  // jumlah goresan, jadi kandidat longgar hanya mengisi sisa daftar.
+  const wide = fineClassify(
+    feat,
+    refs,
+    coarseClassify(feat, refs, STROKE_TOLERANCE_MAX),
+    topN,
+    STROKE_TOLERANCE_MAX,
+  );
+  const seen = new Set(out.map((c) => c.char));
+  for (const c of wide) {
+    if (seen.has(c.char)) continue;
+    out.push(c);
+    seen.add(c.char);
+  }
+  out.sort((a, b) => a.score - b.score);
+  return out.slice(0, topN);
 }

@@ -75,7 +75,7 @@ function ReadingRow({ kind, item, vocab }: { kind: 'on' | 'kun'; item: KanjiRead
 }
 
 export function KanjiDetailView({ detail }: { detail: KanjiDetail }) {
-  const radical = studyEntry(detail.char)?.radical;
+  const radical = detail.radical ?? studyEntry(detail.char)?.radical;
   return (
     <div className='space-y-3'>
       <div className='flex items-start gap-4'>
@@ -92,6 +92,7 @@ export function KanjiDetailView({ detail }: { detail: KanjiDetail }) {
             {detail.strokes} goresan
             {detail.grade ? ` · kelas ${detail.grade}` : ''}
             {detail.freq ? ` · frek #${detail.freq}` : ''}
+            {detail.jlpt && ` · N${detail.jlpt}`}
           </p>
         </div>
       </div>

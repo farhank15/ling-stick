@@ -8,6 +8,7 @@ import {
   setKanjiKnown,
   type KanjiMode,
 } from "~/lib/kanji.server";
+import { enrichKanji } from '~/lib/kanji-enrich.server';
 
 /**
  * GET /api/kanji?mode=recognition → antrean flashcard kanji N5
@@ -49,7 +50,21 @@ export async function action({ request }: ActionFunctionArgs) {
     mode?: string;
     rating?: number;
     known?: boolean;
+    enrich?: string;
   };
+
+  // Lengkapi data kanji dari LLM (komponen/radikal/JLPT) — sebelum maupun sesudah simpan.
+  if (body.enrich) {
+    const ch = body.enrich.trim();
+    if (!ch) return Response.json({ error: 'kanji wajib' }, { status: 400 });
+    try {
+      return Response.json(await enrichKanji(ch));
+    } catch (e) {
+      let msg = 'Gagal melengkapi kanji';
+      if (e instanceof Error) msg = e.message;
+      return Response.json({ error: msg }, { status: 502 });
+    }
+  }
   const kanji = (body.kanji ?? "").trim();
   // Tanda "dikenal" manual dari sheet detail — jalur terpisah dari rating FSRS.
   if (typeof body.known === "boolean") {

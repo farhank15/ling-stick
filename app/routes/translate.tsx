@@ -18,7 +18,7 @@ import { Highlight } from "~/components/Highlight";
 import { KanjiDraw, type DrawStroke } from "~/components/KanjiDraw";
 import { KanjiRadical } from "~/components/KanjiRadical";
 import { KanjiSheet } from '~/components/KanjiSheet';
-import { buildRefPatterns, recognize, type KanjiPattern, type Stroke } from "~/lib/kanji-match2";
+import { buildRefPatternsAll, recognize, type KanjiPattern, type Stroke } from "~/lib/kanji-match2";
 import type { KanjiDetail } from "~/lib/kanji.server";
 import { useToast } from "~/components/Toast";
 import { ttsLang } from "~/lib/utils.shared";
@@ -195,11 +195,11 @@ export default function Translate() {
     const t = setTimeout(async () => {
       try {
         if (!refPatternsRef.current) {
-          const mod = await import("../../data/kanji-strokes.json");
-          const templates = mod.default as unknown as Record<string, Stroke[]>;
-          refPatternsRef.current = await buildRefPatterns(templates);
+          // Semua kanji KanjiVG (2380). Dulu cuma 638 (N5-N3), jadi kanji
+          // N2/N1 tidak pernah muncul sebagai kandidat.
+          refPatternsRef.current = await buildRefPatternsAll();
         }
-        setCands(recognize(drawStrokes, refPatternsRef.current, 16));
+        setCands(recognize(drawStrokes, refPatternsRef.current, 24));
       } catch {
         /* data gagal muat — diam */
       } finally {
@@ -509,7 +509,7 @@ export default function Translate() {
             </div>
           ) : null}
           {selDetail ? (
-            <KanjiSheet detail={selDetail} onClose={() => setSelDetail(null)}>
+            <KanjiSheet detail={selDetail} onClose={() => setSelDetail(null)} onEnriched={setSelDetail}>
               {selRefLevel ? (
                 <div className='space-y-2'>
                   <p className='text-xs text-muted'>
@@ -546,7 +546,7 @@ export default function Translate() {
             <KanjiRadical onPick={(c) => void pickKanji(c)} />
           </div>
           <p className="text-[11px] text-zinc-400">
-            Data: KanjiVG (CC BY-SA 3.0) + KRADFILE (EDRDG) · coretan: N5–N3 (638 kanji).
+            Data: KanjiVG (CC BY-SA 3.0) + KRADFILE (EDRDG) · coretan: 2380 kanji (N5–N1).
           </p>
         </div>
       ) : (

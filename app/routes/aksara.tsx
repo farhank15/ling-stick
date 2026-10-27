@@ -1198,6 +1198,7 @@ export default function AksaraPage() {
           {savedDetail ? (
             <KanjiSheet
               detail={savedDetail}
+              onEnriched={setSavedDetail}
               onClose={() => {
                 setSavedDetail(null);
                 setSavedItemId(null);
