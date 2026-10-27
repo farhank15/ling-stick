@@ -17,7 +17,7 @@ import { JaText, hasJa } from "~/components/JaText";
 import { Highlight } from "~/components/Highlight";
 import { KanjiDraw, type DrawStroke } from "~/components/KanjiDraw";
 import { KanjiRadical } from "~/components/KanjiRadical";
-import { KanjiDetailView } from "~/routes/aksara";
+import { KanjiDetailView } from '~/components/KanjiDetailView';
 import { buildRefPatterns, recognize, type KanjiPattern, type Stroke } from "~/lib/kanji-match2";
 import type { KanjiDetail } from "~/lib/kanji.server";
 import { useToast } from "~/components/Toast";
