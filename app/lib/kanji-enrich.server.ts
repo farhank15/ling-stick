@@ -40,7 +40,8 @@ const SYSTEM = [
 
 let strokeCache: Record<string, number[][][]> | null = null;
 
-async function localStrokeCount(char: string): Promise<number | null> {
+// Goresan textbook (koordinat 0-100) untuk ilustrasi urutan goresan.
+export async function getTextbookStrokes(char: string): Promise<number[][][] | null> {
   if (!strokeCache) {
     try {
       const mod = await import('../../data/textbook-strokes.json');
@@ -50,7 +51,11 @@ async function localStrokeCount(char: string): Promise<number | null> {
       strokeCache = {};
     }
   }
-  const strokes = strokeCache[char];
+  return strokeCache[char] ?? null;
+}
+
+async function localStrokeCount(char: string): Promise<number | null> {
+  const strokes = await getTextbookStrokes(char);
   return strokes ? strokes.length : null;
 }
 

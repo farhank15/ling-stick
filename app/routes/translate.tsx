@@ -282,6 +282,7 @@ export default function Translate() {
           meaningId: selDetail.meaningId,
           reading: selDetail.on[0]?.text ?? selDetail.kun[0]?.text ?? null,
           source: "draw",
+          extra: { kanjiDetail: selDetail },
           examples: selDetail.vocab.slice(0, 2).map((v) => ({
             en: v.word,
             idText: v.gloss,

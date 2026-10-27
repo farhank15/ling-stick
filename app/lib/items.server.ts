@@ -41,6 +41,7 @@ export type SaveItemInput = {
   confidence?: string;
   status?: "learning" | "known" | "archived";
   reading?: string; // JA: kana (+ romaji) — tampil redup di kartu
+  extra?: unknown; // metadata bebas (mis. detail kanji hasil AI)
   examples: {
     senseLabel?: string;
     register: string; // casual | neutral | formal
@@ -87,6 +88,9 @@ export async function saveItem(input: SaveItemInput): Promise<number> {
   const existing = await findItemIdByText(input.text);
   if (existing) throw new DuplicateItemError(existing);
 
+  let extraJson: string | null = null;
+  if (input.extra !== undefined) extraJson = JSON.stringify(input.extra);
+
   const id = await db.transaction(async (tx) => {
     const result = await tx
       .insert(items)
@@ -100,6 +104,7 @@ export async function saveItem(input: SaveItemInput): Promise<number> {
         meaningId: input.meaningId || null,
         notesId: input.notesId || null,
         source: input.source || null,
+        extraJson,
         confidence: input.confidence ?? "medium",
         status: input.status ?? "learning",
         createdAt: now,
@@ -206,6 +211,7 @@ export type LibraryRow = {
   meaningId: string | null;
   notesId: string | null;
   source: string | null;
+  extraJson: string | null;
   confidence: string | null;
   status: string;
   hideMeaning: number;
@@ -231,6 +237,7 @@ export async function listItems(filters: LibraryFilters): Promise<LibraryRow[]> 
         meaning_id: string | null;
         notes_id: string | null;
         source: string | null;
+        extra_json: string | null;
         confidence: string | null;
         status: string;
         hide_meaning: number;
@@ -239,7 +246,7 @@ export async function listItems(filters: LibraryFilters): Promise<LibraryRow[]> 
         first_id: string | null;
         first_reg: string | null;
       }>(sql`
-        SELECT i.id, i.text, i.type, i.register, i.meaning_id, i.notes_id, i.source,
+        SELECT i.id, i.text, i.type, i.register, i.meaning_id, i.notes_id, i.source, i.extra_json,
                i.confidence, i.status, i.hide_meaning, i.created_at,
                (SELECT en FROM examples WHERE item_id = i.id ORDER BY id LIMIT 1) AS first_en,
                (SELECT id_text FROM examples WHERE item_id = i.id ORDER BY id LIMIT 1) AS first_id,
@@ -273,6 +280,7 @@ export async function listItems(filters: LibraryFilters): Promise<LibraryRow[]> 
     meaning_id: string | null;
     notes_id: string | null;
     source: string | null;
+    extra_json: string | null;
     confidence: string | null;
     status: string;
     hide_meaning: number;
@@ -281,7 +289,7 @@ export async function listItems(filters: LibraryFilters): Promise<LibraryRow[]> 
     first_id: string | null;
     first_reg: string | null;
   }>(sql`
-    SELECT i.id, i.text, i.type, i.register, i.meaning_id, i.notes_id, i.source,
+    SELECT i.id, i.text, i.type, i.register, i.meaning_id, i.notes_id, i.source, i.extra_json,
            i.confidence, i.status, i.hide_meaning, i.created_at,
            (SELECT en FROM examples WHERE item_id = i.id ORDER BY id LIMIT 1) AS first_en,
            (SELECT id_text FROM examples WHERE item_id = i.id ORDER BY id LIMIT 1) AS first_id,
@@ -355,6 +363,7 @@ function mapLibraryRow(r: {
   meaning_id: string | null;
   notes_id: string | null;
   source: string | null;
+  extra_json: string | null;
   confidence: string | null;
   status: string;
   hide_meaning: number;
@@ -371,6 +380,7 @@ function mapLibraryRow(r: {
     meaningId: r.meaning_id,
     notesId: r.notes_id,
     source: r.source,
+    extraJson: r.extra_json,
     confidence: r.confidence,
     status: r.status,
     hideMeaning: r.hide_meaning,
@@ -405,6 +415,7 @@ export async function updateItem(
     status: string;
     hideMeaning: number;
     reading: string | null;
+    extraJson: string | null;
   }>,
 ) {
   const values: Record<string, unknown> = {};
@@ -418,6 +429,7 @@ export async function updateItem(
   if (patch.meaningId !== undefined) values.meaningId = patch.meaningId;
   if (patch.notesId !== undefined) values.notesId = patch.notesId;
   if (patch.source !== undefined) values.source = patch.source;
+  if (patch.extraJson !== undefined) values.extraJson = patch.extraJson;
   if (patch.status !== undefined) values.status = patch.status;
   if (patch.hideMeaning !== undefined) values.hideMeaning = patch.hideMeaning;
   if (Object.keys(values).length === 0) return;

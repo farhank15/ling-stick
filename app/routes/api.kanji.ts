@@ -4,11 +4,12 @@ import {
   getKanjiCardDetail,
   getKanjiDetail,
   getKanjiQueue,
+  isKanjiKnown,
   rateKanjiCard,
   setKanjiKnown,
   type KanjiMode,
 } from "~/lib/kanji.server";
-import { enrichKanji } from '~/lib/kanji-enrich.server';
+import { enrichKanji, getTextbookStrokes } from '~/lib/kanji-enrich.server';
 
 /**
  * GET /api/kanji?mode=recognition → antrean flashcard kanji N5
@@ -20,6 +21,17 @@ const MODES = ["recognition", "recall", "reading", "production"] as const;
 export async function loader({ request }: LoaderFunctionArgs) {
   await requireUser(request);
   const url = new URL(request.url);
+  // Ilustrasi urutan goresan untuk kanji tanpa SVG di tabel referensi.
+  const strokesChar = url.searchParams.get("strokes");
+  if (strokesChar) {
+    const strokes = await getTextbookStrokes(strokesChar);
+    if (!strokes) return Response.json({ error: "Goresan tidak ada" }, { status: 404 });
+    return Response.json({ strokes });
+  }
+  const knownChar = url.searchParams.get("known");
+  if (knownChar) {
+    return Response.json({ known: await isKanjiKnown(knownChar) });
+  }
   const detail = url.searchParams.get("detail");
   if (detail) {
     // Detail penuh (bacaan + komponen + vocab + SVG) untuk halaman Aksara.

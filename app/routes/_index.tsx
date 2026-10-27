@@ -30,7 +30,9 @@ type RouteCard = { order: number; title: string; segDone: number; segTotal: numb
 export async function loader({ request }: LoaderFunctionArgs) {
   await requireUser(request);
   const lang = await getTargetLang();
-  const recentP = listItems({ limit: 5 });
+  // Kanji punya tempat sendiri di Aksara (Simpananku) — jangan muncul di
+  // "Tersimpan terakhir" maupun Library, biar dua daftar itu konsisten.
+  const recentP = listItems({ limit: 5, excludeType: 'kanji' });
   const routeP =
     lang === 'ja'
       ? import('~/lib/route.progress').then((m) => m.getRouteMap())

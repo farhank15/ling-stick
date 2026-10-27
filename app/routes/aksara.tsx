@@ -201,7 +201,7 @@ export async function loader({ request }: LoaderFunctionArgs) {
   }[] = [];
   let kanjiComponents: { component: string; count: number }[] = [];
   let kanjiProgress: { total: number; done: number; known: string[] } | null = null;
-  let savedKanji: { id: number; char: string; meaningId: string | null; exampleEn: string | null; exampleId: string | null }[] = [];
+  let savedKanji: { id: number; char: string; meaningId: string | null; exampleEn: string | null; exampleId: string | null; extraJson: string | null }[] = [];
   if (script === "kanji") {
     const jlptNum = Number(level.slice(1)) || 5;
     const { listKanji, listComponents, getKanjiProgress } = await import("~/lib/kanji.server");
@@ -215,7 +215,7 @@ export async function loader({ request }: LoaderFunctionArgs) {
     kanjiList = list;
     kanjiComponents = comps;
     kanjiProgress = prog;
-    savedKanji = saved.filter((r) => r.source === 'draw').map((r) => ({ id: r.id, char: r.text, meaningId: r.meaningId, exampleEn: r.firstExampleEn, exampleId: r.firstExampleId }));
+    savedKanji = saved.filter((r) => r.source === 'draw').map((r) => ({ id: r.id, char: r.text, meaningId: r.meaningId, exampleEn: r.firstExampleEn, exampleId: r.firstExampleId, extraJson: r.extraJson }));
   }
 
   // Kelompok kana mirip — import JSON langsung (masuk bundle server).
@@ -840,8 +840,21 @@ export default function AksaraPage() {
   const [savedItemId, setSavedItemId] = useState<number | null>(null);
   const [confirmDelete, setConfirmDelete] = useState(false);
   const [savedDetail, setSavedDetail] = useState<KanjiDetail | null>(null);
-  const openSaved = (k: { id: number; char: string; meaningId: string | null; exampleEn: string | null; exampleId: string | null }) => {
+  const openSaved = (k: { id: number; char: string; meaningId: string | null; exampleEn: string | null; exampleId: string | null; extraJson: string | null }) => {
     setSavedItemId(k.id);
+    // Detail hasil AI disimpan bersama item — pakai itu dulu supaya tidak
+    // hilang saat sheet dibuka lagi setelah disimpan.
+    if (k.extraJson) {
+      try {
+        const parsed = JSON.parse(k.extraJson) as { kanjiDetail?: KanjiDetail };
+        if (parsed.kanjiDetail && parsed.kanjiDetail.char === k.char) {
+          setSavedDetail(parsed.kanjiDetail);
+          return;
+        }
+      } catch {
+        // metadata rusak — lanjut ke sumber lain
+      }
+    }
     const build = (j: KanjiApi | null) => {
       const on = (j && Array.isArray(j.on_readings) ? j.on_readings : []).map((r: string, i: number) => ({ text: r, primary: i === 0 }));
       const kun = (j && Array.isArray(j.kun_readings) ? j.kun_readings : []).map((r: string, i: number) => ({ text: r, primary: i === 0 }));
@@ -873,6 +886,17 @@ export default function AksaraPage() {
           .catch(() => build(null));
       })
       .catch(() => build(null));
+  };
+  // Simpan hasil AI ke item juga — supaya tetap ada saat sheet dibuka lagi.
+  const saveEnriched = (d: KanjiDetail) => {
+    setSavedDetail(d);
+    if (savedItemId) {
+      fetch('/api/items/' + savedItemId, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ extra: { kanjiDetail: d } }),
+      }).catch(() => {});
+    }
   };
   const deleteSaved = (id: number) => {
     fetch('/api/items/' + id, { method: 'DELETE' })
@@ -1198,7 +1222,7 @@ export default function AksaraPage() {
           {savedDetail ? (
             <KanjiSheet
               detail={savedDetail}
-              onEnriched={setSavedDetail}
+              onEnriched={saveEnriched}
               onClose={() => {
                 setSavedDetail(null);
                 setSavedItemId(null);

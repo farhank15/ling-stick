@@ -1,6 +1,7 @@
 import type { KanjiDetail } from '~/lib/kanji.server';
 import { parseReading, radicalLabel, studyEntry, toHiragana } from '~/lib/kanji-study';
 import { SpeakButton } from '~/components/SpeakButton';
+import { KanjiStrokeGuide } from '~/components/KanjiStrokeGuide';
 
 type KanjiReading = KanjiDetail['on'][number];
 
@@ -84,7 +85,9 @@ export function KanjiDetailView({ detail }: { detail: KanjiDetail }) {
             className='h-24 w-24 shrink-0 rounded-xl border border-zinc-200 p-1 dark:border-zinc-800 [&>svg]:h-full [&>svg]:w-full'
             dangerouslySetInnerHTML={{ __html: detail.svg }}
           />
-        ) : null}
+        ) : (
+          <KanjiStrokeGuide char={detail.char} />
+        )}
         <div className='min-w-0'>
           <p className='font-jp text-3xl font-bold'>{detail.char}</p>
           <p className='text-sm text-zinc-600 dark:text-zinc-300'>{detail.meaningId}</p>

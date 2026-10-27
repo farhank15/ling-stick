@@ -298,3 +298,13 @@ export async function setKanjiKnown(char: string, known: boolean) {
   }
   return { ok: true as const, known };
 }
+
+/** Status "dikenal" untuk satu kanji (dipakai sheet detail). */
+export async function isKanjiKnown(char: string): Promise<boolean> {
+  const [row] = await db
+    .select({ kanji: kanjiKnown.kanji })
+    .from(kanjiKnown)
+    .where(eq(kanjiKnown.kanji, char))
+    .limit(1);
+  return Boolean(row);
+}

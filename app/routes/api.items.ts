@@ -36,6 +36,7 @@ export async function action({ request }: ActionFunctionArgs) {
     }[];
     alternatives?: { text?: string; register?: string; nuanceId?: string; useWhenId?: string }[];
     tagNames?: string[];
+    extra?: unknown;
     addExamplesTo?: string;
     _redirect?: string;
   }>(request);
@@ -94,6 +95,7 @@ export async function action({ request }: ActionFunctionArgs) {
       meaningId: body.meaningId,
       notesId: body.notesId,
       source: body.source,
+      extra: body.extra,
       confidence: body.confidence,
       examples: examples.length
         ? examples

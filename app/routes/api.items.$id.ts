@@ -26,6 +26,7 @@ export async function action({ request, params }: ActionFunctionArgs) {
     if (typeof body.source === "string") patch.source = body.source;
     if (typeof body.status === "string") patch.status = body.status;
     if (typeof body.hideMeaning === "number") patch.hideMeaning = body.hideMeaning;
+    if (body.extra !== undefined) patch.extraJson = JSON.stringify(body.extra);
     await updateItem(id, patch);
     const detail = await getItemDetail(id);
     return Response.json({ ok: true, item: detail?.item ?? null });

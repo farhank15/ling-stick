@@ -1,5 +1,5 @@
 import { useEffect, useState, type ReactNode } from 'react';
-import { Loader2, Sparkles } from 'lucide-react';
+import { Check, Loader2, Sparkles } from 'lucide-react';
 import type { KanjiDetail } from '~/lib/kanji.server';
 import { KanjiDetailView } from '~/components/KanjiDetailView';
 
@@ -17,6 +17,7 @@ export function KanjiSheet({ detail, onClose, children, onEnriched }: Props) {
   const [enriching, setEnriching] = useState(false);
   const [enriched, setEnriched] = useState(false);
   const [enrichError, setEnrichError] = useState<string | null>(null);
+  const [known, setKnown] = useState<boolean | null>(null);
 
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
@@ -25,6 +26,21 @@ export function KanjiSheet({ detail, onClose, children, onEnriched }: Props) {
     window.addEventListener('keydown', onKey);
     return () => window.removeEventListener('keydown', onKey);
   }, [onClose]);
+
+  // Status dikenal per kanji (tabel kanji_known) — sama seperti sheet di Aksara.
+  useEffect(() => {
+    let alive = true;
+    setKnown(null);
+    fetch('/api/kanji?known=' + encodeURIComponent(detail.char))
+      .then((r) => (r.ok ? r.json() : null))
+      .then((d) => {
+        if (alive && d && typeof d.known === 'boolean') setKnown(d.known);
+      })
+      .catch(() => {});
+    return () => {
+      alive = false;
+    };
+  }, [detail.char]);
 
   // Belum lengkap = tidak ada level JLPT, komponen, atau bacaan sama sekali.
   const incomplete =
@@ -58,13 +74,41 @@ export function KanjiSheet({ detail, onClose, children, onEnriched }: Props) {
     }
   };
 
+  const toggleKnown = async () => {
+    if (known === null) return;
+    const next = !known;
+    setKnown(next);
+    try {
+      const res = await fetch('/api/kanji', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ kanji: detail.char, known: next }),
+      });
+      if (!res.ok) throw new Error('gagal');
+    } catch {
+      setKnown(!next);
+    }
+  };
+
   return (
     <div className='fixed inset-x-0 top-0 z-40 h-[100dvh]' role='dialog' aria-modal='true' aria-label={'Detail ' + detail.char}>
       <div className='absolute inset-0 bg-black/40 dark:bg-black/60' onClick={onClose} />
       <div className='absolute inset-x-0 bottom-0 mx-auto max-h-[85dvh] w-full overflow-y-auto overscroll-contain rounded-t-3xl bg-white p-4 pb-[max(1rem,env(safe-area-inset-bottom))] shadow-2xl sm:max-w-2xl dark:bg-zinc-900'>
         <div className='mx-auto mb-3 h-1 w-10 rounded-full bg-zinc-300 sm:hidden dark:bg-zinc-700' />
         <div className='mb-2 flex items-center justify-between gap-2'>
-          <p className='font-jp text-2xl font-bold'>{detail.char}</p>
+          <div className='flex min-w-0 items-center gap-2'>
+            <p className='font-jp text-2xl font-bold'>{detail.char}</p>
+            <button
+              type='button'
+              className={'chip min-h-7 shrink-0 gap-1 px-2 text-[11px] ' + (known ? 'border-emerald-500 bg-emerald-50 text-emerald-700 dark:border-emerald-500/60 dark:bg-emerald-950/50 dark:text-emerald-300' : '')}
+              onClick={() => void toggleKnown()}
+              aria-pressed={known === true}
+              disabled={known === null}
+            >
+              <Check className='h-3 w-3' aria-hidden />
+              {known ? 'Dikenal' : 'Tandai dikenal'}
+            </button>
+          </div>
           <button type='button' className='btn-ghost min-h-9 shrink-0 px-3 text-xs' onClick={onClose}>
             Tutup
           </button>
