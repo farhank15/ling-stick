@@ -1,5 +1,5 @@
 import type { LoaderFunctionArgs, MetaFunction } from "react-router";
-import { Link, redirect, useLoaderData, useSearchParams } from "react-router";
+import { Link, redirect, useLoaderData, useNavigate, useSearchParams } from 'react-router';
 import { useEffect, useRef, useState } from "react";
 import {
   Check,
@@ -26,6 +26,7 @@ import {
 } from "~/lib/kanji-study";
 
 import { KanjiDetailView } from '~/components/KanjiDetailView';
+import { KanjiSheet } from '~/components/KanjiSheet';
 
 type ConfusableGroup = {
   id: string;
@@ -834,6 +835,17 @@ function KanaDrill({
 export default function AksaraPage() {
   const { script, level, kanjiList, kanjiComponents, kanjiProgress, savedKanji, confusables } =
     useLoaderData<typeof loader>();
+  const navigate = useNavigate();
+  const [savedDetail, setSavedDetail] = useState<KanjiDetail | null>(null);
+  const openSaved = (k: { id: number; char: string }) => {
+    fetch('/api/kanji?detail=' + encodeURIComponent(k.char))
+      .then((r) => r.json())
+      .then((d) => {
+        if (d.detail) setSavedDetail(d.detail as KanjiDetail);
+        else navigate('/library/' + k.id);
+      })
+      .catch(() => navigate('/library/' + k.id));
+  };
   const [params, setParams] = useSearchParams();
 
   const go = (next: { script?: Script; level?: string }) => {
@@ -1131,19 +1143,20 @@ export default function AksaraPage() {
               <p className="label">Simpananku ({savedKanji!.length}) — dari coret kanji</p>
               <div className="flex flex-wrap gap-1.5">
                 {savedKanji!.map((k) => (
-                  <Link
+                  <button type='button'
                     key={k.id}
-                    to={`/library/${k.id}`}
+                    onClick={() => void openSaved(k)}
                     className="flex min-h-11 min-w-11 flex-col items-center justify-center rounded-xl border border-teal-600/25 bg-teal-50/60 px-2.5 py-1.5 dark:border-teal-500/25 dark:bg-teal-950/40"
                     title={k.meaningId ?? ""}
                   >
                     <span className="text-xl font-bold leading-none">{k.char}</span>
                     <span className="mt-0.5 max-w-16 truncate text-[9px] text-zinc-500">{k.meaningId}</span>
-                  </Link>
+                  </button>
                 ))}
               </div>
             </div>
           ) : null}
+          {savedDetail ? <KanjiSheet detail={savedDetail} onClose={() => setSavedDetail(null)} /> : null}
 
           <p className="text-center text-xs text-zinc-400">
             Latihan nulis kanji ada di{" "}
