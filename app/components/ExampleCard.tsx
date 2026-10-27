@@ -13,7 +13,7 @@ const REG_CLS: Record<Register, string> = {
 const REG_LABEL: Record<Register, string> = {
   formal: "formal",
   kasual: "kasual",
-  anime: "anime ⚠",
+  anime: "anime",
 };
 
 export function ExampleCard({

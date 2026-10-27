@@ -30,6 +30,29 @@ function SecHead({ n, children }: { n: string; children: ReactNode }) {
   );
 }
 
+// Stabilo: sorot segmen Jepang (kana/kanji) biar otak fokus ke partikel & kata
+// kunci, sementara penjelasan Indonesia tetap tipis. matcha: pitfall teks polos
+// terlalu padat & pasif — kontras berat + warna fokus naikkan keterbacaan.
+function JpFocus({ text }: { text: string }) {
+  const parts = text.split(/(\p{Script=Hiragana}|\p{Script=Katakana}|\p{Script=Han})+/gu);
+  return (
+    <>
+      {parts.map((seg, i) =>
+        seg && /[\p{Script=Hiragana}\p{Script=Katakana}\p{Script=Han}]/u.test(seg) ? (
+          <span
+            key={i}
+            className="rounded bg-amber-200/70 px-1 font-semibold text-amber-900 dark:bg-amber-800/50 dark:text-amber-100"
+          >
+            {seg}
+          </span>
+        ) : (
+          <span key={i}>{seg}</span>
+        ),
+      )}
+    </>
+  );
+}
+
 export async function loader({ request, params }: LoaderFunctionArgs) {
   await requireUser(request);
   const map = await getRouteMap();
@@ -45,8 +68,8 @@ function LessonProgress({ sections, active, progress }: { sections: { id: string
     document.getElementById(id)?.scrollIntoView({ behavior: "smooth", block: "start" });
   };
   return (
-    <div className="sticky top-14 z-20 -mx-4 mb-4 border-b border-zinc-200/70 bg-zinc-50/90 px-4 py-2 backdrop-blur dark:border-zinc-800/70 dark:bg-zinc-950/90">
-      <div className="mx-auto flex max-w-2xl items-center gap-1 overflow-x-auto no-scrollbar">
+    <div className="sticky top-14 z-20 mb-3 rounded-2xl border border-zinc-200/70 bg-zinc-50/90 px-3 py-2 backdrop-blur dark:border-zinc-800/70 dark:bg-zinc-950/90">
+      <div className="flex items-center gap-1 overflow-x-auto no-scrollbar">
         {sections.map((s) => (
           <button
             key={s.id}
@@ -63,7 +86,7 @@ function LessonProgress({ sections, active, progress }: { sections: { id: string
           </button>
         ))}
       </div>
-      <div className="mx-auto mt-1.5 h-1 max-w-2xl overflow-hidden rounded-full bg-zinc-200 dark:bg-zinc-800" aria-hidden>
+      <div className="mt-1.5 h-1 overflow-hidden rounded-full bg-zinc-200 dark:bg-zinc-800" aria-hidden>
         <div className="h-full rounded-full bg-teal-600 transition-all dark:bg-teal-500" style={{ width: `${(progress * 100).toFixed(1)}%` }} />
       </div>
     </div>
@@ -121,7 +144,7 @@ export default function RuteStep() {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           ephemeral: true,
-          message: `Konteks: saya belajar pola "${step.pattern}" (${step.title_id}, ${step.level}). Pertanyaan: ${q}. Jawab singkat Bahasa Indonesia + contoh bila perlu. Tulis kata/kalimat Jepang dengan format 漢字（かな・romaji) saat pertama muncul, lalu 漢字（かな）.`,
+          message: `Konteks: saya belajar pola "${step.pattern}" (${step.title_id}, ${step.level}). Pertanyaan: ${q}. Jawab singkat Bahasa Indonesia + contoh bila perlu. Tulis kata/kalimat Jepang dengan format \u6f22\u5b57(\u304b\u306a\u30fbromaji) saat pertama muncul, lalu \u6f22\u5b57(\u304b\u306a).`,
         }),
       });
       const d = await r.json();
@@ -213,7 +236,7 @@ export default function RuteStep() {
   ];
 
   return (
-    <div ref={containerRef} className="mx-auto w-full max-w-2xl space-y-5">
+    <div ref={containerRef} className="mx-auto w-full max-w-2xl space-y-4">
       <LessonProgress sections={sections} active={active} progress={progress} />
 
       <div className="flex items-center gap-2">
@@ -239,12 +262,12 @@ export default function RuteStep() {
         ) : null}
       </div>
 
-      <div className="rounded-2xl border border-teal-600/20 bg-teal-50/70 px-4 py-3 text-center dark:border-teal-500/20 dark:bg-teal-950/40">
+      <div className="rounded-2xl border border-teal-600/20 bg-teal-50/70 px-3.5 py-3 text-center dark:border-teal-500/20 dark:bg-teal-950/40">
         <p className="font-mono text-2xl font-bold tracking-tight text-teal-800 dark:text-teal-200">{step.pattern}</p>
       </div>
 
       <section id="tujuan" ref={(el) => { sectionRefs.current.tujuan = el; }} className="scroll-mt-28 space-y-3">
-        <div className="card space-y-2 p-4">
+        <div className="card space-y-2 p-3.5">
           <SecHead n="01">Tujuan</SecHead>
           <ul className="space-y-1.5 text-sm leading-relaxed">
             {step.objectives.map((o, i) => (
@@ -258,7 +281,7 @@ export default function RuteStep() {
       </section>
 
       <section id="penjelasan" ref={(el) => { sectionRefs.current.penjelasan = el; }} className="scroll-mt-28 space-y-3">
-        <div className="card space-y-2.5 p-4">
+        <div className="card space-y-2.5 p-3.5">
           <SecHead n="02">Penjelasan</SecHead>
           <MarkdownLite text={step.explanation_id} className="text-[15px] leading-loose" />
           {step.formation ? (
@@ -271,7 +294,7 @@ export default function RuteStep() {
       </section>
 
       <section id="contoh" ref={(el) => { sectionRefs.current.contoh = el; }} className="scroll-mt-28 space-y-3">
-        <div className="card space-y-3 p-4">
+        <div className="card space-y-3 p-3.5">
           <SecHead n="03">Contoh ({step.examples.length}) · formal vs kasual</SecHead>
           {step.register_note_id ? (
             <p className="flex gap-2 rounded-xl bg-sky-50 px-3 py-2 text-xs leading-relaxed text-sky-800 dark:bg-sky-950/60 dark:text-sky-200">
@@ -295,13 +318,21 @@ export default function RuteStep() {
 
       {step.pitfalls_id.length > 0 ? (
         <section id="jebakan" ref={(el) => { sectionRefs.current.jebakan = el; }} className="scroll-mt-28 space-y-3">
-          <div className="card space-y-1.5 border-l-4 border-l-amber-400 p-4">
+          <div className="card space-y-3 border-l-4 border-l-amber-400 p-3.5">
             <p className="label flex items-center gap-1.5 text-amber-700 dark:text-amber-300">
               <TriangleAlert className="h-3.5 w-3.5" /> Jebakan umum
             </p>
-            {step.pitfalls_id.map((p, i) => (
-              <p key={i} className="text-sm leading-relaxed text-amber-800 dark:text-amber-200">• {p}</p>
-            ))}
+            <ul className="space-y-2">
+              {step.pitfalls_id.map((p, i) => (
+                <li
+                  key={i}
+                  className="flex gap-2 rounded-xl bg-amber-50/70 px-3 py-2 text-[13.5px] leading-relaxed text-amber-900 dark:bg-amber-950/30 dark:text-amber-100"
+                >
+                  <TriangleAlert className="mt-0.5 h-3.5 w-3.5 shrink-0 text-amber-500" />
+                  <span><JpFocus text={p} /></span>
+                </li>
+              ))}
+            </ul>
           </div>
         </section>
       ) : null}
@@ -317,7 +348,7 @@ export default function RuteStep() {
           </div>
         ) : null}
 
-        <div className="card space-y-3 p-4">
+        <div className="card space-y-3 p-3.5">
           <SecHead n="04">Latihan ({step.cloze_items.length} soal)</SecHead>
           {step.cloze_items.map((c, i) => (
             <ExerciseCard
@@ -332,7 +363,7 @@ export default function RuteStep() {
           ))}
         </div>
 
-        <div className="card flex items-center gap-3 border-teal-600/25 bg-teal-50/50 p-4 dark:border-teal-500/25 dark:bg-teal-950/30">
+        <div className="card flex items-center gap-3 border-teal-600/25 bg-teal-50/50 p-3.5 dark:border-teal-500/25 dark:bg-teal-950/30">
           <div className="min-w-0 flex-1">
             <p className="font-semibold">{step.cloze_items.length} soal latihan</p>
             <p className="text-xs text-zinc-500">
@@ -354,8 +385,8 @@ export default function RuteStep() {
       </section>
 
       <section className="scroll-mt-28 space-y-3">
-        <div className="card space-y-2 p-4">
-          <SecHead n="💬">
+        <div className="card space-y-2 p-3.5">
+          <SecHead n="05">
             <span className="flex items-center gap-1.5">
               <MessageCircleQuestion className="h-3.5 w-3.5" /> Tanya Ling soal step ini
             </span>
@@ -363,7 +394,7 @@ export default function RuteStep() {
           <div className="flex gap-2">
             <input
               className="input-area min-h-11 flex-1 py-2.5 text-sm"
-              placeholder="Contoh: bedanya は dan が di kalimat negatif?"
+              placeholder="Contoh: bedanya \u306f dan \u304c di kalimat negatif?"
               value={question}
               maxLength={500}
               onChange={(e) => setQuestion(e.target.value)}
@@ -394,11 +425,11 @@ export default function RuteStep() {
           ) : null}
         </div>
 
-        <div className="card space-y-2 p-4">
-          <SecHead n="✎">Catatanku</SecHead>
+        <div className="card space-y-2 p-3.5">
+          <SecHead n="06">Catatanku</SecHead>
           <textarea
             className="input-area min-h-20 text-sm"
-            placeholder="Tulis ringkasan / mnemonik sendiri buat pola ini…"
+            placeholder="Tulis ringkasan / mnemonik sendiri buat pola ini\u2026"
             value={note}
             maxLength={5000}
             onChange={(e) => setNote(e.target.value)}

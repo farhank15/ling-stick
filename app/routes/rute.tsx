@@ -68,7 +68,7 @@ export default function Rute() {
   };
 
   return (
-    <div className="mx-auto w-full max-w-xl space-y-5">
+    <div className="mx-auto w-full max-w-xl space-y-4">
       <div className="card space-y-3 p-4">
         <div className="flex items-center justify-between gap-2">
           <div className="min-w-0">
@@ -98,14 +98,14 @@ export default function Rute() {
         </div>
       </div>
 
-      <ol className="relative space-y-3">
+      <ol className="relative space-y-4 list-none pl-0">
         {steps.map((s, i) => {
           const locked = s.state === "locked";
           const current = s.state === "available" || s.state === "in_progress";
           const passed = s.state === "passed";
           const isLast = i === steps.length - 1 && !exam;
           return (
-            <li key={s.step.step_id} className="relative flex gap-3">
+            <li key={s.step.step_id} className="relative flex gap-2.5">
               <div className="flex flex-col items-center" aria-hidden>
                 <button
                   type="button"
@@ -146,7 +146,7 @@ export default function Rute() {
                   }
                   navigate(`/rute/${s.step.step_id}`);
                 }}
-                className="card flex min-h-11 flex-1 items-center justify-between gap-3 px-4 py-3 text-left transition-colors hover:border-teal-500 disabled:cursor-not-allowed disabled:opacity-70"
+                className="card flex min-h-11 flex-1 items-center justify-between gap-3 px-3.5 py-3 text-left transition-colors hover:border-teal-500 disabled:cursor-not-allowed disabled:opacity-70"
                 aria-label={locked ? `Terkunci: ${s.step.title_id}` : `Buka ${s.step.title_id}`}
               >
                 <div className="min-w-0">
@@ -165,7 +165,7 @@ export default function Rute() {
         })}
 
         {exam ? (
-          <li className="relative flex gap-3">
+          <li className="relative flex gap-2.5">
             <div className="flex flex-col items-center" aria-hidden>
               <button
                 type="button"
@@ -200,7 +200,7 @@ export default function Rute() {
                 }
                 void startExam();
               }}
-              className="card flex min-h-11 flex-1 items-center justify-between gap-3 px-4 py-3 text-left transition-colors hover:border-amber-500 disabled:cursor-not-allowed disabled:opacity-70"
+              className="card flex min-h-11 flex-1 items-center justify-between gap-3 px-3.5 py-3 text-left transition-colors hover:border-amber-500 disabled:cursor-not-allowed disabled:opacity-70"
               aria-label={`Ujian segmen ${seg}`}
             >
               <div className="min-w-0">
