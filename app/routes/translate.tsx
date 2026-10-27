@@ -179,6 +179,7 @@ export default function Translate() {
   const [cands, setCands] = useState<{ char: string; score: number }[]>([]);
   const [candBusy, setCandBusy] = useState(false);
   const [selDetail, setSelDetail] = useState<KanjiDetail | null>(null);
+  const [selRefLevel, setSelRefLevel] = useState<number | null>(null);
   const [savingKanji, setSavingKanji] = useState(false);
   const [savedKanji, setSavedKanji] = useState<string | null>(null);
   const refPatternsRef = useRef<KanjiPattern[] | null>(null);
@@ -211,10 +212,12 @@ export default function Translate() {
   const pickKanji = async (char: string) => {
     setSelDetail(null);
     setSavedKanji(null);
+    setSelRefLevel(null);
     try {
       const r = await fetch(`/api/kanji?detail=${encodeURIComponent(char)}`);
       const d = await r.json();
       if (d.detail) {
+        setSelRefLevel(d.detail.jlpt);
         setSelDetail(d.detail as KanjiDetail);
         return;
       }
@@ -287,7 +290,11 @@ export default function Translate() {
         }),
       });
       const d = await r.json().catch(() => ({}));
-      if (r.status === 409 || d.duplicateOf) {
+      if (d.reference) {
+        let lv = '';
+        if (d.jlpt) lv = ' N' + d.jlpt;
+        toast('Kanji ini sudah ada di referensi' + lv);
+      } else if (r.status === 409 || d.duplicateOf) {
         toast("Kanji ini sudah ada di Library");
       } else if (d.ok ?? r.ok) {
         setSavedKanji(selDetail.char);
@@ -503,21 +510,36 @@ export default function Translate() {
           ) : null}
           {selDetail ? (
             <KanjiSheet detail={selDetail} onClose={() => setSelDetail(null)}>
-              <button
-                className='btn-primary w-full'
-                disabled={savingKanji || savedKanji === selDetail.char}
-                onClick={() => void saveKanji()}
-              >
-                {savedKanji === selDetail.char ? (
-                  <>
-                    <BookmarkCheck className='h-4 w-4' /> Tersimpan
-                  </>
-                ) : (
-                  <>
-                    <Bookmark className='h-4 w-4' /> Simpan ke list kanji
-                  </>
-                )}
-              </button>
+              {selRefLevel ? (
+                <div className='space-y-2'>
+                  <p className='text-xs text-muted'>
+                    Kanji ini sudah ada di referensi N{selRefLevel}. Tidak perlu disimpan lagi.
+                  </p>
+                  <a
+                    href={'/aksara?script=kanji&level=N' + selRefLevel}
+                    className='btn-secondary w-full'
+                    onClick={() => setSelDetail(null)}
+                  >
+                    Buka di Aksara
+                  </a>
+                </div>
+              ) : (
+                <button
+                  className='btn-primary w-full'
+                  disabled={savingKanji || savedKanji === selDetail.char}
+                  onClick={() => void saveKanji()}
+                >
+                  {savedKanji === selDetail.char ? (
+                    <>
+                      <BookmarkCheck className='h-4 w-4' /> Tersimpan
+                    </>
+                  ) : (
+                    <>
+                      <Bookmark className='h-4 w-4' /> Simpan ke list kanji
+                    </>
+                  )}
+                </button>
+              )}
             </KanjiSheet>
           ) : null}
           <div className="border-t border-zinc-100 pt-3 dark:border-zinc-800">

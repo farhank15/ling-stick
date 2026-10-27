@@ -1,4 +1,4 @@
-import { and, desc, eq, gte, inArray, isNull, lte, sql } from "drizzle-orm";
+import { and, desc, eq, gte, inArray, isNull, lte, ne, sql } from "drizzle-orm";
 import type { SQLWrapper } from "drizzle-orm";
 import { db } from "./db/client.server";
 import {
@@ -188,6 +188,7 @@ export async function addExamplesToItem(
 export type LibraryFilters = {
   q?: string;
   type?: string;
+  excludeType?: string;
   register?: string;
   status?: string;
   tag?: string;
@@ -250,6 +251,7 @@ export async function listItems(filters: LibraryFilters): Promise<LibraryRow[]> 
           AND i.deck_id IS NULL
           AND i.status = ${filters.status === "all" ? sql`i.status` : (filters.status || "learning")}
           ${filters.type ? sql`AND i.type = ${filters.type}` : sql``}
+          ${filters.excludeType ? sql`AND i.type != ${filters.excludeType}` : sql``}
           ${filters.register ? sql`AND i.register = ${filters.register}` : sql``}
         ORDER BY i.created_at DESC
         LIMIT ${limit} OFFSET ${offset}
@@ -289,6 +291,7 @@ export async function listItems(filters: LibraryFilters): Promise<LibraryRow[]> 
       AND i.lang = ${lang}
       AND i.deck_id IS NULL
       ${filters.type ? sql`AND i.type = ${filters.type}` : sql``}
+      ${filters.excludeType ? sql`AND i.type != ${filters.excludeType}` : sql``}
       ${filters.register ? sql`AND i.register = ${filters.register}` : sql``}
       ${filters.dateFrom ? sql`AND i.created_at >= ${filters.dateFrom}` : sql``}
       ${filters.dateTo ? sql`AND i.created_at <= ${filters.dateTo}` : sql``}
@@ -313,7 +316,8 @@ export async function getFacetCounts(status?: string): Promise<{
   byType: Record<string, number>;
   byRegister: Record<string, number>;
 }> {
-  const conds: SQLWrapper[] = [eq(items.lang, await getTargetLang()), isNull(items.deckId)];
+  // Kanji = entitas referensi (Aksara), bukan kosakata Library — jangan dihitung.
+  const conds: SQLWrapper[] = [eq(items.lang, await getTargetLang()), isNull(items.deckId), ne(items.type, "kanji")];
   if (status === "all") conds.push(sql`${items.status} IN ('learning', 'known')`);
   else if (status) conds.push(eq(items.status, status));
   else conds.push(eq(items.status, "learning"));

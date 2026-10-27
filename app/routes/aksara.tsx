@@ -1,5 +1,5 @@
 import type { LoaderFunctionArgs, MetaFunction } from "react-router";
-import { Link, redirect, useLoaderData, useSearchParams } from 'react-router';
+import { Link, redirect, useLoaderData, useRevalidator, useSearchParams } from 'react-router';
 import { useEffect, useRef, useState } from "react";
 import {
   Check,
@@ -27,6 +27,7 @@ import {
 
 import { KanjiDetailView } from '~/components/KanjiDetailView';
 import { KanjiSheet } from '~/components/KanjiSheet';
+import { ConfirmModal } from '~/components/ConfirmModal';
 
 type ConfusableGroup = {
   id: string;
@@ -214,7 +215,7 @@ export async function loader({ request }: LoaderFunctionArgs) {
     kanjiList = list;
     kanjiComponents = comps;
     kanjiProgress = prog;
-    savedKanji = saved.map((r) => ({ id: r.id, char: r.text, meaningId: r.meaningId, exampleEn: r.firstExampleEn, exampleId: r.firstExampleId }));
+    savedKanji = saved.filter((r) => r.source === 'draw').map((r) => ({ id: r.id, char: r.text, meaningId: r.meaningId, exampleEn: r.firstExampleEn, exampleId: r.firstExampleId }));
   }
 
   // Kelompok kana mirip — import JSON langsung (masuk bundle server).
@@ -835,8 +836,12 @@ function KanaDrill({
 export default function AksaraPage() {
   const { script, level, kanjiList, kanjiComponents, kanjiProgress, savedKanji, confusables } =
     useLoaderData<typeof loader>();
+  const revalidator = useRevalidator();
+  const [savedItemId, setSavedItemId] = useState<number | null>(null);
+  const [confirmDelete, setConfirmDelete] = useState(false);
   const [savedDetail, setSavedDetail] = useState<KanjiDetail | null>(null);
   const openSaved = (k: { id: number; char: string; meaningId: string | null; exampleEn: string | null; exampleId: string | null }) => {
+    setSavedItemId(k.id);
     const build = (j: KanjiApi | null) => {
       const on = (j && Array.isArray(j.on_readings) ? j.on_readings : []).map((r: string, i: number) => ({ text: r, primary: i === 0 }));
       const kun = (j && Array.isArray(j.kun_readings) ? j.kun_readings : []).map((r: string, i: number) => ({ text: r, primary: i === 0 }));
@@ -868,6 +873,17 @@ export default function AksaraPage() {
           .catch(() => build(null));
       })
       .catch(() => build(null));
+  };
+  const deleteSaved = (id: number) => {
+    fetch('/api/items/' + id, { method: 'DELETE' })
+      .then((r) => {
+        if (r.ok) {
+          setSavedDetail(null);
+          setSavedItemId(null);
+          revalidator.revalidate();
+        }
+      })
+      .catch(() => {});
   };
   const [params, setParams] = useSearchParams();
 
@@ -1179,7 +1195,33 @@ export default function AksaraPage() {
               </div>
             </div>
           ) : null}
-          {savedDetail ? <KanjiSheet detail={savedDetail} onClose={() => setSavedDetail(null)} /> : null}
+          {savedDetail ? (
+            <KanjiSheet
+              detail={savedDetail}
+              onClose={() => {
+                setSavedDetail(null);
+                setSavedItemId(null);
+              }}
+            >
+              {savedItemId ? (
+                <button type='button' className='btn-danger w-full' onClick={() => setConfirmDelete(true)}>
+                  Hapus dari Simpananku
+                </button>
+              ) : null}
+            </KanjiSheet>
+          ) : null}
+          {confirmDelete && savedItemId !== null && (
+            <ConfirmModal
+              open
+              title="Hapus dari Simpananku?"
+              message="Kanji ini dihapus dari daftar simpananmu. Kamu bisa menyimpannya lagi kapan saja."
+              onCancel={() => setConfirmDelete(false)}
+              onConfirm={() => {
+                setConfirmDelete(false);
+                deleteSaved(savedItemId);
+              }}
+            />
+          )}
 
           <p className="text-center text-xs text-zinc-400">
             Latihan nulis kanji ada di{" "}

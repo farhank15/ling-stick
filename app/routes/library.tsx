@@ -29,6 +29,8 @@ export async function loader({ request }: LoaderFunctionArgs) {
     listItems({
       q: url.searchParams.get("q") ?? undefined,
       type: url.searchParams.get("type") ?? undefined,
+      // Kanji hasil coret disimpan di Aksara (Simpananku), bukan di Library.
+      excludeType: "kanji",
       register: url.searchParams.get("register") ?? undefined,
       status,
       limit: 200,

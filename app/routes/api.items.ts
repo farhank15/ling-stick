@@ -9,6 +9,7 @@ import {
   type ItemType,
 } from "~/lib/items.server";
 import { readBody } from "~/lib/parse.server";
+import { getKanjiDetail } from '~/lib/kanji.server';
 
 /**
  * POST /api/items — simpan item + contoh + alternatif + buat kartu (BLUEPRINT §7).
@@ -75,6 +76,15 @@ export async function action({ request }: ActionFunctionArgs) {
   }
 
   const type: ItemType = body.type ?? "word";
+  if (type === 'kanji') {
+    const ref = await getKanjiDetail(text);
+    if (ref) {
+      let lv = 'referensi';
+      if (ref.jlpt) lv = 'N' + ref.jlpt;
+      return Response.json({ error: 'Kanji ini sudah ada di ' + lv, reference: true, jlpt: ref.jlpt }, { status: 409 });
+    }
+  }
+
   try {
     const id = await saveItem({
       text,
