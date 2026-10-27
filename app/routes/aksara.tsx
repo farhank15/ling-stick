@@ -1,5 +1,5 @@
 import type { LoaderFunctionArgs, MetaFunction } from "react-router";
-import { Link, redirect, useLoaderData, useNavigate, useSearchParams } from 'react-router';
+import { Link, redirect, useLoaderData, useSearchParams } from 'react-router';
 import { useEffect, useRef, useState } from "react";
 import {
   Check,
@@ -200,7 +200,7 @@ export async function loader({ request }: LoaderFunctionArgs) {
   }[] = [];
   let kanjiComponents: { component: string; count: number }[] = [];
   let kanjiProgress: { total: number; done: number; known: string[] } | null = null;
-  let savedKanji: { id: number; char: string; meaningId: string | null }[] = [];
+  let savedKanji: { id: number; char: string; meaningId: string | null; exampleEn: string | null; exampleId: string | null }[] = [];
   if (script === "kanji") {
     const jlptNum = Number(level.slice(1)) || 5;
     const { listKanji, listComponents, getKanjiProgress } = await import("~/lib/kanji.server");
@@ -214,7 +214,7 @@ export async function loader({ request }: LoaderFunctionArgs) {
     kanjiList = list;
     kanjiComponents = comps;
     kanjiProgress = prog;
-    savedKanji = saved.map((r) => ({ id: r.id, char: r.text, meaningId: r.meaningId }));
+    savedKanji = saved.map((r) => ({ id: r.id, char: r.text, meaningId: r.meaningId, exampleEn: r.firstExampleEn, exampleId: r.firstExampleId }));
   }
 
   // Kelompok kana mirip — import JSON langsung (masuk bundle server).
@@ -835,16 +835,39 @@ function KanaDrill({
 export default function AksaraPage() {
   const { script, level, kanjiList, kanjiComponents, kanjiProgress, savedKanji, confusables } =
     useLoaderData<typeof loader>();
-  const navigate = useNavigate();
   const [savedDetail, setSavedDetail] = useState<KanjiDetail | null>(null);
-  const openSaved = (k: { id: number; char: string }) => {
+  const openSaved = (k: { id: number; char: string; meaningId: string | null; exampleEn: string | null; exampleId: string | null }) => {
+    const build = (j: KanjiApi | null) => {
+      const on = (j && Array.isArray(j.on_readings) ? j.on_readings : []).map((r: string, i: number) => ({ text: r, primary: i === 0 }));
+      const kun = (j && Array.isArray(j.kun_readings) ? j.kun_readings : []).map((r: string, i: number) => ({ text: r, primary: i === 0 }));
+      const vocab = k.exampleEn ? [{ word: k.exampleEn, reading: '', gloss: k.exampleId || '' }] : [];
+      setSavedDetail({
+        char: k.char,
+        meaningId: k.meaningId || (j && j.meanings ? j.meanings.join(', ') : ''),
+        strokes: j && typeof j.stroke_count === 'number' ? j.stroke_count : 0,
+        grade: j && typeof j.grade === 'number' ? j.grade : null,
+        freq: j && typeof j.freq === 'number' ? j.freq : null,
+        jlpt: j && typeof j.jlpt === 'number' ? j.jlpt : null,
+        svg: null,
+        on,
+        kun,
+        components: [],
+        vocab,
+      });
+    };
     fetch('/api/kanji?detail=' + encodeURIComponent(k.char))
       .then((r) => r.json())
       .then((d) => {
-        if (d.detail) setSavedDetail(d.detail as KanjiDetail);
-        else navigate('/library/' + k.id);
+        if (d.detail) {
+          setSavedDetail(d.detail as KanjiDetail);
+          return;
+        }
+        fetch('https://kanjiapi.dev/v1/kanji/' + encodeURIComponent(k.char))
+          .then((r) => (r.ok ? r.json() : null))
+          .then((j) => build(j as KanjiApi | null))
+          .catch(() => build(null));
       })
-      .catch(() => navigate('/library/' + k.id));
+      .catch(() => build(null));
   };
   const [params, setParams] = useSearchParams();
 
@@ -1179,6 +1202,16 @@ export default function AksaraPage() {
 }
 
 /* ── Referensi kanji kanonis (seed dataset, bukan generate) ── */
+type KanjiApi = {
+  on_readings?: string[];
+  kun_readings?: string[];
+  meanings?: string[];
+  stroke_count?: number;
+  grade?: number;
+  freq?: number;
+  jlpt?: number;
+};
+
 type KanjiRow = {
   char: string;
   meaningId: string;
