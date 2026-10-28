@@ -129,27 +129,49 @@ export function extractFeatures(pattern: Stroke[], interval = 20): Stroke[] {
 
 function endpointDist(a: Stroke, b: Stroke): number {
   if (!a.length || !b.length) return 0;
-  return Math.abs(a[0][0] - b[0][0]) + Math.abs(a[0][1] - b[0][1]) +
-         Math.abs(a[a.length - 1][0] - b[b.length - 1][0]) + Math.abs(a[a.length - 1][1] - b[b.length - 1][1]);
+  const a0 = a[0];
+  const a1 = a[a.length - 1];
+  const b0 = b[0];
+  const b1 = b[b.length - 1];
+  const forward =
+    Math.abs(a0[0] - b0[0]) + Math.abs(a0[1] - b0[1]) +
+    Math.abs(a1[0] - b1[0]) + Math.abs(a1[1] - b1[1]);
+  const reversed =
+    Math.abs(a0[0] - b1[0]) + Math.abs(a0[1] - b1[1]) +
+    Math.abs(a1[0] - b0[0]) + Math.abs(a1[1] - b0[1]);
+  // Ujung-ujungnya saja: toleran kalau arah goresan user terbalik.
+  return Math.min(forward, reversed);
 }
 
 function initialDist(a: Stroke, b: Stroke): number {
   const n = Math.min(a.length, b.length);
-  let sum = 0;
-  for (let i = 0; i < n; i++) sum += Math.abs(a[i][0] - b[i][0]) + Math.abs(a[i][1] - b[i][1]);
+  if (n === 0) return 0;
   const m = Math.max(a.length, b.length);
-  return sum * (m / n);
+  let sumF = 0;
+  let sumR = 0;
+  for (let i = 0; i < n; i++) {
+    const p = b[i];
+    const q = b[b.length - 1 - i];
+    sumF += Math.abs(a[i][0] - p[0]) + Math.abs(a[i][1] - p[1]);
+    sumR += Math.abs(a[i][0] - q[0]) + Math.abs(a[i][1] - q[1]);
+  }
+  // Arah goresan user bisa terbalik (kanan->kiri / bawah->atas). Ambil arah
+  // yang paling cocok supaya kanji yang benar tidak hilang dari kandidat.
+  return Math.min(sumF, sumR) * (m / n);
 }
 
 function wholeWholeDist(a: Stroke, b: Stroke): number {
   const n = a.length, m = b.length;
   if (n === 0 || m === 0) return 0;
-  let sum = 0;
+  let sumF = 0, sumR = 0;
   for (let i = 0; i < Math.min(n, m); i++) {
     const j = Math.floor((n / Math.max(n, m)) * i);
-    sum += Math.abs(a[j][0] - b[i][0]) + Math.abs(a[j][1] - b[i][1]);
+    sumF += Math.abs(a[j][0] - b[i][0]) + Math.abs(a[j][1] - b[i][1]);
+    const k = m - 1 - i;
+    sumR += Math.abs(a[j][0] - b[k][0]) + Math.abs(a[j][1] - b[k][1]);
   }
-  return Math.floor(sum / Math.min(n, m));
+  // Sama seperti initialDist: toleran terhadap arah goresan yang terbalik.
+  return Math.floor(Math.min(sumF, sumR) / Math.min(n, m));
 }
 
 function getLargerAndSize(a: Stroke[], b: Stroke[]): [Stroke[], Stroke[], number, number] {
