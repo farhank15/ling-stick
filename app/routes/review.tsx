@@ -1278,6 +1278,68 @@ export default function ReviewPage() {
     }
   };
 
+  // ── Keyboard shortcuts (flashcard only) — QWOP: Q=Lupa, W=Susah, O=Pas, P=Tahu,
+  //   Space=flip, N/lanjut. Dibatasi scope screen 'flash' biar gak bentrok
+  //   dengan mode kuis lain. matcha: disable default scroll/zoom pada tombol rating.
+  useEffect(() => {
+    if (screen !== "flash") return;
+    const handleKey = (e: KeyboardEvent) => {
+      // Jangan override shortcut di textarea/input.
+      if (e.target instanceof HTMLInputElement || e.target instanceof HTMLTextAreaElement) return;
+      // Jangan override jika ada modal terbuka (mis. hint match / history).
+      const openModal = document.querySelector('[role="dialog"]');
+      if (openModal) return;
+      switch (e.key) {
+        case "q":
+        case "Q":
+          e.preventDefault();
+          navigator.vibrate?.(15);
+          void rateCard(1, "Lupa — muncul lagi cepat");
+          break;
+        case "w":
+        case "W":
+          e.preventDefault();
+          navigator.vibrate?.(15);
+          void rateCard(2, "Susah — interval lebih pendek");
+          break;
+        case "o":
+        case "O":
+          e.preventDefault();
+          navigator.vibrate?.(15);
+          void rateCard(3, "Pas");
+          break;
+        case "p":
+        case "P":
+          e.preventDefault();
+          navigator.vibrate?.(15);
+          void knowCard();
+          break;
+        case " ":
+        case "Space":
+          if (e.key === "Space" && (e.target instanceof HTMLElement) && (e.target.tagName === "BUTTON" || e.target.tagName === "INPUT")) return;
+          e.preventDefault();
+          setReveal((v) => !v);
+          break;
+        case "n":
+        case "N":
+        case "ArrowRight":
+          e.preventDefault();
+          advanceCard();
+          break;
+        case "ArrowLeft":
+          e.preventDefault();
+          setCardIdx((i) => Math.max(0, i - 1));
+          break;
+        case "Escape":
+          e.preventDefault();
+          backToPick("Flashcard berhenti");
+          break;
+      }
+    };
+    window.addEventListener("keydown", handleKey);
+    return () => window.removeEventListener("keydown", handleKey);
+  }, [screen, rateCard, knowCard, advanceCard, setReveal, setCardIdx, backToPick]);
+
   /* ── Swipe handlers (flashcard) ── */
   const onSwipeStart = (clientX: number) => {
     dragStartX.current = clientX;
@@ -1649,31 +1711,32 @@ export default function ReviewPage() {
         </div>
 
         <p className="text-center text-xs text-zinc-400">
-          Swipe kiri = masih dipelajari · Swipe kanan = udah tahu
+          Swipe kiri = masih dipelajari · Swipe kanan = udah tahu · 
+          <strong> Q/W/O/P</strong> = Lupa/Susah/Pas/Tahu · <strong>spasi</strong> = balik kartu · <strong>Esc</strong> = selesai
         </p>
 
         {/* Fallback tombol */}
         <div className="grid grid-cols-4 gap-2">
-          <button className="btn-secondary flex-col gap-1 py-2.5 text-xs" onClick={() => void rateCard(1, "Masih dipelajari — bakal muncul lagi")}>
-            <XCircle className="h-4 w-4 text-red-500" /> Lupa
+          <button className="btn-secondary flex-col gap-1 py-2.5 text-xs" onClick={() => void rateCard(1, "Masih dipelajari — bakal muncul lagi")} title="Q / swipe kiri">
+            <XCircle className="h-4 w-4 text-red-500" /> Lupa (Q)
             {cards[cardIdx]?.intervals ? (
               <span className="text-[10px] font-normal text-zinc-400">{cards[cardIdx]!.intervals![1]}</span>
             ) : null}
           </button>
-          <button className="btn-secondary flex-col gap-1 py-2.5 text-xs" onClick={() => void rateCard(2)}>
-            <RotateCcw className="h-4 w-4 text-amber-500" /> Susah
+          <button className="btn-secondary flex-col gap-1 py-2.5 text-xs" onClick={() => void rateCard(2)} title="W / interval lebih pendek">
+            <RotateCcw className="h-4 w-4 text-amber-500" /> Susah (W)
             {cards[cardIdx]?.intervals ? (
               <span className="text-[10px] font-normal text-zinc-400">{cards[cardIdx]!.intervals![2]}</span>
             ) : null}
           </button>
-          <button className="btn-secondary flex-col gap-1 py-2.5 text-xs" onClick={() => void rateCard(3)}>
-            <CheckCircle2 className="h-4 w-4 text-teal-600" /> Pas
+          <button className="btn-secondary flex-col gap-1 py-2.5 text-xs" onClick={() => void rateCard(3)} title="O">
+            <CheckCircle2 className="h-4 w-4 text-teal-600" /> Pas (O)
             {cards[cardIdx]?.intervals ? (
               <span className="text-[10px] font-normal text-zinc-400">{cards[cardIdx]!.intervals![3]}</span>
             ) : null}
           </button>
-          <button className="btn-secondary flex-col gap-1 py-2.5 text-xs" onClick={() => void knowCard()}>
-            <BadgeCheck className="h-4 w-4 text-emerald-600" /> Tahu
+          <button className="btn-secondary flex-col gap-1 py-2.5 text-xs" onClick={() => void knowCard()} title="P / keluar dari antrean">
+            <BadgeCheck className="h-4 w-4 text-emerald-600" /> Tahu (P)
             {cards[cardIdx]?.intervals ? (
               <span className="text-[10px] font-normal text-zinc-400">{cards[cardIdx]!.intervals![4]}</span>
             ) : null}
