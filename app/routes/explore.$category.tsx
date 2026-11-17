@@ -163,10 +163,10 @@ async function _action({ request, params }: ActionFunctionArgs) {
       added++;
     }
 
-    // Tandai auto-generate pernah jalan → nggak diulang tiap buka halaman.
+    // Tandai auto-generate pernah jalan → nggak diulang tiap buka halaman (per-user).
     await db
       .insert(settings)
-      .values({ key: autoGenKey(category), value: "1" })
+      .values({ key: autoGenKey(category), value: "1", userId: requireUserId() })
       .onConflictDoNothing();
 
     genLocks.delete(category);

@@ -86,7 +86,7 @@ export async function getKanjiWidgetLevel(): Promise<number> {
   const [row] = await db
     .select({ value: settings.value })
     .from(settings)
-    .where(eq(settings.key, KANJI_WIDGET_LEVEL_KEY))
+    .where(and(eq(settings.userId, requireUserId()), eq(settings.key, KANJI_WIDGET_LEVEL_KEY)))
     .limit(1);
   const n = Number(row?.value);
   if (!Number.isFinite(n)) return KANJI_WIDGET_LEVEL_DEFAULT;
@@ -98,7 +98,7 @@ export async function getNewCardsPerDay(): Promise<number> {
   const [row] = await db
     .select({ value: settings.value })
     .from(settings)
-    .where(eq(settings.key, NEW_CARDS_KEY))
+    .where(and(eq(settings.userId, requireUserId()), eq(settings.key, NEW_CARDS_KEY)))
     .limit(1);
   const n = Number(row?.value);
   if (!Number.isFinite(n)) return env.NEW_CARDS_PER_DAY;
@@ -107,9 +107,13 @@ export async function getNewCardsPerDay(): Promise<number> {
 
 export async function setNewCardsPerDay(n: number): Promise<number> {
   const clean = Math.min(NEW_CARDS_MAX, Math.max(NEW_CARDS_MIN, Math.round(Number(n) || 0)));
+  const uid = requireUserId();
   await db
     .insert(settings)
-    .values({ key: NEW_CARDS_KEY, value: String(clean) })
-    .onConflictDoUpdate({ target: settings.key, set: { value: String(clean) } });
+    .values({ key: NEW_CARDS_KEY, value: String(clean), userId: uid })
+    .onConflictDoUpdate({
+      target: [settings.userId, settings.key],
+      set: { value: String(clean) },
+    });
   return clean;
 }

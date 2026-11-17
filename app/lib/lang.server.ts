@@ -1,6 +1,7 @@
-import { eq } from "drizzle-orm";
+import { and, eq } from "drizzle-orm";
 import { db } from "./db/client.server";
 import { settings } from "./db/schema";
+import { currentUserId, requireUserId } from "./user-context";
 
 /**
  * Bahasa target aktif (satu global, ganti di Settings):
@@ -22,30 +23,42 @@ const KEY = "targetLang";
  * dalam satu render (beberapa loader paralel) tapi cepet ngikut perubahan.
  */
 const TTL_MS = 2_000;
-let cached: { value: TargetLang; at: number } | null = null;
+// Cache per-user (dulu global — di multi-user, user A bisa kebawa targetLang user B).
+const cache = new Map<number, { value: TargetLang; at: number }>();
 
 export function isTargetLang(v: string | null | undefined): v is TargetLang {
   return v === "en" || v === "ja";
 }
 
 export async function getTargetLang(): Promise<TargetLang> {
+  const uid = currentUserId();
+  if (uid == null) return "en"; // non-request (skrip/seed) → default aman
+  const cached = cache.get(uid);
   if (cached && Date.now() - cached.at < TTL_MS) return cached.value;
   try {
-    const [row] = await db.select().from(settings).where(eq(settings.key, KEY)).limit(1);
-    cached = { value: isTargetLang(row?.value) ? row.value : "en", at: Date.now() };
+    const [row] = await db
+      .select()
+      .from(settings)
+      .where(and(eq(settings.key, KEY), eq(settings.userId, uid)))
+      .limit(1);
+    cache.set(uid, { value: isTargetLang(row?.value) ? row.value : "en", at: Date.now() });
   } catch {
-    cached = { value: cached?.value ?? "en", at: Date.now() };
+    cache.set(uid, { value: cached?.value ?? "en", at: Date.now() });
   }
-  return cached.value;
+  return cache.get(uid)!.value;
 }
 
 /** Simpan pilihan bahasa. Dipanggil dari action Settings; cache ikut diperbarui. */
 export async function setTargetLang(lang: TargetLang): Promise<void> {
+  const uid = requireUserId();
   await db
     .insert(settings)
-    .values({ key: KEY, value: lang })
-    .onConflictDoUpdate({ target: settings.key, set: { value: lang } });
-  cached = { value: lang, at: Date.now() };
+    .values({ key: KEY, value: lang, userId: uid })
+    .onConflictDoUpdate({
+      target: [settings.userId, settings.key],
+      set: { value: lang },
+    });
+  cache.set(uid, { value: lang, at: Date.now() });
 }
 
 /**
