@@ -495,16 +495,18 @@ async function runIsolationRebuilds(client: Client): Promise<void> {
   const meta = await client.execute("SELECT value FROM app_meta WHERE key = 'isolation_v1'");
   if (meta.rows.length > 0) return;
 
-  // SQLite secara default me-rewrite SEMUA referensi (FK di tabel anak, trigger,
-  // content= FTS5) saat ALTER TABLE RENAME. Karena tabel legacy langsung di-drop
-  // setelah copy, referensi itu akan menggantung → INSERT anak gagal
-  // ("no such table: main.items_legacy"). foreign_keys=OFF (wajib — FK selalu
-  // di-rewrite walau legacy_alter_table=ON) + legacy_alter_table=ON mematikan
-  // rewrite itu: tabel anak tetap menunjuk nama "items" yang dibuat ulang.
-  await client.execute("PRAGMA foreign_keys=OFF");
-  await client.execute("PRAGMA legacy_alter_table=ON");
+  // PENTING (Turso): PRAGMA tidak diizinkan via HTTP ("SQL not allowed
+  // statement"), jadi rebuild TIDAK boleh mematikan foreign_keys. Urutan di
+  // bawah sengaja aman-FK: data diselamatkan ke tabel tanpa FK dulu, baru
+  // induk di-drop & dibuat ulang, lalu anak direkonstruksi dengan FK ke
+  // induk baru. Valid baik foreign_keys=ON maupun OFF (libsql lokal ON).
+  await client.executeMultiple(`
+    DROP TRIGGER IF EXISTS items_ai;
+    DROP TRIGGER IF EXISTS items_ad;
+    DROP TRIGGER IF EXISTS items_au;
+  `);
 
-  // settings → PK(user_id, key)
+  // settings → PK(user_id, key) — tak dirujuk FK/trigger lain, rename aman.
   await client.executeMultiple(`
     ALTER TABLE settings RENAME TO settings_legacy;
     CREATE TABLE settings (
@@ -517,13 +519,11 @@ async function runIsolationRebuilds(client: Client): Promise<void> {
     DROP TABLE settings_legacy;
   `);
 
-  // items → UNIQUE(user_id, text_norm); pertahankan FTS + triggers.
+  // items → UNIQUE(user_id, text_norm); pertahankan FTS + triggers + FK anak.
+  // Tahap 1-2: selamatkan data (items ke items_v2 skema baru; anak-anak ke
+  // tabel *_keep TANPA FK supaya items lama bebas di-drop walau FK ON).
   await client.executeMultiple(`
-    DROP TRIGGER IF EXISTS items_ai;
-    DROP TRIGGER IF EXISTS items_ad;
-    DROP TRIGGER IF EXISTS items_au;
-    ALTER TABLE items RENAME TO items_legacy;
-    CREATE TABLE items (
+    CREATE TABLE items_v2 (
       id INTEGER PRIMARY KEY,
       text TEXT NOT NULL,
       text_norm TEXT NOT NULL,
@@ -544,15 +544,102 @@ async function runIsolationRebuilds(client: Client): Promise<void> {
       user_id INTEGER,
       UNIQUE(user_id, text_norm)
     );
-    INSERT INTO items (id, text, text_norm, type, register, meaning_id, notes_id, source, confidence, status,
-                       hide_meaning, lang, reading, created_at, deck_id, extra_json, needs_id, user_id)
+    INSERT INTO items_v2 (id, text, text_norm, type, register, meaning_id, notes_id, source, confidence, status,
+                          hide_meaning, lang, reading, created_at, deck_id, extra_json, needs_id, user_id)
       SELECT id, text, text_norm, type, register, meaning_id, notes_id, source, confidence, status,
              hide_meaning, lang, reading, created_at, deck_id, extra_json, needs_id, user_id
-      FROM items_legacy;
-    DROP TABLE items_legacy;
+      FROM items;
+
+    CREATE TABLE cards_keep (
+      item_id INTEGER PRIMARY KEY, due INTEGER NOT NULL, stability REAL, difficulty REAL,
+      elapsed_days INTEGER, scheduled_days INTEGER, reps INTEGER NOT NULL DEFAULT 0,
+      lapses INTEGER NOT NULL DEFAULT 0, state INTEGER NOT NULL DEFAULT 0,
+      learning_steps INTEGER NOT NULL DEFAULT 0, last_review INTEGER, user_id INTEGER
+    );
+    INSERT INTO cards_keep SELECT * FROM cards;
+    DROP TABLE cards;
+
+    CREATE TABLE examples_keep (
+      id INTEGER PRIMARY KEY, item_id INTEGER NOT NULL, sense_label TEXT,
+      register TEXT NOT NULL DEFAULT 'neutral', en TEXT NOT NULL, id_text TEXT NOT NULL,
+      is_context INTEGER NOT NULL DEFAULT 0, kana TEXT
+    );
+    INSERT INTO examples_keep SELECT * FROM examples;
+    DROP TABLE examples;
+
+    CREATE TABLE alternatives_keep (
+      id INTEGER PRIMARY KEY, item_id INTEGER NOT NULL, text TEXT NOT NULL,
+      register TEXT, nuance_id TEXT, use_when_id TEXT
+    );
+    INSERT INTO alternatives_keep SELECT * FROM alternatives;
+    DROP TABLE alternatives;
+
+    CREATE TABLE item_tags_keep (
+      item_id INTEGER NOT NULL, tag_id INTEGER NOT NULL, PRIMARY KEY (item_id, tag_id)
+    );
+    INSERT INTO item_tags_keep SELECT * FROM item_tags;
+    DROP TABLE item_tags;
+  `);
+
+  // Tahap 3: tak ada lagi FK menunjuk items lama → drop & rename induk baru.
+  await client.executeMultiple(`
+    DROP TABLE items;
+    ALTER TABLE items_v2 RENAME TO items;
     CREATE INDEX IF NOT EXISTS items_status_idx ON items(status);
     CREATE INDEX IF NOT EXISTS items_deck_idx ON items(deck_id);
     CREATE INDEX IF NOT EXISTS items_user_idx ON items(user_id);
+  `);
+
+  // Tahap 4: anak-anak kembali dengan FK ke items baru (data dari *_keep),
+  // lalu tahap 5: index + trigger FTS + reindex.
+  await client.executeMultiple(`
+    CREATE TABLE cards (
+      item_id INTEGER PRIMARY KEY REFERENCES items(id) ON DELETE CASCADE,
+      due INTEGER NOT NULL, stability REAL, difficulty REAL,
+      elapsed_days INTEGER, scheduled_days INTEGER, reps INTEGER NOT NULL DEFAULT 0,
+      lapses INTEGER NOT NULL DEFAULT 0, state INTEGER NOT NULL DEFAULT 0,
+      learning_steps INTEGER NOT NULL DEFAULT 0, last_review INTEGER, user_id INTEGER
+    );
+    INSERT INTO cards SELECT * FROM cards_keep;
+    DROP TABLE cards_keep;
+    CREATE INDEX IF NOT EXISTS cards_due_idx ON cards(due);
+
+    CREATE TABLE examples (
+      id INTEGER PRIMARY KEY,
+      item_id INTEGER NOT NULL REFERENCES items(id) ON DELETE CASCADE,
+      sense_label TEXT,
+      register TEXT NOT NULL DEFAULT 'neutral',
+      en TEXT NOT NULL,
+      id_text TEXT NOT NULL,
+      is_context INTEGER NOT NULL DEFAULT 0,
+      kana TEXT
+    );
+    INSERT INTO examples SELECT * FROM examples_keep;
+    DROP TABLE examples_keep;
+    CREATE INDEX IF NOT EXISTS examples_item_idx ON examples(item_id);
+
+    CREATE TABLE alternatives (
+      id INTEGER PRIMARY KEY,
+      item_id INTEGER NOT NULL REFERENCES items(id) ON DELETE CASCADE,
+      text TEXT NOT NULL,
+      register TEXT,
+      nuance_id TEXT,
+      use_when_id TEXT
+    );
+    INSERT INTO alternatives SELECT * FROM alternatives_keep;
+    DROP TABLE alternatives_keep;
+    CREATE INDEX IF NOT EXISTS alternatives_item_idx ON alternatives(item_id);
+
+    CREATE TABLE item_tags (
+      item_id INTEGER NOT NULL REFERENCES items(id) ON DELETE CASCADE,
+      tag_id INTEGER NOT NULL REFERENCES tags(id) ON DELETE CASCADE,
+      PRIMARY KEY (item_id, tag_id)
+    );
+    INSERT INTO item_tags SELECT * FROM item_tags_keep;
+    DROP TABLE item_tags_keep;
+  `);
+
+  await client.executeMultiple(`
     CREATE TRIGGER items_ai AFTER INSERT ON items BEGIN
       INSERT INTO items_fts(rowid, text, meaning_id) VALUES (new.id, new.text, new.meaning_id);
     END;
@@ -650,8 +737,6 @@ async function runIsolationRebuilds(client: Client): Promise<void> {
   `);
 
   await client.execute("INSERT OR IGNORE INTO app_meta (key, value) VALUES ('isolation_v1', '1')");
-  await client.execute("PRAGMA legacy_alter_table=OFF");
-  await client.execute("PRAGMA foreign_keys=ON");
 }
 
 /** Jalankan semua migrasi via libsql (async). Sekali per proses. */
