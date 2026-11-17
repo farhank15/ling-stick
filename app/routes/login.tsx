@@ -8,8 +8,13 @@ import {
   sessionCookieHeader,
 } from "~/lib/auth.server";
 import { env } from "~/lib/env.server";
+import { inUserContext } from "~/lib/user-context";
 
-export async function loader({ request }: LoaderFunctionArgs) {
+export function loader(...args: Parameters<typeof _loader>) {
+  return inUserContext(() => _loader(...args));
+}
+
+async function _loader({ request }: LoaderFunctionArgs) {
   if (await isAuthenticated(request)) throw redirect("/", 303);
   return {
     passwordConfigured: Boolean(env.APP_PASSWORD),
@@ -17,7 +22,11 @@ export async function loader({ request }: LoaderFunctionArgs) {
   };
 }
 
-export async function action({ request }: ActionFunctionArgs) {
+export function action(...args: Parameters<typeof _action>) {
+  return inUserContext(() => _action(...args));
+}
+
+async function _action({ request }: ActionFunctionArgs) {
   const form = await request.formData();
   const bootstrap = form.get("bootstrap") === "1";
 

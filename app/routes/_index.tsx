@@ -1,3 +1,4 @@
+import { inUserContext } from "~/lib/user-context";
 import type { ActionFunctionArgs, LoaderFunctionArgs, MetaFunction } from 'react-router';
 import { Link, useLoaderData, useRevalidator } from 'react-router';
 import { useEffect } from 'react';
@@ -27,7 +28,11 @@ type WeatherCurrent = {
 
 type RouteCard = { order: number; title: string; segDone: number; segTotal: number; xp: number };
 
-export async function loader({ request }: LoaderFunctionArgs) {
+export function loader(...args: Parameters<typeof _loader>) {
+  return inUserContext(() => _loader(...args));
+}
+
+async function _loader({ request }: LoaderFunctionArgs) {
   await requireUser(request);
   const lang = await getTargetLang();
   // Kanji punya tempat sendiri di Aksara (Simpananku) — jangan muncul di
@@ -99,7 +104,11 @@ async function fetchSlemanWeather(): Promise<WeatherCurrent | null> {
   }
 }
 
-export async function action({ request }: ActionFunctionArgs) {
+export function action(...args: Parameters<typeof _action>) {
+  return inUserContext(() => _action(...args));
+}
+
+async function _action({ request }: ActionFunctionArgs) {
   await requireUser(request);
   const form = await request.formData();
   const intent = form.get('intent');

@@ -6,13 +6,17 @@ import { env } from "~/lib/env.server";
 import { getTargetLang } from "~/lib/lang.server";
 import { normalizeText } from "~/lib/utils.shared";
 import { and, eq, like } from "drizzle-orm";
-import { requireUserId } from "~/lib/user-context";
+import { inUserContext, requireUserId } from "~/lib/user-context";
 
 /**
  * GET /api/suggest?q= — autocomplete kata (BLUEPRINT §7).
  * Prioritas: item di Library sendiri → Datamuse (fallback, tanpa key).
  */
-export async function loader({ request }: LoaderFunctionArgs) {
+export function loader(...args: Parameters<typeof _loader>) {
+  return inUserContext(() => _loader(...args));
+}
+
+async function _loader({ request }: LoaderFunctionArgs) {
   await requireUser(request);
   const url = new URL(request.url);
   const q = normalizeText(url.searchParams.get("q") ?? "").slice(0, 60);

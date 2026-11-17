@@ -2,13 +2,18 @@ import type { LoaderFunctionArgs, MetaFunction } from "react-router";
 import { Link, useLoaderData, useNavigate, useSearchParams } from "react-router";
 import { Check, ChevronLeft, ChevronRight, Lock, Play, Trophy } from "lucide-react";
 import { requireUser } from "~/lib/auth.server";
+import { inUserContext } from "~/lib/user-context";
 import { getRouteMap } from "~/lib/route.progress";
 import { useToast } from "~/components/Toast";
 
 export const meta: MetaFunction = () => [{ title: "Rute Belajar — LingStick" }];
 export const handle = { title: "Rute" };
 
-export async function loader({ request }: LoaderFunctionArgs) {
+export function loader(...args: Parameters<typeof _loader>) {
+  return inUserContext(() => _loader(...args));
+}
+
+async function _loader({ request }: LoaderFunctionArgs) {
   await requireUser(request);
   const url = new URL(request.url);
   const map = await getRouteMap();

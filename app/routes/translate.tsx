@@ -12,6 +12,7 @@ import {
   X,
 } from "lucide-react";
 import { requireUser } from "~/lib/auth.server";
+import { inUserContext } from "~/lib/user-context";
 import { getTargetLang } from "~/lib/lang.server";
 import { JaText, hasJa } from "~/components/JaText";
 import { Highlight } from "~/components/Highlight";
@@ -27,7 +28,11 @@ import { SpeakButton } from "~/components/SpeakButton";
 export const meta: MetaFunction = () => [{ title: "Terjemah — LingStick" }];
 export const handle = { title: "Terjemah" };
 
-export async function loader({ request }: { request: Request }) {
+export function loader(...args: Parameters<typeof _loader>) {
+  return inUserContext(() => _loader(...args));
+}
+
+async function _loader({ request }: { request: Request }) {
   await requireUser(request);
   return { lang: await getTargetLang() };
 }

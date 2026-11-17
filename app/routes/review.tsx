@@ -27,6 +27,7 @@ import {
   Zap,
 } from "lucide-react";
 import { requireUser } from "~/lib/auth.server";
+import { inUserContext } from "~/lib/user-context";
 import { env } from "~/lib/env.server";
 import { getTargetLang } from "~/lib/lang.server";
 import { JaText, hasJa } from "~/components/JaText";
@@ -37,7 +38,11 @@ import { useToast } from "~/components/Toast";
 export const meta: MetaFunction = () => [{ title: "Review — LingStick" }];
 export const handle = { title: "Review" };
 
-export async function loader({ request }: { request: Request }) {
+export function loader(...args: Parameters<typeof _loader>) {
+  return inUserContext(() => _loader(...args));
+}
+
+async function _loader({ request }: { request: Request }) {
   await requireUser(request);
   const { getStreak } = await import("~/lib/quiz.server");
   return { dailyTarget: env.DAILY_QUIZ_SIZE, lang: await getTargetLang(), streak: await getStreak() };

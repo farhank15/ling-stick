@@ -5,7 +5,7 @@ import { claimLegacyData, DATA_OWNER_KEY } from "~/lib/claim.server";
 import { db, ensureDbReady } from "~/lib/db/client.server";
 import { sessions, settings, users } from "~/lib/db/schema";
 import { env } from "~/lib/env.server";
-import { setCurrentUser } from "~/lib/user-context";
+import { injectCurrentUser } from "~/lib/user-context";
 
 /**
  * Autentikasi multi-user — sesi DB-backed (opaque token di cookie httpOnly),
@@ -73,7 +73,7 @@ export async function requireUser(request: Request): Promise<UserRow> {
   if (!found) throw redirect("/login", 303);
   await touchSession(sid, found.session, Date.now());
   // Suntik user ke konteks request → service layer memfilter per-user.
-  setCurrentUser(found.user.id);
+  injectCurrentUser(found.user.id);
   return found.user;
 }
 

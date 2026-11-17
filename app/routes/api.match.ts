@@ -1,5 +1,6 @@
 import type { ActionFunctionArgs, LoaderFunctionArgs } from "react-router";
 import { requireUser } from "~/lib/auth.server";
+import { inUserContext } from "~/lib/user-context";
 import { applyRating } from "~/lib/fsrs.server";
 import { applyReview, getItemDetail } from "~/lib/items.server";
 import { getMatchRounds } from "~/lib/quiz.server";
@@ -8,7 +9,11 @@ import { getMatchRounds } from "~/lib/quiz.server";
  * GET /api/match → 5 ronde × 4 pasangan {itemId, word, meaning}
  * POST { results: { itemId, correct }[] } → FSRS: benar = Good(3), pernah salah = Again(1)
  */
-export async function loader({ request }: LoaderFunctionArgs) {
+export function loader(...args: Parameters<typeof _loader>) {
+  return inUserContext(() => _loader(...args));
+}
+
+async function _loader({ request }: LoaderFunctionArgs) {
   await requireUser(request);
   const url = new URL(request.url);
   const deckIdParam = Number(url.searchParams.get("deckId"));
@@ -28,7 +33,11 @@ export async function loader({ request }: LoaderFunctionArgs) {
   return Response.json({ rounds });
 }
 
-export async function action({ request }: ActionFunctionArgs) {
+export function action(...args: Parameters<typeof _action>) {
+  return inUserContext(() => _action(...args));
+}
+
+async function _action({ request }: ActionFunctionArgs) {
   await requireUser(request);
   const body = (await request.json().catch(() => ({}))) as {
     results?: { itemId?: number; correct?: boolean }[];

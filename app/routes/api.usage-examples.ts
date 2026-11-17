@@ -2,6 +2,7 @@ import type { ActionFunctionArgs } from "react-router";
 import { eq } from "drizzle-orm";
 import { z } from "zod";
 import { requireUser } from "~/lib/auth.server";
+import { inUserContext } from "~/lib/user-context";
 import { db } from "~/lib/db/client.server";
 import { llmCache } from "~/lib/db/schema";
 import { llmConfigured } from "~/lib/llm.server";
@@ -48,7 +49,11 @@ The user gives a word/phrase/sentence and its English translation context. Provi
 
 JSON shape: { "pronunciation": string, "examples": [{ "en": string, "id": string }] }`;
 
-export async function action({ request }: ActionFunctionArgs) {
+export function action(...args: Parameters<typeof _action>) {
+  return inUserContext(() => _action(...args));
+}
+
+async function _action({ request }: ActionFunctionArgs) {
   await requireUser(request);
   const body = (await request.json().catch(() => ({}))) as {
     text?: string;

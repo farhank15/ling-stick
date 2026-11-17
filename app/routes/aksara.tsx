@@ -14,6 +14,7 @@ import {
   X,
 } from "lucide-react";
 import { requireUser } from "~/lib/auth.server";
+import { inUserContext } from "~/lib/user-context";
 import { getTargetLang } from "~/lib/lang.server";
 import { ttsLang } from "~/lib/utils.shared";
 import { SpeakButton } from "~/components/SpeakButton";
@@ -175,7 +176,11 @@ const SCRIPT_LABEL: Record<Script, string> = {
 };
 const LEVELS = ["N5", "N4", "N3", "N2", "N1"] as const;
 
-export async function loader({ request }: LoaderFunctionArgs) {
+export function loader(...args: Parameters<typeof _loader>) {
+  return inUserContext(() => _loader(...args));
+}
+
+async function _loader({ request }: LoaderFunctionArgs) {
   await requireUser(request);
   const lang = await getTargetLang();
   if (lang !== "ja") throw redirect("/"); // halaman khusus mode Jepang

@@ -1,6 +1,7 @@
 import type { ActionFunctionArgs } from "react-router";
 import { inArray } from "drizzle-orm";
 import { requireUser } from "~/lib/auth.server";
+import { inUserContext } from "~/lib/user-context";
 import { db } from "~/lib/db/client.server";
 import { items, reviewLogs } from "~/lib/db/schema";
 import { markKnown, markLearning } from "~/lib/items.server";
@@ -9,7 +10,11 @@ import { markKnown, markLearning } from "~/lib/items.server";
  * POST /api/items/bulk { action: "known"|"learning"|"delete", ids: number[] }
  * Aksi massal dari Library (centang multi).
  */
-export async function action({ request }: ActionFunctionArgs) {
+export function action(...args: Parameters<typeof _action>) {
+  return inUserContext(() => _action(...args));
+}
+
+async function _action({ request }: ActionFunctionArgs) {
   await requireUser(request);
   const body = (await request.json().catch(() => ({}))) as {
     action?: string;

@@ -3,6 +3,7 @@ import { Link, useLoaderData } from "react-router";
 import { useEffect, useRef, useState } from "react";
 import { ArrowRight, Check, Eye, EyeOff, Loader2, PencilLine, X } from "lucide-react";
 import { requireUser } from "~/lib/auth.server";
+import { inUserContext } from "~/lib/user-context";
 import { getKanjiQueue } from "~/lib/kanji.server";
 import { KanjiDraw, type DrawStroke } from "~/components/KanjiDraw";
 import type { KanjiPattern } from "~/lib/kanji-match2";
@@ -22,7 +23,11 @@ function isLevel(v: string | null): v is Level {
  * Rating FSRS masuk ke kartu `production` (tabel kanji_cards), terpisah dari
  * mode Kenali/Baca supaya jadwal menulis tidak menutupi jadwal mengenali.
  */
-export async function loader({ request }: LoaderFunctionArgs) {
+export function loader(...args: Parameters<typeof _loader>) {
+  return inUserContext(() => _loader(...args));
+}
+
+async function _loader({ request }: LoaderFunctionArgs) {
   await requireUser(request);
   const raw = new URL(request.url).searchParams.get("level");
   const level: Level = isLevel(raw) ? raw : "N5";

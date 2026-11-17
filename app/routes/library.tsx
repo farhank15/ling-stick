@@ -3,6 +3,7 @@ import { Link, useLoaderData, useNavigation, useRevalidator, useSearchParams } f
 import { useEffect, useMemo, useRef, useState } from "react";
 import { BadgeCheck, CheckCircle2, Circle, Loader2, Search, Trash2, Volume2 } from "lucide-react";
 import { requireUser } from "~/lib/auth.server";
+import { inUserContext } from "~/lib/user-context";
 import { getFacetCounts, listItems } from "~/lib/items.server";
 import { ConfirmModal } from "~/components/ConfirmModal";
 import { SpeakButton } from "~/components/SpeakButton";
@@ -21,7 +22,11 @@ function speak(text: string, lang?: string) {
 }
 export const handle = { title: "Library" };
 
-export async function loader({ request }: LoaderFunctionArgs) {
+export function loader(...args: Parameters<typeof _loader>) {
+  return inUserContext(() => _loader(...args));
+}
+
+async function _loader({ request }: LoaderFunctionArgs) {
   await requireUser(request);
   const url = new URL(request.url);
   const status = url.searchParams.get("status") ?? "";

@@ -1,5 +1,6 @@
 import type { ActionFunctionArgs, LoaderFunctionArgs } from "react-router";
 import { requireUser } from "~/lib/auth.server";
+import { inUserContext } from "~/lib/user-context";
 import {
   getKanjiCardDetail,
   getKanjiDetail,
@@ -18,7 +19,11 @@ import { enrichKanji, getTextbookStrokes } from '~/lib/kanji-enrich.server';
  */
 const MODES = ["recognition", "recall", "reading", "production"] as const;
 
-export async function loader({ request }: LoaderFunctionArgs) {
+export function loader(...args: Parameters<typeof _loader>) {
+  return inUserContext(() => _loader(...args));
+}
+
+async function _loader({ request }: LoaderFunctionArgs) {
   await requireUser(request);
   const url = new URL(request.url);
   // Ilustrasi urutan goresan untuk kanji tanpa SVG di tabel referensi.
@@ -55,7 +60,11 @@ export async function loader({ request }: LoaderFunctionArgs) {
   return Response.json({ cards: await getKanjiQueue(mode, 20, jlpt) });
 }
 
-export async function action({ request }: ActionFunctionArgs) {
+export function action(...args: Parameters<typeof _action>) {
+  return inUserContext(() => _action(...args));
+}
+
+async function _action({ request }: ActionFunctionArgs) {
   await requireUser(request);
   const body = (await request.json().catch(() => ({}))) as {
     kanji?: string;

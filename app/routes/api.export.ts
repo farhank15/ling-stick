@@ -13,14 +13,18 @@ import {
   settings,
   tags,
 } from "~/lib/db/schema";
-import { requireUserId } from "~/lib/user-context";
+import { inUserContext, requireUserId } from "~/lib/user-context";
 
 /**
  * GET /api/export — backup JSON seluruh data.
  * Format file memakai snake_case (sama dengan kolom DB) supaya stabil
  * dan gampah dibaca; import menerima snake_case & camelCase.
  */
-export async function loader({ request }: LoaderFunctionArgs) {
+export function loader(...args: Parameters<typeof _loader>) {
+  return inUserContext(() => _loader(...args));
+}
+
+async function _loader({ request }: LoaderFunctionArgs) {
   await requireUser(request);
   const uid = requireUserId();
 

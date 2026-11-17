@@ -6,7 +6,7 @@ import { items } from "~/lib/db/schema";
 import { getTargetLang } from "~/lib/lang.server";
 import { normalizeText } from "~/lib/utils.shared";
 import { llmExtract } from "~/lib/llm.server";
-import { requireUserId } from "~/lib/user-context";
+import { inUserContext, requireUserId } from "~/lib/user-context";
 
 /**
  * POST /api/extract { text } — ekstrak idiom/slang/reaksi/phrasal dari teks
@@ -14,7 +14,11 @@ import { requireUserId } from "~/lib/user-context";
  * Return: { expressions, exists: boolean[] } — exists[i] true kalau teksnya
  * sudah ada di Library (1 query inArray, murah). Biar user pilih yang baru aja.
  */
-export async function action({ request }: ActionFunctionArgs) {
+export function action(...args: Parameters<typeof _action>) {
+  return inUserContext(() => _action(...args));
+}
+
+async function _action({ request }: ActionFunctionArgs) {
   await requireUser(request);
   const body = (await request.json().catch(() => ({}))) as { text?: string };
   const text = (body.text ?? "").trim();

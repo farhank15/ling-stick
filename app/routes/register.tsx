@@ -1,3 +1,4 @@
+import { inUserContext } from "~/lib/user-context";
 import type { ActionFunctionArgs, LoaderFunctionArgs } from "react-router";
 import { Form, Link, redirect, useActionData, useLoaderData, useNavigation } from "react-router";
 import {
@@ -8,12 +9,20 @@ import {
   sessionCookieHeader,
 } from "~/lib/auth.server";
 
-export async function loader({ request }: LoaderFunctionArgs) {
+export function loader(...args: Parameters<typeof _loader>) {
+  return inUserContext(() => _loader(...args));
+}
+
+async function _loader({ request }: LoaderFunctionArgs) {
   if (await isAuthenticated(request)) throw redirect("/", 303);
   return { ownerReady: await ownerEstablished() };
 }
 
-export async function action({ request }: ActionFunctionArgs) {
+export function action(...args: Parameters<typeof _action>) {
+  return inUserContext(() => _action(...args));
+}
+
+async function _action({ request }: ActionFunctionArgs) {
   const form = await request.formData();
   const username = String(form.get("username") ?? "");
   const password = String(form.get("password") ?? "");

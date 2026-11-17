@@ -1,5 +1,6 @@
 import type { ActionFunctionArgs, LoaderFunctionArgs } from "react-router";
 import { requireUser } from "~/lib/auth.server";
+import { inUserContext } from "~/lib/user-context";
 import {
   answerQuestion,
   getHistory,
@@ -26,7 +27,11 @@ import {
  * POST { action: "known", itemId }      → tandai sudah hafal
  * POST { action: "create", mode, count, level?, topic? } → generate set tambahan manual
  */
-export async function loader({ request }: LoaderFunctionArgs) {
+export function loader(...args: Parameters<typeof _loader>) {
+  return inUserContext(() => _loader(...args));
+}
+
+async function _loader({ request }: LoaderFunctionArgs) {
   await requireUser(request);
   const url = new URL(request.url);
 
@@ -119,7 +124,11 @@ function setResponse(set: NonNullable<Awaited<ReturnType<typeof getSetById>>>) {
 }
 
 /** POST /api/quiz { index, correct } atau { action: "known", itemId } */
-export async function action({ request }: ActionFunctionArgs) {
+export function action(...args: Parameters<typeof _action>) {
+  return inUserContext(() => _action(...args));
+}
+
+async function _action({ request }: ActionFunctionArgs) {
   await requireUser(request);
   const body = (await request.json().catch(() => ({}))) as {
     setId?: number;

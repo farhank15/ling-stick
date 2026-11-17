@@ -16,7 +16,7 @@ import {
 } from "~/lib/db/schema";
 import { normalizeText } from "~/lib/items.server";
 import { getTargetLang } from "~/lib/lang.server";
-import { requireUserId } from "~/lib/user-context";
+import { inUserContext, requireUserId } from "~/lib/user-context";
 
 type Row = Record<string, unknown>;
 const str = (v: unknown, d = "") => (v === null || v === undefined ? d : String(v));
@@ -38,7 +38,11 @@ function pick(p: Row, snake: string, camel: string): Row[] {
  * Additive: item dengan text_norm yang sama dilewati (nggak ditimpa).
  * Atomic: satu transaction — gagal di tengah → semua dibatalkan.
  */
-export async function action({ request }: ActionFunctionArgs) {
+export function action(...args: Parameters<typeof _action>) {
+  return inUserContext(() => _action(...args));
+}
+
+async function _action({ request }: ActionFunctionArgs) {
   await requireUser(request);
   const p = (await request.json().catch(() => null)) as Row | null;
   if (!p || !Array.isArray(p.items ?? p.its)) {

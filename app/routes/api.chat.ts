@@ -1,5 +1,6 @@
 import type { ActionFunctionArgs } from "react-router";
 import { requireUser } from "~/lib/auth.server";
+import { inUserContext } from "~/lib/user-context";
 import { llmChat } from "~/lib/llm.server";
 import {
   appendMessages,
@@ -16,7 +17,11 @@ import {
  * diambil dari server (bukan dikirim client) supaya aman & konsisten.
  * Return: { ok, sessionId, reply, suggestions }
  */
-export async function action({ request }: ActionFunctionArgs) {
+export function action(...args: Parameters<typeof _action>) {
+  return inUserContext(() => _action(...args));
+}
+
+async function _action({ request }: ActionFunctionArgs) {
   await requireUser(request);
   const body = (await request.json().catch(() => ({}))) as {
     message?: string;

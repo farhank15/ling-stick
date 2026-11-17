@@ -1,6 +1,7 @@
 import type { ActionFunctionArgs } from "react-router";
 import { redirect } from "react-router";
 import { requireUser } from "~/lib/auth.server";
+import { inUserContext } from "~/lib/user-context";
 import {
   addExamplesToItem,
   findItemIdByText,
@@ -15,7 +16,11 @@ import { getKanjiDetail } from '~/lib/kanji.server';
  * POST /api/items — simpan item + contoh + alternatif + buat kartu (BLUEPRINT §7).
  * GET /api/items?q=&type=&register=&status=&tag= — list library.
  */
-export async function action({ request }: ActionFunctionArgs) {
+export function action(...args: Parameters<typeof _action>) {
+  return inUserContext(() => _action(...args));
+}
+
+async function _action({ request }: ActionFunctionArgs) {
   await requireUser(request);
   const body = await readBody<{
     text?: string;
@@ -125,7 +130,11 @@ export async function action({ request }: ActionFunctionArgs) {
   }
 }
 
-export async function loader({ request }: ActionFunctionArgs) {
+export function loader(...args: Parameters<typeof _loader>) {
+  return inUserContext(() => _loader(...args));
+}
+
+async function _loader({ request }: ActionFunctionArgs) {
   await requireUser(request);
   const url = new URL(request.url);
   const { listItems } = await import("~/lib/items.server");

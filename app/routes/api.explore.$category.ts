@@ -1,5 +1,6 @@
 import type { LoaderFunctionArgs } from "react-router";
 import { requireUser } from "~/lib/auth.server";
+import { inUserContext } from "~/lib/user-context";
 import { llmExplore } from "~/lib/llm.server";
 import { getExploreCategory, saveExploreRow } from "~/lib/items.server";
 import { EXPLORE_CATEGORIES, EXPLORE_CATEGORIES_JA } from "~/lib/explore.categories";
@@ -10,7 +11,11 @@ import { getTargetLang } from "~/lib/lang.server";
  * hasil di-cache di DB (BLUEPRINT F4). Kategori & prompt ikut bahasa target:
  * JA = daftar kategori Jepang (EXPLORE_CATEGORIES_JA), EN = CEFR list.
  */
-export async function loader({ request, params }: LoaderFunctionArgs) {
+export function loader(...args: Parameters<typeof _loader>) {
+  return inUserContext(() => _loader(...args));
+}
+
+async function _loader({ request, params }: LoaderFunctionArgs) {
   await requireUser(request);
   const category = String(params.category ?? "");
   const lang = await getTargetLang();

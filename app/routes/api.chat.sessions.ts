@@ -1,5 +1,6 @@
 import type { ActionFunctionArgs } from "react-router";
 import { requireUser } from "~/lib/auth.server";
+import { inUserContext } from "~/lib/user-context";
 import {
   createSession,
   deleteAllSessions,
@@ -16,7 +17,11 @@ import {
  * POST  { action: "delete", id }    → hapus 1 sesi
  * POST  { action: "clear" }         → hapus SEMUA sesi
  */
-export async function loader({ request }: { request: Request }) {
+export function loader(...args: Parameters<typeof _loader>) {
+  return inUserContext(() => _loader(...args));
+}
+
+async function _loader({ request }: { request: Request }) {
   await requireUser(request);
   const url = new URL(request.url);
   const id = Number(url.searchParams.get("id"));
@@ -29,7 +34,11 @@ export async function loader({ request }: { request: Request }) {
   return Response.json({ sessions: await listSessions() });
 }
 
-export async function action({ request }: ActionFunctionArgs) {
+export function action(...args: Parameters<typeof _action>) {
+  return inUserContext(() => _action(...args));
+}
+
+async function _action({ request }: ActionFunctionArgs) {
   await requireUser(request);
   const body = (await request.json().catch(() => ({}))) as {
     action?: string;

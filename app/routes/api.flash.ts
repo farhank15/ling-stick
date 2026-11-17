@@ -1,5 +1,6 @@
 import type { ActionFunctionArgs, LoaderFunctionArgs } from "react-router";
 import { requireUser } from "~/lib/auth.server";
+import { inUserContext } from "~/lib/user-context";
 import { applyRating } from "~/lib/fsrs.server";
 import { applyReview, getItemDetail } from "~/lib/items.server";
 import { getFlashQueue } from "~/lib/quiz.server";
@@ -8,7 +9,11 @@ import { getFlashQueue } from "~/lib/quiz.server";
  * GET /api/flash → antrian flashcard (kartu due + kartu baru hari ini)
  * POST { itemId, rating } → terapkan rating FSRS (1=Again .. 4=Easy)
  */
-export async function loader({ request }: LoaderFunctionArgs) {
+export function loader(...args: Parameters<typeof _loader>) {
+  return inUserContext(() => _loader(...args));
+}
+
+async function _loader({ request }: LoaderFunctionArgs) {
   await requireUser(request);
   // exclude=itemId,itemId — kartu yang sudah tampil sesi ini dilewati biar
   // putaran berikutnya variatif + kartu baru otomatis nyelip. Kalau hasilnya
@@ -37,7 +42,11 @@ export async function loader({ request }: LoaderFunctionArgs) {
   return Response.json({ cards: queue });
 }
 
-export async function action({ request }: ActionFunctionArgs) {
+export function action(...args: Parameters<typeof _action>) {
+  return inUserContext(() => _action(...args));
+}
+
+async function _action({ request }: ActionFunctionArgs) {
   await requireUser(request);
   const body = (await request.json().catch(() => ({}))) as {
     itemId?: number;

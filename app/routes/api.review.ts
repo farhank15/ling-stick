@@ -1,5 +1,6 @@
 import type { ActionFunctionArgs, LoaderFunctionArgs } from "react-router";
 import { requireUser } from "~/lib/auth.server";
+import { inUserContext } from "~/lib/user-context";
 import { applyRating } from "~/lib/fsrs.server";
 import { applyReview, getReviewQueue, markKnown, markLearning } from "~/lib/items.server";
 
@@ -8,13 +9,21 @@ import { applyReview, getReviewQueue, markKnown, markLearning } from "~/lib/item
  * action POST /api/review { itemId, rating, mode } → jadwal FSRS baru.
  * POST /api/review { itemId, action: "known" } → tandai sudah hafal.
  */
-export async function loader({ request }: LoaderFunctionArgs) {
+export function loader(...args: Parameters<typeof _loader>) {
+  return inUserContext(() => _loader(...args));
+}
+
+async function _loader({ request }: LoaderFunctionArgs) {
   await requireUser(request);
   const queue = await getReviewQueue();
   return Response.json(queue);
 }
 
-export async function action({ request }: ActionFunctionArgs) {
+export function action(...args: Parameters<typeof _action>) {
+  return inUserContext(() => _action(...args));
+}
+
+async function _action({ request }: ActionFunctionArgs) {
   await requireUser(request);
   const body = (await request.json().catch(() => ({}))) as {
     itemId?: number;

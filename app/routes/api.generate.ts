@@ -1,5 +1,6 @@
 import type { ActionFunctionArgs } from "react-router";
 import { requireUser } from "~/lib/auth.server";
+import { inUserContext } from "~/lib/user-context";
 import { llmGenerate } from "~/lib/llm.server";
 import { findItemIdByText } from "~/lib/items.server";
 import { normalizeText } from "~/lib/utils.shared";
@@ -8,7 +9,11 @@ import { normalizeText } from "~/lib/utils.shared";
  * POST /api/generate { text } — makna, contoh 3 register, alternatif (Poolside,
  * Zod-validated, di-cache). BLUEPRINT F1/§7.
  */
-export async function action({ request }: ActionFunctionArgs) {
+export function action(...args: Parameters<typeof _action>) {
+  return inUserContext(() => _action(...args));
+}
+
+async function _action({ request }: ActionFunctionArgs) {
   await requireUser(request);
   const body = (await request.json().catch(() => ({}))) as { text?: string };
   const text = (body.text ?? "").trim();

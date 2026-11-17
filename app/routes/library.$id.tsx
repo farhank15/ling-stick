@@ -9,6 +9,7 @@ import { useToast } from "~/components/Toast";
 import { JaText, hasJa, splitReading } from "~/components/JaText";
 import { MarkdownLite } from "~/components/MarkdownLite";
 import { requireUser } from "~/lib/auth.server";
+import { inUserContext } from "~/lib/user-context";
 import { deleteItem, getItemDetail, markLearning, updateItem } from "~/lib/items.server";
 import { redirect } from "react-router";
 
@@ -24,7 +25,11 @@ function speak(text: string, lang?: string) {
   window.speechSynthesis.speak(u);
 }
 
-export async function loader({ request, params }: LoaderFunctionArgs) {
+export function loader(...args: Parameters<typeof _loader>) {
+  return inUserContext(() => _loader(...args));
+}
+
+async function _loader({ request, params }: LoaderFunctionArgs) {
   await requireUser(request);
   const id = Number(params.id);
   const detail = await getItemDetail(id);
@@ -32,7 +37,11 @@ export async function loader({ request, params }: LoaderFunctionArgs) {
   return detail;
 }
 
-export async function action({ request, params }: ActionFunctionArgs) {
+export function action(...args: Parameters<typeof _action>) {
+  return inUserContext(() => _action(...args));
+}
+
+async function _action({ request, params }: ActionFunctionArgs) {
   await requireUser(request);
   const id = Number(params.id);
   const form = await request.formData();

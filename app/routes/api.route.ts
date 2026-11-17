@@ -1,5 +1,6 @@
 import type { ActionFunctionArgs, LoaderFunctionArgs } from "react-router";
 import { requireUser } from "~/lib/auth.server";
+import { inUserContext } from "~/lib/user-context";
 
 /**
  * Catatan + Tanya-Jawab per step Rute.
@@ -7,7 +8,11 @@ import { requireUser } from "~/lib/auth.server";
  * POST { stepId, note } → simpan catatan bebas
  * POST { stepId, qa: { q, a } } → simpan 1 Tanya-Jawab Ling
  */
-export async function loader({ request }: LoaderFunctionArgs) {
+export function loader(...args: Parameters<typeof _loader>) {
+  return inUserContext(() => _loader(...args));
+}
+
+async function _loader({ request }: LoaderFunctionArgs) {
   await requireUser(request);
   const stepId = new URL(request.url).searchParams.get("stepId") ?? "";
   if (!stepId) return Response.json({ error: "stepId wajib" }, { status: 400 });
@@ -15,7 +20,11 @@ export async function loader({ request }: LoaderFunctionArgs) {
   return Response.json(await getStepNotes(stepId));
 }
 
-export async function action({ request }: ActionFunctionArgs) {
+export function action(...args: Parameters<typeof _action>) {
+  return inUserContext(() => _action(...args));
+}
+
+async function _action({ request }: ActionFunctionArgs) {
   await requireUser(request);
   const body = (await request.json().catch(() => ({}))) as {
     stepId?: string;

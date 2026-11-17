@@ -1,5 +1,6 @@
 import type { ActionFunctionArgs } from "react-router";
 import { requireUser } from "~/lib/auth.server";
+import { inUserContext } from "~/lib/user-context";
 import { llmCheckSentence } from "~/lib/llm.server";
 import { getItemDetail } from "~/lib/items.server";
 
@@ -7,7 +8,11 @@ import { getItemDetail } from "~/lib/items.server";
  * POST /api/check-sentence { itemId, sentence } — koreksi kalimat buatan sendiri
  * (BLUEPRINT F6).
  */
-export async function action({ request }: ActionFunctionArgs) {
+export function action(...args: Parameters<typeof _action>) {
+  return inUserContext(() => _action(...args));
+}
+
+async function _action({ request }: ActionFunctionArgs) {
   await requireUser(request);
   const body = (await request.json().catch(() => ({}))) as {
     itemId?: number;

@@ -1,5 +1,6 @@
 import type { ActionFunctionArgs } from "react-router";
 import { requireUser } from "~/lib/auth.server";
+import { inUserContext } from "~/lib/user-context";
 import { llmTranslate } from "~/lib/llm.server";
 
 /**
@@ -8,7 +9,11 @@ import { llmTranslate } from "~/lib/llm.server";
  * - prefer "llm" : langsung LLM + cache — dipakai auto-translate dashboard
  *   (hemat kuota Lara yang cuma 10k karakter/bulan, BLUEPRINT §8 catatan 1)
  */
-export async function action({ request }: ActionFunctionArgs) {
+export function action(...args: Parameters<typeof _action>) {
+  return inUserContext(() => _action(...args));
+}
+
+async function _action({ request }: ActionFunctionArgs) {
   await requireUser(request);
   const body = (await request.json().catch(() => ({}))) as {
     text?: string;

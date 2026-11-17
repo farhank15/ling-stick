@@ -3,6 +3,7 @@ import { Link, useLoaderData, useNavigate } from "react-router";
 import { useEffect, useRef, useState, type ReactNode } from "react";
 import { ArrowLeft, BadgeCheck, CheckCircle2, ExternalLink, Info, Loader2, MessageCircleQuestion, RotateCcw, Save, TriangleAlert } from "lucide-react";
 import { requireUser } from "~/lib/auth.server";
+import { inUserContext } from "~/lib/user-context";
 import { getRouteMap } from "~/lib/route.progress";
 import { MarkdownLite } from "~/components/MarkdownLite";
 import { useToast } from "~/components/Toast";
@@ -53,7 +54,11 @@ function JpFocus({ text }: { text: string }) {
   );
 }
 
-export async function loader({ request, params }: LoaderFunctionArgs) {
+export function loader(...args: Parameters<typeof _loader>) {
+  return inUserContext(() => _loader(...args));
+}
+
+async function _loader({ request, params }: LoaderFunctionArgs) {
   await requireUser(request);
   const map = await getRouteMap();
   const stepId = params.stepId ?? "";

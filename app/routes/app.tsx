@@ -23,10 +23,15 @@ import {
   type LucideIcon,
 } from "lucide-react";
 import { requireUser } from "~/lib/auth.server";
+import { inUserContext } from "~/lib/user-context";
 import { getTargetLang } from "~/lib/lang.server";
 import { warmUpTts } from "~/lib/tts.client";
 
-export async function loader({ request }: LoaderFunctionArgs) {
+export function loader(...args: Parameters<typeof _loader>) {
+  return inUserContext(() => _loader(...args));
+}
+
+async function _loader({ request }: LoaderFunctionArgs) {
   await requireUser(request);
   return { lang: await getTargetLang() };
 }

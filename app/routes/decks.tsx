@@ -1,11 +1,16 @@
 import { useState } from "react";
 import { useLoaderData, useRevalidator } from "react-router";
 import { requireUser } from "~/lib/auth.server";
+import { inUserContext } from "~/lib/user-context";
 import { deckNeedsId, listDecks } from "~/lib/decks.server";
 import { guessMap, parseTable, type ColMap } from "~/lib/deck-parse";
 import { Layers, Trash2, Upload } from "lucide-react";
 
-export async function loader({ request }: { request: Request }) {
+export function loader(...args: Parameters<typeof _loader>) {
+  return inUserContext(() => _loader(...args));
+}
+
+async function _loader({ request }: { request: Request }) {
   await requireUser(request);
   const { getTargetLang } = await import("~/lib/lang.server");
   const lang = await getTargetLang();

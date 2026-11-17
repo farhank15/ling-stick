@@ -10,12 +10,16 @@ import { getTargetLang } from "~/lib/lang.server";
 import { JaText, hasJa } from "~/components/JaText";
 import { and, eq, inArray, sql } from "drizzle-orm";
 import { useToast } from "~/components/Toast";
-import { requireUserId } from "~/lib/user-context";
+import { inUserContext, requireUserId } from "~/lib/user-context";
 
 export const meta: MetaFunction = () => [{ title: "Explore — LingStick" }];
 export const handle = { title: "Explore" };
 
-export async function loader({ request }: LoaderFunctionArgs) {
+export function loader(...args: Parameters<typeof _loader>) {
+  return inUserContext(() => _loader(...args));
+}
+
+async function _loader({ request }: LoaderFunctionArgs) {
   await requireUser(request);
 
   // "Expression of the day": 3 ekspresi acak dari cache, urutan stabil per hari.

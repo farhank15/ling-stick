@@ -12,7 +12,7 @@ import { SpeakButton } from "~/components/SpeakButton";
 import { and, asc, eq, inArray } from "drizzle-orm";
 import { saveExploreRow } from "~/lib/items.server";
 import { useToast } from "~/components/Toast";
-import { requireUserId } from "~/lib/user-context";
+import { inUserContext, requireUserId } from "~/lib/user-context";
 
 export const handle = { title: "Explore", ownHeader: true };
 export const meta: MetaFunction = () => [{ title: "Explore — LingStick" }];
@@ -39,7 +39,11 @@ function categoriesFor(lang: string) {
 }
 
 /** Loader CUMA baca DB — cepat. Row dianotasi `saved` (sudah ada di Library?). */
-export async function loader({ request, params }: LoaderFunctionArgs) {
+export function loader(...args: Parameters<typeof _loader>) {
+  return inUserContext(() => _loader(...args));
+}
+
+async function _loader({ request, params }: LoaderFunctionArgs) {
   await requireUser(request);
   const category = String(params.category ?? "");
   const lang = await getTargetLang();
@@ -106,7 +110,11 @@ export async function loader({ request, params }: LoaderFunctionArgs) {
 }
 
 /** Action = generate batch ekspresi via LLM (dipanggil dari client). */
-export async function action({ request, params }: ActionFunctionArgs) {
+export function action(...args: Parameters<typeof _action>) {
+  return inUserContext(() => _action(...args));
+}
+
+async function _action({ request, params }: ActionFunctionArgs) {
   await requireUser(request);
   const category = String(params.category ?? "");
   const lang = await getTargetLang();

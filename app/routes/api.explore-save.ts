@@ -1,6 +1,7 @@
 import type { ActionFunctionArgs } from "react-router";
 import { redirect } from "react-router";
 import { requireUser } from "~/lib/auth.server";
+import { inUserContext } from "~/lib/user-context";
 import {
   addExamplesToItem,
   findItemIdByText,
@@ -25,7 +26,11 @@ const TYPES: ItemType[] = [
  * Body JSON: { text, type, register, meaningId, notesId?, source?, exampleEn?, exampleId? }
  * Kalau item sudah ada → contoh (kalau ada) ditambahkan ke item lama.
  */
-export async function action({ request }: ActionFunctionArgs) {
+export function action(...args: Parameters<typeof _action>) {
+  return inUserContext(() => _action(...args));
+}
+
+async function _action({ request }: ActionFunctionArgs) {
   await requireUser(request);
   const body = await readBody<{
     text?: string;

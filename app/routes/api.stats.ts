@@ -6,14 +6,18 @@ import { items, llmUsage, quizSets } from "~/lib/db/schema";
 import { getTargetLang } from "~/lib/lang.server";
 import { laraStatus } from "~/lib/lara.server";
 import { todayStr } from "~/lib/utils.shared";
-import { requireUserId } from "~/lib/user-context";
+import { inUserContext, requireUserId } from "~/lib/user-context";
 
 /** Cache in-memory 60 detik — buka ulang halaman = instan (data statistik gak perlu realtime). */
 const statsCache = new Map<string, { at: number; data: unknown }>();
 const STATS_TTL = 60_000;
 
 /** GET /api/stats — data statistik untuk halaman Pengaturan (per-user). */
-export async function loader({ request }: LoaderFunctionArgs) {
+export function loader(...args: Parameters<typeof _loader>) {
+  return inUserContext(() => _loader(...args));
+}
+
+async function _loader({ request }: LoaderFunctionArgs) {
   await requireUser(request);
   const lang = await getTargetLang();
   const uid = requireUserId();

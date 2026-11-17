@@ -14,6 +14,7 @@ import {
   Volume2,
 } from "lucide-react";
 import { requireUser } from "~/lib/auth.server";
+import { inUserContext } from "~/lib/user-context";
 import { getTargetLang } from "~/lib/lang.server";
 import { ttsLang } from "~/lib/utils.shared";
 import { JaText, hasJa, splitReading } from "~/components/JaText";
@@ -88,7 +89,11 @@ const ACTION_LABEL: Record<string, string> = {
   know: "Ditandai sudah tahu",
 };
 
-export async function loader({ request }: { request: Request }) {
+export function loader(...args: Parameters<typeof _loader>) {
+  return inUserContext(() => _loader(...args));
+}
+
+async function _loader({ request }: { request: Request }) {
   await requireUser(request);
   // Data awal ikut SSR biar buka Bank langsung tampil (tanpa spinner fetch).
   // Filter level tetap client-fetch (refresh). Import server di-dynamic (RRv7).

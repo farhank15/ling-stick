@@ -1,5 +1,6 @@
 import type { ActionFunctionArgs, LoaderFunctionArgs } from "react-router";
 import { requireUser } from "~/lib/auth.server";
+import { inUserContext } from "~/lib/user-context";
 import {
   generateBankWords,
   listBank,
@@ -19,7 +20,11 @@ import { getTargetLang } from "~/lib/lang.server";
  * POST { id, action: "learn"|"know"|"reset" }
  * POST { action: "generate", level, count, topic? } → generate kata baru via LLM
  */
-export async function loader({ request }: LoaderFunctionArgs) {
+export function loader(...args: Parameters<typeof _loader>) {
+  return inUserContext(() => _loader(...args));
+}
+
+async function _loader({ request }: LoaderFunctionArgs) {
   await requireUser(request);
   const url = new URL(request.url);
 
@@ -43,7 +48,11 @@ export async function loader({ request }: LoaderFunctionArgs) {
  * DIDEFINISI DI DALAM action: kalau module-level, import server ikut ke bundle
  * client (RRv7 code-splitting cuma strip kode yang direferensikan loader/action).
  */
-export async function action({ request }: ActionFunctionArgs) {
+export function action(...args: Parameters<typeof _action>) {
+  return inUserContext(() => _action(...args));
+}
+
+async function _action({ request }: ActionFunctionArgs) {
   await requireUser(request);
 
   const parseLevel = async (raw: string | null | undefined): Promise<Cefr> => {

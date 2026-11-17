@@ -1,5 +1,6 @@
 import type { ActionFunctionArgs, LoaderFunctionArgs } from "react-router";
 import { requireUser } from "~/lib/auth.server";
+import { inUserContext } from "~/lib/user-context";
 import { deleteDeck, importDeck, listDecks, type ImportRow } from "~/lib/decks.server";
 
 /**
@@ -8,13 +9,21 @@ import { deleteDeck, importDeck, listDecks, type ImportRow } from "~/lib/decks.s
  * POST { op:"delete", deckId } → hapus deck + isi.
  * Resource route TANPA komponen (JSON mentah).
  */
-export async function loader({ request }: LoaderFunctionArgs) {
+export function loader(...args: Parameters<typeof _loader>) {
+  return inUserContext(() => _loader(...args));
+}
+
+async function _loader({ request }: LoaderFunctionArgs) {
   await requireUser(request);
   const { getTargetLang } = await import("~/lib/lang.server");
   return Response.json({ decks: await listDecks(await getTargetLang()) });
 }
 
-export async function action({ request }: ActionFunctionArgs) {
+export function action(...args: Parameters<typeof _action>) {
+  return inUserContext(() => _action(...args));
+}
+
+async function _action({ request }: ActionFunctionArgs) {
   await requireUser(request);
   const body = (await request.json().catch(() => ({}))) as {
     op?: string;

@@ -4,6 +4,7 @@ import { useEffect, useRef, useState } from "react";
 import { Form, useFetcher, useLoaderData, useNavigation } from "react-router";
 import { useToast } from "~/components/Toast";
 import { requireUser } from "~/lib/auth.server";
+import { inUserContext } from "~/lib/user-context";
 import { db } from "~/lib/db/client.server";
 import { llmUsage } from "~/lib/db/schema";
 import { env } from "~/lib/env.server";
@@ -34,7 +35,11 @@ const LANG_META: Record<TargetLang, { label: string; desc: string }> = {
   ja: { label: "日本語", desc: "Kana, kanji & tata bahasa per level JLPT, TTS ja-JP" },
 };
 
-export async function loader({ request }: LoaderFunctionArgs) {
+export function loader(...args: Parameters<typeof _loader>) {
+  return inUserContext(() => _loader(...args));
+}
+
+async function _loader({ request }: LoaderFunctionArgs) {
   await requireUser(request);
   // Paralel — hemat 1 round-trip Turso (dulu berurutan).
   const [[usage], lara, targetLang, fsrs] = await Promise.all([
@@ -66,7 +71,11 @@ export async function loader({ request }: LoaderFunctionArgs) {
 }
 
 /** POST action — ganti bahasa target aktif (en/ja) / simpan preferensi review. */
-export async function action({ request }: ActionFunctionArgs) {
+export function action(...args: Parameters<typeof _action>) {
+  return inUserContext(() => _action(...args));
+}
+
+async function _action({ request }: ActionFunctionArgs) {
   await requireUser(request);
   const body = (await request.json().catch(() => ({}))) as {
     lang?: string;

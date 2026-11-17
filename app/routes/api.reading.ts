@@ -1,5 +1,6 @@
 import type { ActionFunctionArgs } from "react-router";
 import { requireUser } from "~/lib/auth.server";
+import { inUserContext } from "~/lib/user-context";
 import { getTargetLang } from "~/lib/lang.server";
 import { isReadingLevelFor, readingLevels, type ReadingLevel } from "~/lib/reading.shared";
 
@@ -10,7 +11,11 @@ import { isReadingLevelFor, readingLevels, type ReadingLevel } from "~/lib/readi
  * selalu dapat HTML dokumen, res.json() throw → "Generate gagal" palsu padahal
  * row kepalang masuk DB. Jangan taruh JSON action di document route.
  */
-export async function action({ request }: ActionFunctionArgs) {
+export function action(...args: Parameters<typeof _action>) {
+  return inUserContext(() => _action(...args));
+}
+
+async function _action({ request }: ActionFunctionArgs) {
   await requireUser(request);
   const lang = await getTargetLang();
   const { bumpReadCount, deleteReading, generateReading, listReadings } = await import(
