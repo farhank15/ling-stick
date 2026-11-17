@@ -139,48 +139,59 @@ export function groupByTheme<T extends { char: string }>(rows: T[]): StudyGroup<
   return groups;
 }
 
+const IS_CJK = /[\u4e00-\u9faf]/;
+
 /**
- * Kelompokkan per radikal (pola bentuk). Keluarga >=2 tampil dulu, urut
- * jumlah anggota; sisanya digabung supaya tidak jadi puluhan section.
+ * Kelompokkan per POLA BENTUK (komponen penyusun). Berbeda dari versi lama
+ * yang cuma pakai 1 radikal resmi per kanji (mis. 安 ber-radikal 宀 padahal
+ * mengandung 女) — versi ini memakai dekomposisi komponen penuh (KRad):
+ * - Sebuah kanji tampil di SEMUA keluarga yang memuat komponennya
+ *   (multi-membership), anggota primer (kanji itu sendiri / radikal resmi)
+ *   diletakkan paling depan.
+ * - Keluarga = komponen CJK dengan >=2 anggota; diurutkan menurun. Sisanya
+ *   (komponen/frekuensi 1 atau tanpa data) digabung ke bucket "__single".
  */
-export function groupByRadical<T extends { char: string; strokes?: number }>(
-  rows: T[],
-): StudyGroup<T>[] {
-  const buckets = new Map<string, T[]>();
-  const unassigned: T[] = [];
-  for (const row of rows) {
-    const radical = ENTRIES[row.char]?.radical;
-    if (!radical) {
-      // Level lain belum punya kurasi radikal — jangan bikin grup "Radikal ?".
-      unassigned.push(row);
-      continue;
-    }
-    const list = buckets.get(radical) ?? [];
-    list.push(row);
-    buckets.set(radical, list);
-  }
-  const families = [...buckets.entries()]
-    .filter(([, list]) => list.length >= 2)
-    .sort((a, b) => b[1].length - a[1].length || a[0].localeCompare(b[0], "ja"));
-  const groups: StudyGroup<T>[] = families.map(([radical, list]) => ({
-    key: radical,
-    label: `Radikal ${radicalLabel(radical)}`,
-    hint: `${list.length} kanji memakai radikal ini — hafal satu pola, sisanya lebih mudah.`,
-    rows: byStrokes(list),
-  }));
-  const singles = [
-    ...[...buckets.values()].filter((list) => list.length === 1).flatMap((list) => list),
-    ...unassigned,
-  ];
+export function groupByRadical<
+  T extends { char: string; strokes?: number; components?: readonly string[] },
+>(rows: T[]): StudyGroup<T>[] {
+  const compOf = (r: T): string[] => {
+    if (r.components && r.components.length > 0) return r.components.filter((c) => IS_CJK.test(c));
+    const rad = ENTRIES[r.char]?.radical;
+    return rad ? [rad] : [];
+  };
+  const primaryOf = (r: T): string | null => ENTRIES[r.char]?.radical ?? r.components?.[0] ?? null;
+
+  // Frekuensi komponen di set yang sedang ditampilkan.
+  const freq = new Map<string, number>();
+  for (const r of rows) for (const p of compOf(r)) freq.set(p, (freq.get(p) ?? 0) + 1);
+  const keys = [...freq.entries()].filter(([, n]) => n >= 2).map(([k]) => k);
+
+  const byStrokesJa = (a: T, b: T) =>
+    (a.strokes ?? 99) - (b.strokes ?? 99) || a.char.localeCompare(b.char, "ja");
+  const families: StudyGroup<T>[] = keys.map((key) => {
+    const members = rows.filter((r) => compOf(r).includes(key));
+    const primary = members.filter((r) => r.char === key || primaryOf(r) === key);
+    const secondary = members.filter((r) => !primary.includes(r));
+    return {
+      key,
+      label: `Pola ${radicalLabel(key)}`,
+      hint: `${members.length} kanji memuat pola ini — hafal satu bentuk, sisanya lebih mudah.`,
+      rows: [...primary.sort(byStrokesJa), ...secondary.sort(byStrokesJa)],
+    };
+  });
+  families.sort((a, b) => b.rows.length - a.rows.length || a.key.localeCompare(b.key, "ja"));
+
+  const placed = new Set(families.flatMap((f) => f.rows));
+  const singles = rows.filter((r) => !placed.has(r));
   if (singles.length) {
-    groups.push({
+    families.push({
       key: "__single",
       label: "Belum punya keluarga",
-      hint: "Radikal belum dipetakan, atau belum muncul di kanji lain pada level ini.",
+      hint: "Komponen belum dipetakan, atau belum muncul di kanji lain pada level ini.",
       rows: byStrokes(singles),
     });
   }
-  return groups;
+  return families;
 }
 
 /* ── Pencarian kanji ──────────────────────────────────────────────────────
