@@ -10,6 +10,7 @@ import { getTargetLang } from "~/lib/lang.server";
 import { JaText, hasJa } from "~/components/JaText";
 import { and, eq, inArray, sql } from "drizzle-orm";
 import { useToast } from "~/components/Toast";
+import { requireUserId } from "~/lib/user-context";
 
 export const meta: MetaFunction = () => [{ title: "Explore — LingStick" }];
 export const handle = { title: "Explore" };
@@ -49,7 +50,13 @@ export async function loader({ request }: LoaderFunctionArgs) {
     const saved = await db
       .select({ textNorm: items.textNorm })
       .from(items)
-      .where(and(eq(items.lang, lang), inArray(items.textNorm, eotdRaw.map((r) => r.text.trim().toLowerCase()))));
+      .where(
+        and(
+          eq(items.lang, lang),
+          eq(items.userId, requireUserId()),
+          inArray(items.textNorm, eotdRaw.map((r) => r.text.trim().toLowerCase())),
+        ),
+      );
     for (const s of saved) savedNorms.add(s.textNorm);
   }
   const eotd = eotdRaw.map((r) => ({

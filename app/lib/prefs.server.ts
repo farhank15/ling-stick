@@ -1,7 +1,8 @@
 import { db } from "~/lib/db/client.server";
 import { settings } from "~/lib/db/schema";
 import { env } from "~/lib/env.server";
-import { eq } from "drizzle-orm";
+import { and, eq } from "drizzle-orm";
+import { requireUserId } from "~/lib/user-context";
 
 /**
  * Preferensi user yang bisa diubah dari UI (tabel settings).
@@ -33,16 +34,22 @@ function clamp(n: number, min: number, max: number): number {
 }
 
 async function readNumber(key: string): Promise<number | null> {
-  const [row] = await db.select({ value: settings.value }).from(settings).where(eq(settings.key, key)).limit(1);
+  const uid = requireUserId();
+  const [row] = await db
+    .select({ value: settings.value })
+    .from(settings)
+    .where(and(eq(settings.userId, uid), eq(settings.key, key)))
+    .limit(1);
   const n = Number(row?.value);
   return Number.isFinite(n) ? n : null;
 }
 
 async function writeSetting(key: string, value: string): Promise<void> {
+  const uid = requireUserId();
   await db
     .insert(settings)
-    .values({ key, value })
-    .onConflictDoUpdate({ target: settings.key, set: { value } });
+    .values({ key, value, userId: uid })
+    .onConflictDoUpdate({ target: [settings.userId, settings.key], set: { value } });
 }
 
 export async function getFsrsSettings(): Promise<FsrsSettings> {

@@ -1,11 +1,11 @@
 import type { LoaderFunctionArgs } from "react-router";
+import { and, eq, inArray } from "drizzle-orm";
 import { requireUser } from "~/lib/auth.server";
 import { db } from "~/lib/db/client.server";
 import {
   alternatives,
   cards,
   examples,
-  exploreItems,
   itemTags,
   items,
   quizSets,
@@ -13,6 +13,7 @@ import {
   settings,
   tags,
 } from "~/lib/db/schema";
+import { requireUserId } from "~/lib/user-context";
 
 /**
  * GET /api/export — backup JSON seluruh data.
@@ -21,19 +22,26 @@ import {
  */
 export async function loader({ request }: LoaderFunctionArgs) {
   await requireUser(request);
+  const uid = requireUserId();
 
-  const [its, exs, alts, tgs, itgs, cds, rls, exps, qs, sts] = await Promise.all([
-    db.select().from(items),
-    db.select().from(examples),
-    db.select().from(alternatives),
-    db.select().from(tags),
-    db.select().from(itemTags),
-    db.select().from(cards),
-    db.select().from(reviewLogs),
-    db.select().from(exploreItems),
-    db.select().from(quizSets),
-    db.select().from(settings),
+  const its = await db.select().from(items).where(eq(items.userId, uid));
+  const ids = its.map((r) => r.id);
+  const [exs, alts, itgs, cds, rls] = await Promise.all([
+    ids.length ? db.select().from(examples).where(inArray(examples.itemId, ids)) : [],
+    ids.length ? db.select().from(alternatives).where(inArray(alternatives.itemId, ids)) : [],
+    ids.length ? db.select().from(itemTags).where(inArray(itemTags.itemId, ids)) : [],
+    ids.length ? db.select().from(cards).where(inArray(cards.itemId, ids)) : [],
+    ids.length
+      ? db
+          .select()
+          .from(reviewLogs)
+          .where(and(inArray(reviewLogs.itemId, ids), eq(reviewLogs.userId, uid)))
+      : [],
   ]);
+  const qs = await db.select().from(quizSets).where(eq(quizSets.userId, uid));
+  const sts = await db.select().from(settings).where(eq(settings.userId, uid));
+  const tagIds = [...new Set(itgs.map((r) => r.tagId))];
+  const tgs = tagIds.length ? await db.select().from(tags).where(inArray(tags.id, tagIds)) : [];
 
   const payload = {
     app: "lingstick",
@@ -93,20 +101,6 @@ export async function loader({ request }: LoaderFunctionArgs) {
       reviewed_at: r.reviewedAt,
       state: r.state,
       due: r.due,
-    })),
-    explore_items: exps.map((r) => ({
-      id: r.id,
-      category: r.category,
-      text: r.text,
-      type: r.type,
-      register: r.register,
-      meaning_id: r.meaningId,
-      use_when_id: r.useWhenId,
-      example_en: r.exampleEn,
-      example_id: r.exampleId,
-      examples_json: r.examplesJson,
-      hidden: r.hidden,
-      created_at: r.createdAt,
     })),
     quiz_sets: qs.map((r) => ({
       id: r.id,

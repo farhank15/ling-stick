@@ -12,6 +12,7 @@ import { SpeakButton } from "~/components/SpeakButton";
 import { and, asc, eq, inArray } from "drizzle-orm";
 import { saveExploreRow } from "~/lib/items.server";
 import { useToast } from "~/components/Toast";
+import { requireUserId } from "~/lib/user-context";
 
 export const handle = { title: "Explore", ownHeader: true };
 export const meta: MetaFunction = () => [{ title: "Explore — LingStick" }];
@@ -63,14 +64,20 @@ export async function loader({ request, params }: LoaderFunctionArgs) {
     const saved = await db
       .select({ textNorm: items.textNorm })
       .from(items)
-      .where(and(eq(items.lang, await getTargetLang()), inArray(items.textNorm, normTexts)));
+      .where(
+        and(
+          eq(items.lang, await getTargetLang()),
+          eq(items.userId, requireUserId()),
+          inArray(items.textNorm, normTexts),
+        ),
+      );
     for (const s of saved) savedNorms.add(s.textNorm);
   }
 
   const [autoMarker] = await db
     .select()
     .from(settings)
-    .where(eq(settings.key, autoGenKey(category)))
+    .where(and(eq(settings.key, autoGenKey(category)), eq(settings.userId, requireUserId())))
     .limit(1);
 
   // Ekspresi yang udah ada di Library (tersimpan) dibuang dari daftar —

@@ -1,8 +1,9 @@
 import { and, eq, ne, inArray, sql } from "drizzle-orm";
-import { db } from "~/lib/db/client.server";
-import { cards, examples, items, wordbank } from "~/lib/db/schema";
+import { db, getRawClient } from "~/lib/db/client.server";
+import { cards, examples, items, wordbank, wordbankProgress } from "~/lib/db/schema";
 import { getTargetLang, detectLang } from "~/lib/lang.server";
 import { normalizeText } from "~/lib/utils.shared";
+import { requireUserId } from "~/lib/user-context";
 
 /** Bank Kata — BLUEPRINT §3 (katalog kosakata per level CEFR, koleksi selalu bertambah). */
 
@@ -64,145 +65,146 @@ export function isLevel(v: string | null | undefined): v is Cefr {
   return isCefr(v) || (!!v && (JLPT_LEVELS as readonly string[]).includes(v));
 }
 
-/** List entri bank; filter level & status. Contoh di-prefetch 1 query (anti N+1). Semua ter-scope bahasa aktif.
- *  Mode JA: entri type "kana" gak ikut — aksara punya menu sendiri di Home (halaman Aksara). */
+/** List entri bank; filter level & status. Katalog bersama + status belajar per-user.
+ *  Mode JA: entri type "kana" gak ikut — aksara punya menu sendiri (halaman Aksara). */
 export async function listBank(filter: { cefr?: string; status?: string } = {}) {
   const lang = await getTargetLang();
-  const conds = [eq(wordbank.lang, lang)];
-  if (lang === "ja") {
-    // Aksara punya menu sendiri (Home → Aksara): entri kana (あ, カ, dsb.) gak tampil
-    // di Bank. Partikel tetap masuk — itu materi grammar, bukan aksara.
-    conds.push(ne(wordbank.type, "kana"));
-  }
-  if (isLevel(filter.cefr)) conds.push(eq(wordbank.cefr, filter.cefr));
+  const uid = requireUserId();
+  const baseConds = [eq(wordbank.lang, lang)];
+  if (lang === "ja") baseConds.push(ne(wordbank.type, "kana"));
+  if (isLevel(filter.cefr)) baseConds.push(eq(wordbank.cefr, filter.cefr));
+
+  const [catalog, prog] = await Promise.all([
+    db.select().from(wordbank).where(and(...baseConds)).limit(600),
+    db.select().from(wordbankProgress).where(eq(wordbankProgress.userId, uid)),
+  ]);
+  const progMap = new Map(prog.map((p) => [p.bankId, p]));
+
+  const merged = catalog.map((r) => {
+    const p = progMap.get(r.id);
+    return p
+      ? { ...parseRow(r), status: p.status as BankEntry["status"], itemId: p.itemId }
+      : parseRow(r);
+  });
   if (filter.status && ["new", "learning", "known"].includes(filter.status)) {
-    conds.push(eq(wordbank.status, filter.status));
+    return merged.filter((r) => r.status === filter.status);
   }
-  const rows = await db
-    .select()
-    .from(wordbank)
-    .where(conds.length ? and(...conds) : undefined)
-    .orderBy(sql`CASE ${wordbank.cefr} WHEN 'A1' THEN 1 WHEN 'A2' THEN 2 WHEN 'B1' THEN 3 WHEN 'B2' THEN 4 WHEN 'C1' THEN 5 ELSE 6 END`, wordbank.id)
-    .limit(600);
-  return rows.map(parseRow);
+  return merged;
 }
 
-/** Badge count per level CEFR/JLPT + per status — 1 query GROUP BY. Ter-scope bahasa aktif.
- *  Mode JA kana di-exclude biar badge count = isi list Bank (kana dihitung di menu Aksara).
- *  byLevel/total = status "new" SAJA (selaras list Bank yang filter status=new);
- *  row belajar/hafal dipertahankan di DB tapi tidak dihitung sebagai katalog. */
+/** Badge count per level CEFR/JLPT + per status — per-user (katalog + progress).
+ *  Mode JA kana di-exclude biar badge count = isi list Bank (kana dihitung di menu Aksara). */
 export async function getBankStats() {
   const lang = await getTargetLang();
+  const uid = requireUserId();
   const baseConds =
     lang === "ja" ? [eq(wordbank.lang, lang), ne(wordbank.type, "kana")] : [eq(wordbank.lang, lang)];
-  const statConds = and(...baseConds);
-  // Dua agregasi independen — paralel (hemat 1 round-trip Turso).
-  const [perLevel, perStatus] = await Promise.all([
-    db
-      .select({ cefr: wordbank.cefr, total: sql<number>`count(*)` })
-      .from(wordbank)
-      .where(and(statConds, eq(wordbank.status, "new")))
-      .groupBy(wordbank.cefr),
-    db
-      .select({ status: wordbank.status, total: sql<number>`count(*)` })
-      .from(wordbank)
-      .where(statConds)
-      .groupBy(wordbank.status),
+
+  const [catalog, prog] = await Promise.all([
+    db.select().from(wordbank).where(and(...baseConds)),
+    db.select().from(wordbankProgress).where(eq(wordbankProgress.userId, uid)),
   ]);
-  const byLevel = Object.fromEntries(perLevel.map((r) => [r.cefr, Number(r.total)])) as Record<string, number>;
-  const byStatus = Object.fromEntries(perStatus.map((r) => [r.status, Number(r.total)])) as Record<string, number>;
+  const adopted = new Set(prog.map((p) => p.bankId));
+  const unadopted = catalog.filter((r) => !adopted.has(r.id));
+
+  const byLevel: Record<string, number> = {};
+  for (const r of unadopted) byLevel[r.cefr] = (byLevel[r.cefr] ?? 0) + 1;
+  const learning = prog.filter((p) => p.status === "learning").length;
+  const known = prog.filter((p) => p.status === "known").length;
   return {
     byLevel,
-    byStatus,
-    total: Object.values(byLevel).reduce((a, b) => a + b, 0),
-    learning: byStatus.learning ?? 0,
-    known: byStatus.known ?? 0,
+    byStatus: { new: unadopted.length, learning, known },
+    total: unadopted.length,
+    learning,
+    known,
   };
 }
 
-/** Tandai "mau dipelajari": kirim ke Library + bikin kartu FSRS (jalan mulai sekarang). */
-export async function startLearning(bankId: number) {
-  const [entry] = await db.select().from(wordbank).where(eq(wordbank.id, bankId)).limit(1);
-  if (!entry) throw new Error("Entri tidak ada");
-  if (entry.status === "learning") return entry.itemId;
-  if (entry.status === "known") {
-    // Sudah tahu → tetap boleh dipelajari lagi.
-    await db.update(items).set({ status: "learning" }).where(eq(items.id, entry.itemId!));
-    await db.update(wordbank).set({ status: "learning" }).where(eq(wordbank.id, bankId));
-    return entry.itemId;
-  }
+async function upsertProgress(uid: number, bankId: number, status: string, itemId: number | null) {
+  await db
+    .insert(wordbankProgress)
+    .values({ userId: uid, bankId, status, itemId, updatedAt: Date.now() })
+    .onConflictDoUpdate({
+      target: [wordbankProgress.userId, wordbankProgress.bankId],
+      set: { status, itemId, updatedAt: Date.now() },
+    });
+}
 
+/** Pastikan item Library + kartu FSRS ada untuk entri bank (milik user). */
+async function ensureItemForBank(entry: typeof wordbank.$inferSelect, uid: number): Promise<number> {
   const norm = normalizeText(entry.text);
-  const [existing] = await db
-    .select()
-    .from(items)
-    .where(and(eq(items.textNorm, norm), eq(items.lang, entry.lang)))
-    .limit(1);
-  let itemId: number;
-  if (existing) {
-    itemId = existing.id;
-    await db.update(items).set({ status: "learning" }).where(eq(items.id, itemId));
-  } else {
-    const exs = (JSON.parse(entry.examplesJson || "[]") as BankExample[]).slice(0, 3);      const [created] = await db
-      .insert(items)
-      .values({
-        text: entry.text,
-        textNorm: norm,
-        type: entry.type,
-        lang: entry.lang,
-        reading: entry.reading ?? null,
-        register: entry.register,
-        meaningId: entry.meaningId,
-        notesId: entry.useWhenId ? `Dipakai saat: ${entry.useWhenId}` : null,
-        source: `Bank Kata (${entry.cefr})`,
-        status: "learning",
-        createdAt: Date.now(),
-      })
-      .onConflictDoNothing()
-      .returning();
-    if (created) {
-      itemId = created.id;
-    } else {
-      const [again] = await db.select().from(items).where(eq(items.textNorm, norm)).limit(1);
-      if (!again) throw new Error("Gagal impor kata");
-      itemId = again.id;
-    }
-    if (exs.length) {
-      await db
-        .insert(examples)
-        .values(
-          exs.map((e) => ({
-            itemId,
-            register: "neutral",
-            en: e.en,
-            idText: e.id,
-          })),
-        )
-        .onConflictDoNothing();
-    }
+  const exRows = await getRawClient().execute({
+    sql: "SELECT id FROM items WHERE text_norm = ? AND lang = ? AND user_id = ? LIMIT 1",
+    args: [norm, entry.lang, uid],
+  });
+  const existingId = Number(exRows.rows[0]?.id) || null;
+  if (existingId) {
+    await db.update(items).set({ status: "learning" }).where(eq(items.id, existingId));
+    return existingId;
   }
-
-  // Kartu FSRS: bikin kalau belum ada (due = sekarang → langsung masuk latihan).
+  const exs = (JSON.parse(entry.examplesJson || "[]") as BankExample[]).slice(0, 3);
+  await db
+    .insert(items)
+    .values({
+      text: entry.text,
+      textNorm: norm,
+      type: entry.type,
+      lang: entry.lang,
+      reading: entry.reading ?? null,
+      register: entry.register,
+      meaningId: entry.meaningId,
+      notesId: entry.useWhenId ? `Dipakai saat: ${entry.useWhenId}` : null,
+      source: `Bank Kata (${entry.cefr})`,
+      status: "learning",
+      createdAt: Date.now(),
+      userId: uid,
+    })
+    .onConflictDoNothing();
+  const rows = await getRawClient().execute({
+    sql: "SELECT id FROM items WHERE text_norm = ? AND user_id = ? LIMIT 1",
+    args: [norm, uid],
+  });
+  const itemId = Number(rows.rows[0]?.id);
+  if (!itemId) throw new Error("Gagal impor kata");
+  if (exs.length) {
+    await db
+      .insert(examples)
+      .values(exs.map((e) => ({ itemId, register: "neutral", en: e.en, idText: e.id })))
+      .onConflictDoNothing();
+  }
   const [card] = await db.select().from(cards).where(eq(cards.itemId, itemId)).limit(1);
   if (!card) {
     const now = Date.now();
-    await db.insert(cards).values({ itemId, due: now, reps: 0, lapses: 0, state: 0, learningSteps: 0 });
+    await db.insert(cards).values({ itemId, due: now, reps: 0, lapses: 0, state: 0, learningSteps: 0, userId: uid });
   }
-  // Sudah masuk Library → hapus dari bank (biar bank cuma isi katalog yang belum diproses).
-  await db.delete(wordbank).where(eq(wordbank.id, bankId));
   return itemId;
 }
 
-/** Tandai "sudah tahu": item di Library ikut di-known lalu entri dihapus dari bank. */
-export async function markKnown(bankId: number) {
+/** Tandai "mau dipelajari": kirim ke Library + bikin kartu FSRS (status per-user). */
+export async function startLearning(bankId: number) {
+  const uid = requireUserId();
   const [entry] = await db.select().from(wordbank).where(eq(wordbank.id, bankId)).limit(1);
   if (!entry) throw new Error("Entri tidak ada");
-  if (entry.itemId) {
-    await db.update(items).set({ status: "known" }).where(eq(items.id, entry.itemId));
+  const itemId = await ensureItemForBank(entry, uid);
+  await upsertProgress(uid, bankId, "learning", itemId);
+  return itemId;
+}
+
+/** Tandai "sudah tahu": item di Library ikut di-known + progress per-user. */
+export async function markKnown(bankId: number) {
+  const uid = requireUserId();
+  const [entry] = await db.select().from(wordbank).where(eq(wordbank.id, bankId)).limit(1);
+  if (!entry) throw new Error("Entri tidak ada");
+  const [prog] = await db
+    .select()
+    .from(wordbankProgress)
+    .where(and(eq(wordbankProgress.userId, uid), eq(wordbankProgress.bankId, bankId)))
+    .limit(1);
+  const itemId = prog?.itemId ?? entry.itemId;
+  if (itemId) {
+    await db.update(items).set({ status: "known" }).where(and(eq(items.id, itemId), eq(items.userId, uid)));
   }
-  // Row bank TETAP ada (status=known) — dulu di-DELETE, bikin entri yang udah
-  // ditandai hafal muncul lagi di list setelah refresh.
-  await db.update(wordbank).set({ status: "known" }).where(eq(wordbank.id, bankId));
+  await upsertProgress(uid, bankId, "known", itemId);
 }
 
 /* ── Generate kata baru via LLM ─────────────────────────────── */
@@ -370,87 +372,52 @@ async function insertGeneratedJa(
 /**
  * Tandai entri bank "mau dipelajari" TANPA menghapus row-nya (dipakai halaman
  * Aksara/kanji: daftar tetap lengkap, status berubah jadi filter belajar/hafal).
- * startLearning (Bank) vs ini: Bank menghapus entri yang sudah diproses.
+ * Status tersimpan per-user di wordbank_progress.
  */
 export async function learnBankKeep(bankId: number): Promise<number | null> {
+  const uid = requireUserId();
   const [entry] = await db.select().from(wordbank).where(eq(wordbank.id, bankId)).limit(1);
   if (!entry) return null;
-  let itemId = entry.itemId;
-  const norm = normalizeText(entry.text);
-  if (!itemId) {
-    const [existing] = await db
-      .select({ id: items.id })
-      .from(items)
-      .where(and(eq(items.textNorm, norm), eq(items.lang, entry.lang)))
-      .limit(1);
-    if (existing) {
-      itemId = existing.id;
-    } else {
-      const [created] = await db
-        .insert(items)
-        .values({
-          text: entry.text,
-          textNorm: norm,
-          type: entry.type,
-          lang: entry.lang,
-          reading: entry.reading ?? null,
-          register: entry.register,
-          meaningId: entry.meaningId,
-          notesId: entry.useWhenId ? `Dipakai saat: ${entry.useWhenId}` : null,
-          source: `Aksara (${entry.cefr})`,
-          status: "learning",
-          createdAt: Date.now(),
-        })
-        .onConflictDoNothing()
-        .returning();
-      itemId = created?.id ?? null;
-    }
-    if (itemId) {
-      await db.update(wordbank).set({ itemId, status: "learning" }).where(eq(wordbank.id, bankId));
-      const [card] = await db.select().from(cards).where(eq(cards.itemId, itemId)).limit(1);
-      if (!card) {
-        await db.insert(cards).values({ itemId, due: Date.now(), reps: 0, lapses: 0, state: 0, learningSteps: 0 });
-      }
-      // Contoh dari bank ikut dibuatin sekali.
-      const exs = (JSON.parse(entry.examplesJson || "[]") as BankExample[]).slice(0, 3);
-      if (exs.length) {
-        await db
-          .insert(examples)
-          .values(exs.map((e) => ({ itemId: itemId!, register: "neutral", en: e.en, idText: e.id })))
-          .onConflictDoNothing();
-      }
-    }
-  } else {
-    await db.update(items).set({ status: "learning" }).where(eq(items.id, itemId));
-    await db.update(wordbank).set({ status: "learning" }).where(eq(wordbank.id, bankId));
-  }
+  const itemId = await ensureItemForBank(entry, uid);
+  await upsertProgress(uid, bankId, "learning", itemId);
   return itemId;
 }
 
-/** Tandai entri bank "sudah hafal" (status saja — row tetap ada buat filter). */
+/** Tandai entri bank "sudah hafal" (progress per-user — row katalog tetap ada). */
 export async function markBankKnownKeep(bankId: number): Promise<void> {
+  const uid = requireUserId();
   const [entry] = await db.select().from(wordbank).where(eq(wordbank.id, bankId)).limit(1);
   if (!entry) return;
-  if (entry.itemId) {
-    await db.update(items).set({ status: "known" }).where(eq(items.id, entry.itemId));
+  const [prog] = await db
+    .select()
+    .from(wordbankProgress)
+    .where(and(eq(wordbankProgress.userId, uid), eq(wordbankProgress.bankId, bankId)))
+    .limit(1);
+  const itemId = prog?.itemId ?? entry.itemId;
+  if (itemId) {
+    await db.update(items).set({ status: "known" }).where(and(eq(items.id, itemId), eq(items.userId, uid)));
   }
-  await db.update(wordbank).set({ status: "known" }).where(eq(wordbank.id, bankId));
+  await upsertProgress(uid, bankId, "known", itemId);
 }
 
 /** Sinkronkan status bank dari status item Library (mis. item di-known dari quiz). */
 export async function syncBankFromItems() {
-  const rows = await db.select().from(wordbank).where(eq(wordbank.status, "learning"));
+  const uid = requireUserId();
+  const rows = await db
+    .select()
+    .from(wordbankProgress)
+    .where(and(eq(wordbankProgress.userId, uid), eq(wordbankProgress.status, "learning")));
   if (!rows.length) return;
   const ids = rows.map((r) => r.itemId).filter((v): v is number => typeof v === "number");
   if (!ids.length) return;
   const itemRows = await db
     .select({ id: items.id, status: items.status })
     .from(items)
-    .where(inArray(items.id, ids));
+    .where(and(inArray(items.id, ids), eq(items.userId, uid)));
   const map = new Map(itemRows.map((r) => [r.id, r.status]));
   for (const r of rows) {
     if (r.itemId && map.get(r.itemId) === "known") {
-      await db.update(wordbank).set({ status: "known" }).where(eq(wordbank.id, r.id));
+      await db.update(wordbankProgress).set({ status: "known", updatedAt: Date.now() }).where(and(eq(wordbankProgress.userId, uid), eq(wordbankProgress.bankId, r.bankId)));
     }
   }
 }

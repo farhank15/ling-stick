@@ -3,6 +3,7 @@ import { db } from "./db/client.server";
 import { cards, decks, examples, items } from "./db/schema";
 import { normalizeText } from "./items.server";
 import { newCardRow } from "./fsrs.server";
+import { requireUserId } from "./user-context";
 
 /**
  * Decks impor (TSV user) — terpisah dari Library.
@@ -24,10 +25,11 @@ export type DeckRow = {
 };
 
 export async function listDecks(lang?: string): Promise<DeckRow[]> {
+  const uid = requireUserId();
   const rows = await db
     .select()
     .from(decks)
-    .where(lang ? eq(decks.lang, lang) : undefined)
+    .where(and(eq(decks.userId, uid), lang ? eq(decks.lang, lang) : undefined))
     .orderBy(decks.createdAt);
   return rows.map((d) => ({
     id: d.id,
@@ -43,7 +45,8 @@ export async function listDecks(lang?: string): Promise<DeckRow[]> {
 }
 
 export async function getDeck(deckId: number) {
-  const [d] = await db.select().from(decks).where(eq(decks.id, deckId)).limit(1);
+  const uid = requireUserId();
+  const [d] = await db.select().from(decks).where(and(eq(decks.id, deckId), eq(decks.userId, uid))).limit(1);
   return d ?? null;
 }
 
@@ -68,6 +71,7 @@ export async function importDeck(
   if (rows.length === 0) throw new Error("Tidak ada baris");
   if (rows.length > 10_000) throw new Error("Maks 10.000 baris per deck");
   const lang = meta.lang === "en" ? "en" : "ja";
+  const uid = requireUserId();
 
   const [deck] = await db
     .insert(decks)
@@ -80,6 +84,7 @@ export async function importDeck(
       count: 0,
       skipped: 0,
       createdAt: Date.now(),
+      userId: uid,
     })
     .returning();
   if (!deck) throw new Error("Gagal buat deck");
@@ -122,6 +127,7 @@ export async function importDeck(
             deckId: deck.id,
             extraJson: r.extra && Object.keys(r.extra).length > 0 ? JSON.stringify(r.extra) : null,
             needsId: meaning ? 0 : 1,
+            userId: uid,
           })
           .onConflictDoNothing()
           .returning({ id: items.id });
@@ -130,7 +136,7 @@ export async function importDeck(
           continue;
         }
         const card = newCardRow(item.id);
-        await tx.insert(cards).values(card).onConflictDoNothing();
+        await tx.insert(cards).values({ ...card, userId: uid }).onConflictDoNothing();
         // Contoh kalimat (kalau ada) — ikut terhapus via cascade saat deck dihapus.
         if (r.examples && r.examples.length > 0) {
           await tx.insert(examples).values(
@@ -154,8 +160,9 @@ export async function importDeck(
 
 /** Hapus deck + semua item + kartu + contoh (cascade). */
 export async function deleteDeck(deckId: number): Promise<number> {
+  const uid = requireUserId();
   const itemIds = (
-    await db.select({ id: items.id }).from(items).where(eq(items.deckId, deckId))
+    await db.select({ id: items.id }).from(items).where(and(eq(items.deckId, deckId), eq(items.userId, uid)))
   ).map((r) => r.id);
   if (itemIds.length > 0) {
     // Hapus per chunk biar placeholder SQLite tak jebol.
@@ -166,24 +173,26 @@ export async function deleteDeck(deckId: number): Promise<number> {
       await db.delete(items).where(inArray(items.id, chunk));
     }
   }
-  await db.delete(decks).where(eq(decks.id, deckId));
+  await db.delete(decks).where(and(eq(decks.id, deckId), eq(decks.userId, uid)));
   return itemIds.length;
 }
 
 /** Item ID satu deck — untuk scope kuis/flashcard via filter itemIds yang sudah ada. */
 export async function deckItemIds(deckId: number): Promise<number[]> {
+  const uid = requireUserId();
   const rows = await db
     .select({ id: items.id })
     .from(items)
-    .where(and(eq(items.deckId, deckId), eq(items.status, "learning")));
+    .where(and(eq(items.deckId, deckId), eq(items.userId, uid), eq(items.status, "learning")));
   return rows.map((r) => r.id);
 }
 
 /** Hitung needs-ID per deck (arti kosong). */
 export async function deckNeedsId(deckId: number): Promise<number> {
+  const uid = requireUserId();
   const [row] = await db
     .select({ c: sql<number>`COUNT(*)` })
     .from(items)
-    .where(and(eq(items.deckId, deckId), eq(items.needsId, 1)));
+    .where(and(eq(items.deckId, deckId), eq(items.userId, uid), eq(items.needsId, 1)));
   return Number(row?.c ?? 0);
 }

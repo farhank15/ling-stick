@@ -6,6 +6,7 @@ import { env } from "~/lib/env.server";
 import { getTargetLang } from "~/lib/lang.server";
 import { normalizeText } from "~/lib/utils.shared";
 import { and, eq, like } from "drizzle-orm";
+import { requireUserId } from "~/lib/user-context";
 
 /**
  * GET /api/suggest?q= — autocomplete kata (BLUEPRINT §7).
@@ -21,7 +22,13 @@ export async function loader({ request }: LoaderFunctionArgs) {
   const own = await db
     .select({ text: items.text })
     .from(items)
-    .where(and(like(items.textNorm, `%${q}%`), eq(items.lang, await getTargetLang())))
+    .where(
+      and(
+        like(items.textNorm, `%${q}%`),
+        eq(items.lang, await getTargetLang()),
+        eq(items.userId, requireUserId()),
+      ),
+    )
     .limit(5);
 
   // 2) Datamuse ( gratis, tanpa key ) — gagal diam-diam.

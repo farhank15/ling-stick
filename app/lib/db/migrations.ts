@@ -116,6 +116,26 @@ export const MIGRATIONS: string[] = [
   );
   CREATE INDEX IF NOT EXISTS sessions_expires_idx ON sessions(expires_at);
 
+  -- Multi-user: akun lokal (username+password scrypt) + bootstrap password.
+  CREATE TABLE IF NOT EXISTS users (
+    id              INTEGER PRIMARY KEY AUTOINCREMENT,
+    username        TEXT,
+    display_name    TEXT NOT NULL,
+    provider        TEXT NOT NULL DEFAULT 'local',
+    password_hash   TEXT,
+    password_salt   TEXT,
+    is_owner        INTEGER NOT NULL DEFAULT 0,
+    created_at      INTEGER NOT NULL,
+    last_login_at   INTEGER
+  );
+  CREATE UNIQUE INDEX IF NOT EXISTS users_username_uq ON users(username);
+
+  -- Metadata migrasi (marker untuk rebuild satu-kali, dsb).
+  CREATE TABLE IF NOT EXISTS app_meta (
+    key   TEXT PRIMARY KEY,
+    value TEXT NOT NULL
+  );
+
   CREATE TABLE IF NOT EXISTS llm_usage (
     day   TEXT PRIMARY KEY,
     calls INTEGER NOT NULL DEFAULT 0
@@ -322,6 +342,40 @@ const TOLERANT_MIGRATIONS: string[] = [
   `ALTER TABLE items ADD COLUMN extra_json TEXT`,
   `ALTER TABLE items ADD COLUMN needs_id INTEGER NOT NULL DEFAULT 0`,
   `CREATE INDEX IF NOT EXISTS items_deck_idx ON items(deck_id)`,
+  // Multi-user: kolom user_id + akun lokal — aditif, null sampai diklaim user pertama.
+  `ALTER TABLE users ADD COLUMN username TEXT`,
+  `ALTER TABLE users ADD COLUMN password_hash TEXT`,
+  `ALTER TABLE users ADD COLUMN password_salt TEXT`,
+  `CREATE UNIQUE INDEX IF NOT EXISTS users_username_uq ON users(username)`,
+  `ALTER TABLE sessions ADD COLUMN user_id INTEGER`,
+  `ALTER TABLE sessions ADD COLUMN last_seen_at INTEGER`,
+  `ALTER TABLE items ADD COLUMN user_id INTEGER`,
+  `ALTER TABLE decks ADD COLUMN user_id INTEGER`,
+  `ALTER TABLE cards ADD COLUMN user_id INTEGER`,
+  `ALTER TABLE review_logs ADD COLUMN user_id INTEGER`,
+  `ALTER TABLE settings ADD COLUMN user_id INTEGER`,
+  `ALTER TABLE quiz_sets ADD COLUMN user_id INTEGER`,
+  `ALTER TABLE quiz_answers ADD COLUMN user_id INTEGER`,
+  `ALTER TABLE kanji_cards ADD COLUMN user_id INTEGER`,
+  `ALTER TABLE kanji_known ADD COLUMN user_id INTEGER`,
+  `ALTER TABLE chat_sessions ADD COLUMN user_id INTEGER`,
+  `ALTER TABLE route_notes ADD COLUMN user_id INTEGER`,
+  `CREATE INDEX IF NOT EXISTS sessions_user_idx ON sessions(user_id)`,
+  `CREATE INDEX IF NOT EXISTS items_user_idx ON items(user_id)`,
+  `CREATE INDEX IF NOT EXISTS quiz_sets_user_idx ON quiz_sets(user_id)`,
+  `CREATE INDEX IF NOT EXISTS kanji_cards_user_idx ON kanji_cards(user_id)`,
+  `CREATE INDEX IF NOT EXISTS chat_sessions_user_idx ON chat_sessions(user_id)`,
+  `ALTER TABLE wordbank ADD COLUMN user_id INTEGER`,
+  `CREATE INDEX IF NOT EXISTS wordbank_user_idx ON wordbank(user_id)`,
+  `CREATE TABLE IF NOT EXISTS wordbank_progress (
+    user_id INTEGER NOT NULL,
+    bank_id INTEGER NOT NULL,
+    status TEXT NOT NULL DEFAULT 'learning',
+    item_id INTEGER,
+    updated_at INTEGER NOT NULL,
+    PRIMARY KEY (user_id, bank_id)
+  )`,
+  `CREATE INDEX IF NOT EXISTS wordbank_progress_user_idx ON wordbank_progress(user_id)`,
 ];
 
 /** Seed awal Bank Kata — jalan sekali (skip kalau bank sudah berisi). */
@@ -432,6 +486,174 @@ async function seedWordbank(client: Client): Promise<void> {
   }
 }
 
+/**
+ * Rebuild satu-kali menuju constraint per-user (UNIQUE/PK komposit user_id).
+ * Dijaga marker app_meta('isolation_v1') — hanya efektif sekali (aman
+ * idempotent di deploy berikutnya). Data dipertahankan (id & isi utuh).
+ */
+async function runIsolationRebuilds(client: Client): Promise<void> {
+  const meta = await client.execute("SELECT value FROM app_meta WHERE key = 'isolation_v1'");
+  if (meta.rows.length > 0) return;
+
+  // SQLite secara default me-rewrite SEMUA referensi (FK di tabel anak, trigger,
+  // content= FTS5) saat ALTER TABLE RENAME. Karena tabel legacy langsung di-drop
+  // setelah copy, referensi itu akan menggantung → INSERT anak gagal
+  // ("no such table: main.items_legacy"). foreign_keys=OFF (wajib — FK selalu
+  // di-rewrite walau legacy_alter_table=ON) + legacy_alter_table=ON mematikan
+  // rewrite itu: tabel anak tetap menunjuk nama "items" yang dibuat ulang.
+  await client.execute("PRAGMA foreign_keys=OFF");
+  await client.execute("PRAGMA legacy_alter_table=ON");
+
+  // settings → PK(user_id, key)
+  await client.executeMultiple(`
+    ALTER TABLE settings RENAME TO settings_legacy;
+    CREATE TABLE settings (
+      key TEXT NOT NULL,
+      value TEXT NOT NULL,
+      user_id INTEGER,
+      PRIMARY KEY (user_id, key)
+    );
+    INSERT INTO settings (key, value, user_id) SELECT key, value, user_id FROM settings_legacy;
+    DROP TABLE settings_legacy;
+  `);
+
+  // items → UNIQUE(user_id, text_norm); pertahankan FTS + triggers.
+  await client.executeMultiple(`
+    DROP TRIGGER IF EXISTS items_ai;
+    DROP TRIGGER IF EXISTS items_ad;
+    DROP TRIGGER IF EXISTS items_au;
+    ALTER TABLE items RENAME TO items_legacy;
+    CREATE TABLE items (
+      id INTEGER PRIMARY KEY,
+      text TEXT NOT NULL,
+      text_norm TEXT NOT NULL,
+      type TEXT NOT NULL,
+      register TEXT NOT NULL DEFAULT 'neutral',
+      meaning_id TEXT,
+      notes_id TEXT,
+      source TEXT,
+      confidence TEXT DEFAULT 'medium',
+      status TEXT NOT NULL DEFAULT 'learning',
+      hide_meaning INTEGER NOT NULL DEFAULT 0,
+      lang TEXT NOT NULL DEFAULT 'en',
+      reading TEXT,
+      created_at INTEGER NOT NULL,
+      deck_id INTEGER,
+      extra_json TEXT,
+      needs_id INTEGER NOT NULL DEFAULT 0,
+      user_id INTEGER,
+      UNIQUE(user_id, text_norm)
+    );
+    INSERT INTO items (id, text, text_norm, type, register, meaning_id, notes_id, source, confidence, status,
+                       hide_meaning, lang, reading, created_at, deck_id, extra_json, needs_id, user_id)
+      SELECT id, text, text_norm, type, register, meaning_id, notes_id, source, confidence, status,
+             hide_meaning, lang, reading, created_at, deck_id, extra_json, needs_id, user_id
+      FROM items_legacy;
+    DROP TABLE items_legacy;
+    CREATE INDEX IF NOT EXISTS items_status_idx ON items(status);
+    CREATE INDEX IF NOT EXISTS items_deck_idx ON items(deck_id);
+    CREATE INDEX IF NOT EXISTS items_user_idx ON items(user_id);
+    CREATE TRIGGER items_ai AFTER INSERT ON items BEGIN
+      INSERT INTO items_fts(rowid, text, meaning_id) VALUES (new.id, new.text, new.meaning_id);
+    END;
+    CREATE TRIGGER items_ad AFTER DELETE ON items BEGIN
+      INSERT INTO items_fts(items_fts, rowid, text, meaning_id)
+      VALUES('delete', old.id, old.text, old.meaning_id);
+    END;
+    CREATE TRIGGER items_au AFTER UPDATE ON items BEGIN
+      INSERT INTO items_fts(items_fts, rowid, text, meaning_id)
+      VALUES('delete', old.id, old.text, old.meaning_id);
+      INSERT INTO items_fts(rowid, text, meaning_id) VALUES (new.id, new.text, new.meaning_id);
+    END;
+    INSERT INTO items_fts(items_fts) VALUES('rebuild');
+  `);
+
+  // quiz_sets → UNIQUE(user_id, day, mode, lang)
+  await client.executeMultiple(`
+    ALTER TABLE quiz_sets RENAME TO quiz_sets_legacy;
+    CREATE TABLE quiz_sets (
+      id INTEGER PRIMARY KEY,
+      day TEXT NOT NULL,
+      mode TEXT NOT NULL DEFAULT 'daily',
+      lang TEXT NOT NULL DEFAULT 'en',
+      title TEXT NOT NULL,
+      questions TEXT NOT NULL,
+      order_json TEXT NOT NULL,
+      total INTEGER NOT NULL,
+      done INTEGER NOT NULL DEFAULT 0,
+      correct INTEGER NOT NULL DEFAULT 0,
+      completed INTEGER NOT NULL DEFAULT 0,
+      created_at INTEGER NOT NULL,
+      user_id INTEGER,
+      UNIQUE(user_id, day, mode, lang)
+    );
+    INSERT INTO quiz_sets (id, day, mode, lang, title, questions, order_json, total, done, correct, completed, created_at, user_id)
+      SELECT id, day, mode, lang, title, questions, order_json, total, done, correct, completed, created_at, user_id
+      FROM quiz_sets_legacy;
+    DROP TABLE quiz_sets_legacy;
+  `);
+
+  // kanji_cards → PK(user_id, kanji, mode)
+  await client.executeMultiple(`
+    ALTER TABLE kanji_cards RENAME TO kanji_cards_legacy;
+    CREATE TABLE kanji_cards (
+      kanji TEXT NOT NULL,
+      mode TEXT NOT NULL,
+      due INTEGER NOT NULL,
+      stability REAL,
+      difficulty REAL,
+      elapsed_days INTEGER,
+      scheduled_days INTEGER,
+      reps INTEGER NOT NULL DEFAULT 0,
+      lapses INTEGER NOT NULL DEFAULT 0,
+      state INTEGER NOT NULL DEFAULT 0,
+      learning_steps INTEGER NOT NULL DEFAULT 0,
+      last_review INTEGER,
+      user_id INTEGER,
+      PRIMARY KEY (user_id, kanji, mode)
+    );
+    INSERT INTO kanji_cards (kanji, mode, due, stability, difficulty, elapsed_days, scheduled_days, reps, lapses, state, learning_steps, last_review, user_id)
+      SELECT kanji, mode, due, stability, difficulty, elapsed_days, scheduled_days, reps, lapses, state, learning_steps, last_review, user_id
+      FROM kanji_cards_legacy;
+    DROP TABLE kanji_cards_legacy;
+  `);
+
+  // kanji_known → PK(user_id, kanji)
+  await client.executeMultiple(`
+    ALTER TABLE kanji_known RENAME TO kanji_known_legacy;
+    CREATE TABLE kanji_known (
+      kanji TEXT NOT NULL,
+      marked_at INTEGER NOT NULL,
+      user_id INTEGER,
+      PRIMARY KEY (user_id, kanji)
+    );
+    INSERT INTO kanji_known (kanji, marked_at, user_id)
+      SELECT kanji, marked_at, user_id FROM kanji_known_legacy;
+    DROP TABLE kanji_known_legacy;
+  `);
+
+  // route_notes → UNIQUE(user_id, step_id, lang)
+  await client.executeMultiple(`
+    ALTER TABLE route_notes RENAME TO route_notes_legacy;
+    CREATE TABLE route_notes (
+      step_id TEXT NOT NULL,
+      lang TEXT NOT NULL DEFAULT 'ja',
+      note TEXT NOT NULL DEFAULT '',
+      qa_json TEXT NOT NULL DEFAULT '[]',
+      updated_at INTEGER NOT NULL,
+      user_id INTEGER,
+      UNIQUE(user_id, step_id, lang)
+    );
+    INSERT INTO route_notes (step_id, lang, note, qa_json, updated_at, user_id)
+      SELECT step_id, lang, note, qa_json, updated_at, user_id FROM route_notes_legacy;
+    DROP TABLE route_notes_legacy;
+  `);
+
+  await client.execute("INSERT OR IGNORE INTO app_meta (key, value) VALUES ('isolation_v1', '1')");
+  await client.execute("PRAGMA legacy_alter_table=OFF");
+  await client.execute("PRAGMA foreign_keys=ON");
+}
+
 /** Jalankan semua migrasi via libsql (async). Sekali per proses. */
 export async function runMigrations(client: Client): Promise<void> {
   for (const ddl of MIGRATIONS) {
@@ -484,17 +706,22 @@ export async function runMigrations(client: Client): Promise<void> {
         correct    INTEGER NOT NULL DEFAULT 0,
         completed  INTEGER NOT NULL DEFAULT 0,
         created_at INTEGER NOT NULL,
+        user_id    INTEGER,
         UNIQUE(day, mode, lang)
       );
-      INSERT INTO quiz_sets (id, day, mode, lang, title, questions, order_json, total, done, correct, completed, created_at)
+      INSERT INTO quiz_sets (id, day, mode, lang, title, questions, order_json, total, done, correct, completed, created_at, user_id)
         SELECT id, day,
                ${names.has("mode") ? "mode" : "'daily'"},
                ${names.has("lang") ? "lang" : "'en'"},
-               title, questions, order_json, total, done, correct, completed, created_at
+               title, questions, order_json, total, done, correct, completed, created_at, NULL
         FROM quiz_sets_legacy;
       DROP TABLE quiz_sets_legacy;
     `);
   }
+
+  // Constraint per-user (UNIQUE/PK komposit dengan user_id) — satu kali.
+  // Dijalankan SETELAH rebuild legacy di atas supaya kolom mode/lang sudah ada.
+  await runIsolationRebuilds(client);
 
   // Seed awal Bank Kata sekali di awal (per bahasa — EN & JP beda set).
   await seedWordbank(client);

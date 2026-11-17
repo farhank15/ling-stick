@@ -6,6 +6,7 @@ import { items } from "~/lib/db/schema";
 import { getTargetLang } from "~/lib/lang.server";
 import { normalizeText } from "~/lib/utils.shared";
 import { llmExtract } from "~/lib/llm.server";
+import { requireUserId } from "~/lib/user-context";
 
 /**
  * POST /api/extract { text } — ekstrak idiom/slang/reaksi/phrasal dari teks
@@ -32,7 +33,13 @@ export async function action({ request }: ActionFunctionArgs) {
       const rows = await db
         .select({ t: items.textNorm })
         .from(items)
-        .where(and(inArray(items.textNorm, norms), eq(items.lang, lang)));
+        .where(
+          and(
+            inArray(items.textNorm, norms),
+            eq(items.lang, lang),
+            eq(items.userId, requireUserId()),
+          ),
+        );
       const have = new Set(rows.map((r) => r.t));
       exists = exprs.map((e) => have.has(normalizeText(e.text)));
     }

@@ -1,5 +1,5 @@
 import type { ActionFunctionArgs } from "react-router";
-import { eq } from "drizzle-orm";
+import { and, eq } from "drizzle-orm";
 import { requireUser } from "~/lib/auth.server";
 import { db } from "~/lib/db/client.server";
 import {
@@ -15,6 +15,8 @@ import {
   tags,
 } from "~/lib/db/schema";
 import { normalizeText } from "~/lib/items.server";
+import { getTargetLang } from "~/lib/lang.server";
+import { requireUserId } from "~/lib/user-context";
 
 type Row = Record<string, unknown>;
 const str = (v: unknown, d = "") => (v === null || v === undefined ? d : String(v));
@@ -69,7 +71,7 @@ export async function action({ request }: ActionFunctionArgs) {
         const [existing] = await tx
           .select({ id: items.id })
           .from(items)
-          .where(eq(items.textNorm, textNorm))
+          .where(and(eq(items.textNorm, textNorm), eq(items.userId, requireUserId())))
           .limit(1);
         if (existing) {
           // Skip: item sudah ada → children-nya JUGA dilewati (anti duplikat).
@@ -90,6 +92,7 @@ export async function action({ request }: ActionFunctionArgs) {
             status: str(it.status, "learning"),
             hideMeaning: num(it.hide_meaning ?? it.hideMeaning),
             createdAt: num(it.created_at ?? it.createdAt, Date.now()),
+            userId: requireUserId(),
           })
           .returning({ id: items.id });
         if (oldId) idMap.set(oldId, inserted.id);
@@ -143,6 +146,7 @@ export async function action({ request }: ActionFunctionArgs) {
           state: num(c.state),
           learningSteps: num(c.learning_steps ?? c.learningSteps),
           lastReview: nullableNum(c.last_review ?? c.lastReview),
+          userId: requireUserId(),
         });
         stats.cardsAdded++;
       }
@@ -156,6 +160,7 @@ export async function action({ request }: ActionFunctionArgs) {
           reviewedAt: num(rl.reviewed_at ?? rl.reviewedAt, Date.now()),
           state: nullableNum(rl.state),
           due: nullableNum(rl.due),
+          userId: requireUserId(),
         });
         stats.reviewLogsAdded++;
       }
@@ -202,13 +207,15 @@ export async function action({ request }: ActionFunctionArgs) {
         if (r.length > 0) stats.exploreAdded++;
       }
 
-      // 5) Quiz set & settings — merge (yang sudah ada dilewati).
+      // 5) Quiz set & settings — merge (yang sudah ada dilewati) per-user.
       for (const q of pick(p, "quiz_sets", "quizSets")) {
         if (!str(q.day)) continue;
         const r = await tx
           .insert(quizSets)
           .values({
             day: str(q.day),
+            mode: str(q.mode, "daily"),
+            lang: await getTargetLang(),
             title: str(q.title, "Import"),
             questions: str(q.questions, "[]"),
             order: str(q.order_json ?? q.order ?? q.orderJson, "[]"),
@@ -217,6 +224,7 @@ export async function action({ request }: ActionFunctionArgs) {
             correct: num(q.correct),
             completed: num(q.completed),
             createdAt: num(q.created_at ?? q.createdAt, Date.now()),
+            userId: requireUserId(),
           })
           .onConflictDoNothing()
           .returning({ id: quizSets.id });
@@ -227,8 +235,11 @@ export async function action({ request }: ActionFunctionArgs) {
         if (!key) continue;
         await tx
           .insert(settings)
-          .values({ key, value: str(s.value) })
-          .onConflictDoNothing();
+          .values({ key, value: str(s.value), userId: requireUserId() })
+          .onConflictDoUpdate({
+            target: [settings.userId, settings.key],
+            set: { value: str(s.value) },
+          });
       }
     });
 

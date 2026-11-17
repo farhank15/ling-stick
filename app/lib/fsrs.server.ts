@@ -25,7 +25,9 @@ async function getScheduler() {
   if (Date.now() - configAt > CONFIG_TTL_MS) {
     const { getFsrsSettings } = await import("~/lib/prefs.server");
     const cfg = await getFsrsSettings();
-    const key = `${cfg.retention}|${cfg.maxInterval}`;
+    const { currentUserId } = await import("~/lib/user-context");
+    const uid = currentUserId() ?? "anon";
+    const key = `${cfg.retention}|${cfg.maxInterval}|${uid}`;
     if (key !== schedulerKey) {
       scheduler = fsrs(
         generatorParameters({

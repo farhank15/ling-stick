@@ -2,6 +2,7 @@ import { and, eq, inArray } from "drizzle-orm";
 import { db } from "~/lib/db/client.server";
 import { quizSets } from "~/lib/db/schema";
 import { getTargetLang } from "~/lib/lang.server";
+import { requireUserId } from "~/lib/user-context";
 import { loadAllSteps } from "./route.server";
 import type { RouteStep } from "./route.schema";
 import type { QuizQuestion } from "./quiz.server";
@@ -67,12 +68,12 @@ export function stepToQuestions(step: RouteStep): QuizQuestion[] {
   });
 }
 
-/** Ambil semua set rute bahasa aktif (filter day prefix di memori — kolom day tak ada index prefix). */
-async function allRouteSets(lang: string) {
+/** Ambil semua set rute bahasa aktif milik user (filter day prefix di memori). */
+async function allRouteSets(lang: string, uid: number) {
   const rows = await db
     .select()
     .from(quizSets)
-    .where(and(eq(quizSets.lang, lang), inArray(quizSets.mode, ["route", "route_exam"])))
+    .where(and(eq(quizSets.lang, lang), eq(quizSets.userId, uid), inArray(quizSets.mode, ["route", "route_exam"])))
     .limit(500);
   return rows;
 }
@@ -80,11 +81,12 @@ async function allRouteSets(lang: string) {
 /** Buat/ambil set lesson step. */
 export async function getOrCreateRouteSet(stepId: string) {
   const lang = await getTargetLang();
+  const uid = requireUserId();
   const day = `route:${lang}:${stepId}`;
   const [existing] = await db
     .select()
     .from(quizSets)
-    .where(and(eq(quizSets.day, day), eq(quizSets.mode, "route"), eq(quizSets.lang, lang)))
+    .where(and(eq(quizSets.day, day), eq(quizSets.mode, "route"), eq(quizSets.lang, lang), eq(quizSets.userId, uid)))
     .limit(1);
   if (existing) return existing;
 
@@ -106,6 +108,7 @@ export async function getOrCreateRouteSet(stepId: string) {
       correct: 0,
       completed: 0,
       createdAt: Date.now(),
+      userId: uid,
     })
     .onConflictDoNothing()
     .returning();
@@ -113,7 +116,7 @@ export async function getOrCreateRouteSet(stepId: string) {
   const [again] = await db
     .select()
     .from(quizSets)
-    .where(and(eq(quizSets.day, day), eq(quizSets.mode, "route"), eq(quizSets.lang, lang)))
+    .where(and(eq(quizSets.day, day), eq(quizSets.mode, "route"), eq(quizSets.lang, lang), eq(quizSets.userId, uid)))
     .limit(1);
   if (again) {
     // Backfill furigana: set lama (dibuat sebelum kana cloze ada) yang BELUM
@@ -144,11 +147,12 @@ export async function getOrCreateRouteSet(stepId: string) {
 /** Buat/ambil set checkpoint exam segmen (campuran cloze segmen itu, maks 15). */
 export async function getOrCreateExamSet(segment: number) {
   const lang = await getTargetLang();
+  const uid = requireUserId();
   const day = `route:${lang}:exam-${segment}`;
   const [existing] = await db
     .select()
     .from(quizSets)
-    .where(and(eq(quizSets.day, day), eq(quizSets.mode, "route_exam"), eq(quizSets.lang, lang)))
+    .where(and(eq(quizSets.day, day), eq(quizSets.mode, "route_exam"), eq(quizSets.lang, lang), eq(quizSets.userId, uid)))
     .limit(1);
   if (existing && !existing.completed) return existing; // lanjutkan percobaan berjalan
   if (existing && existing.completed) {
@@ -201,6 +205,7 @@ export async function getOrCreateExamSet(segment: number) {
       correct: 0,
       completed: 0,
       createdAt: Date.now(),
+      userId: uid,
     })
     .onConflictDoNothing()
     .returning();
@@ -208,7 +213,7 @@ export async function getOrCreateExamSet(segment: number) {
   const [again] = await db
     .select()
     .from(quizSets)
-    .where(and(eq(quizSets.day, day), eq(quizSets.mode, "route_exam"), eq(quizSets.lang, lang)))
+    .where(and(eq(quizSets.day, day), eq(quizSets.mode, "route_exam"), eq(quizSets.lang, lang), eq(quizSets.userId, uid)))
     .limit(1);
   return again ?? null;
 }
@@ -234,13 +239,15 @@ const MAP_TTL = 30_000;
 
 export async function getRouteMap(): Promise<RouteMap> {
   const lang = await getTargetLang();
-  const cached = mapCache.get(lang);
+  const uid = requireUserId();
+  const cacheKey = `${uid}:${lang}`;
+  const cached = mapCache.get(cacheKey);
   // Cache 30 dtk: peta dibuka berulang (map ↔ step ↔ review) tanpa bayar ulang.
   // Invalidasi otomatis saat jawab soal? Tidak — TTL pendek cukup; progres
   // terbaru muncul maksimal 30 dtk kemudian (atau refresh).
   if (cached && Date.now() - cached.at < MAP_TTL) return cached.map;
-  const map = await buildRouteMap(lang);
-  mapCache.set(lang, { at: Date.now(), map });
+  const map = await buildRouteMap(lang, uid);
+  mapCache.set(cacheKey, { at: Date.now(), map });
   return map;
 }
 
@@ -249,11 +256,11 @@ export function clearRouteMapCache() {
   mapCache.clear();
 }
 
-async function buildRouteMap(lang: string): Promise<RouteMap> {
+async function buildRouteMap(lang: string, uid: number): Promise<RouteMap> {
   const steps = loadAllSteps()
     .map(({ step }) => step)
     .filter((s) => (lang === "ja" ? s.step_id.startsWith("ja-") : false));
-  const sets = await allRouteSets(lang);
+  const sets = await allRouteSets(lang, uid);
   const byDay = new Map(sets.map((s) => [s.day, s]));
 
   const progresses: StepProgress[] = steps.map((step) => {
@@ -347,14 +354,15 @@ export async function getNextStep(): Promise<StepProgress | null> {
 export type StepQA = { q: string; a: string; at: number };
 export type StepNotes = { note: string; qa: StepQA[] };
 
-/** Catatan + Tanya-Jawab tersimpan per step. */
+/** Catatan + Tanya-Jawab tersimpan per step (per-user). */
 export async function getStepNotes(stepId: string): Promise<StepNotes> {
   const lang = await getTargetLang();
+  const uid = requireUserId();
   const { routeNotes } = await import("~/lib/db/schema");
   const [row] = await db
     .select()
     .from(routeNotes)
-    .where(and(eq(routeNotes.stepId, stepId), eq(routeNotes.lang, lang)))
+    .where(and(eq(routeNotes.stepId, stepId), eq(routeNotes.lang, lang), eq(routeNotes.userId, uid)))
     .limit(1);
   let qa: StepQA[] = [];
   try {
@@ -366,33 +374,35 @@ export async function getStepNotes(stepId: string): Promise<StepNotes> {
   return { note: row?.note ?? "", qa: qa.slice(-20) };
 }
 
-/** Simpan catatan bebas per step (upsert). */
+/** Simpan catatan bebas per step (upsert) — per-user. */
 export async function saveStepNote(stepId: string, note: string): Promise<void> {
   const lang = await getTargetLang();
+  const uid = requireUserId();
   const { routeNotes } = await import("~/lib/db/schema");
   const now = Date.now();
   // Upsert hanya menyentuh note — qaJson yang sudah ada dipertahankan
   // (insert baru pasti belum punya qa).
   await db
     .insert(routeNotes)
-    .values({ stepId, lang, note: note.slice(0, 5000), qaJson: "[]", updatedAt: now })
+    .values({ stepId, lang, note: note.slice(0, 5000), qaJson: "[]", updatedAt: now, userId: uid })
     .onConflictDoUpdate({
-      target: [routeNotes.stepId, routeNotes.lang],
+      target: [routeNotes.userId, routeNotes.stepId, routeNotes.lang],
       set: { note: note.slice(0, 5000), updatedAt: now },
     });
 }
 
-/** Tambah 1 Tanya-Jawab Ling ke catatan step (maks 20 terakhir). */
+/** Tambah 1 Tanya-Jawab Ling ke catatan step (maks 20 terakhir) — per-user. */
 export async function addStepQA(stepId: string, q: string, a: string): Promise<StepQA[]> {
   const lang = await getTargetLang();
+  const uid = requireUserId();
   const { routeNotes } = await import("~/lib/db/schema");
   const cur = await getStepNotes(stepId);
   const qa = [...cur.qa, { q: q.slice(0, 500), a: a.slice(0, 3000), at: Date.now() }].slice(-20);
   await db
     .insert(routeNotes)
-    .values({ stepId, lang, note: cur.note, qaJson: JSON.stringify(qa), updatedAt: Date.now() })
+    .values({ stepId, lang, note: cur.note, qaJson: JSON.stringify(qa), updatedAt: Date.now(), userId: uid })
     .onConflictDoUpdate({
-      target: [routeNotes.stepId, routeNotes.lang],
+      target: [routeNotes.userId, routeNotes.stepId, routeNotes.lang],
       set: { qaJson: JSON.stringify(qa), updatedAt: Date.now() },
     });
   return qa;

@@ -1,6 +1,7 @@
-import { asc, desc, eq, sql } from "drizzle-orm";
+import { and, asc, desc, eq, sql } from "drizzle-orm";
 import { db } from "./db/client.server";
 import { chatMessages, chatSessions } from "./db/schema";
+import { requireUserId } from "./user-context";
 
 export type ChatMsg = { role: "user" | "assistant"; content: string };
 export type StoredSuggestion = {
@@ -9,11 +10,13 @@ export type StoredSuggestion = {
   examples: { en: string; id: string }[];
 };
 
-/** Semua sesi (terbaru dulu) + jumlah pesan via GROUP BY (anti-subquery ambigu). */
+/** Semua sesi milik user (terbaru dulu) + jumlah pesan via GROUP BY. */
 export async function listSessions() {
+  const uid = requireUserId();
   const rows = await db
     .select({ id: chatSessions.id, title: chatSessions.title, updatedAt: chatSessions.updatedAt })
     .from(chatSessions)
+    .where(eq(chatSessions.userId, uid))
     .orderBy(desc(chatSessions.updatedAt))
     .limit(50);
   const counts = await db
@@ -23,14 +26,17 @@ export async function listSessions() {
       lastContent: sql<string>`min(content)`,
     })
     .from(chatMessages)
+    .where(
+      sql`${chatMessages.sessionId} IN (SELECT id FROM chat_sessions WHERE user_id = ${uid})`,
+    )
     .groupBy(chatMessages.sessionId);
   const countMap = new Map(counts.map((c) => [c.sessionId, Number(c.total)]));
-  // Pesan terakhir per sesi — pakai SQL mentah berkualifikasi penuh (subquery
-  // correlated dengan interpolasi kolom drizzle terbukti ambigu di libsql).
+  // Pesan terakhir per sesi — pakai SQL mentah berkualifikasi penuh.
   const lasts = await db.all<{ session_id: number; content: string }>(sql`
     SELECT m.session_id AS session_id, m.content AS content
     FROM chat_messages m
-    WHERE m.id IN (SELECT MAX(id) FROM chat_messages GROUP BY session_id)
+    WHERE m.session_id IN (SELECT id FROM chat_sessions WHERE user_id = ${uid})
+      AND m.id IN (SELECT MAX(id) FROM chat_messages GROUP BY session_id)
   `);
   const lastMap = new Map(lasts.map((l) => [l.session_id, l.content]));
 
@@ -44,16 +50,27 @@ export async function listSessions() {
 }
 
 export async function createSession(title?: string) {
+  const uid = requireUserId();
   const now = Date.now();
   const [row] = await db
     .insert(chatSessions)
-    .values({ title: title?.trim().slice(0, 80) || "Obrolan baru", createdAt: now, updatedAt: now })
+    .values({
+      title: title?.trim().slice(0, 80) || "Obrolan baru",
+      createdAt: now,
+      updatedAt: now,
+      userId: uid,
+    })
     .returning();
   return row;
 }
 
 export async function getSession(id: number) {
-  const [row] = await db.select().from(chatSessions).where(eq(chatSessions.id, id)).limit(1);
+  const uid = requireUserId();
+  const [row] = await db
+    .select()
+    .from(chatSessions)
+    .where(and(eq(chatSessions.id, id), eq(chatSessions.userId, uid)))
+    .limit(1);
   return row ?? null;
 }
 
@@ -80,10 +97,16 @@ export function historyWindow<T extends { role: string; content: string }>(rows:
 }
 
 export async function getMessages(sessionId: number) {
+  const uid = requireUserId();
   return db
     .select()
     .from(chatMessages)
-    .where(eq(chatMessages.sessionId, sessionId))
+    .where(
+      and(
+        eq(chatMessages.sessionId, sessionId),
+        sql`${chatMessages.sessionId} IN (SELECT id FROM chat_sessions WHERE user_id = ${uid})`,
+      ),
+    )
     .orderBy(asc(chatMessages.id));
 }
 
@@ -95,7 +118,7 @@ function autoTitle(firstUserMsg: string): string {
 }
 
 /**
- * Simpan pasangan user+assistant & update sesi.
+ * Simpan pasangan user+assistant & update sesi (milik user).
  * Judul otomatis dari pertanyaan pertama sesi itu.
  */
 export async function appendMessages(opts: {
@@ -105,6 +128,7 @@ export async function appendMessages(opts: {
   suggestions?: StoredSuggestion[];
   isFirstExchange: boolean;
 }) {
+  const uid = requireUserId();
   const now = Date.now();
   await db.transaction(async (tx) => {
     await tx.insert(chatMessages).values([
@@ -125,14 +149,16 @@ export async function appendMessages(opts: {
         updatedAt: now,
         ...(opts.isFirstExchange ? { title: autoTitle(opts.user) } : {}),
       })
-      .where(eq(chatSessions.id, opts.sessionId));
+      .where(and(eq(chatSessions.id, opts.sessionId), eq(chatSessions.userId, uid)));
   });
 }
 
 export async function deleteSession(id: number) {
-  await db.delete(chatSessions).where(eq(chatSessions.id, id));
+  const uid = requireUserId();
+  await db.delete(chatSessions).where(and(eq(chatSessions.id, id), eq(chatSessions.userId, uid)));
 }
 
 export async function deleteAllSessions() {
-  await db.delete(chatSessions);
+  const uid = requireUserId();
+  await db.delete(chatSessions).where(eq(chatSessions.userId, uid));
 }

@@ -16,6 +16,7 @@ import { getTargetLang, detectLang } from "./lang.server";
 import { newCardRow } from "./fsrs.server";
 import { startOfDay, addDays } from "./utils.shared";
 import { getNewCardsPerDay } from "./prefs.server";
+import { requireUserId } from "./user-context";
 
 /**
  * Data layer Item — BLUEPRINT §6/§7. Semua akses DB items/cards ada di sini.
@@ -73,10 +74,11 @@ export function normalizeText(s: string): string {
 
 export async function findItemIdByText(text: string): Promise<number | null> {
   const lang = await getTargetLang();
+  const uid = requireUserId();
   const [row] = await db
     .select({ id: items.id })
     .from(items)
-    .where(and(eq(items.textNorm, normalizeText(text)), eq(items.lang, lang)))
+    .where(and(eq(items.textNorm, normalizeText(text)), eq(items.lang, lang), eq(items.userId, uid)))
     .limit(1);
   return row?.id ?? null;
 }
@@ -84,6 +86,7 @@ export async function findItemIdByText(text: string): Promise<number | null> {
 export async function saveItem(input: SaveItemInput): Promise<number> {
   const now = Date.now();
   const textNorm = normalizeText(input.text);
+  const uid = requireUserId();
 
   const existing = await findItemIdByText(input.text);
   if (existing) throw new DuplicateItemError(existing);
@@ -108,6 +111,7 @@ export async function saveItem(input: SaveItemInput): Promise<number> {
         confidence: input.confidence ?? "medium",
         status: input.status ?? "learning",
         createdAt: now,
+        userId: uid,
       })
       .returning({ id: items.id });
     const item = result[0];
@@ -162,6 +166,7 @@ export async function saveItem(input: SaveItemInput): Promise<number> {
       state: card.state,
       learningSteps: card.learningSteps,
       lastReview: card.lastReview,
+      userId: uid,
     });
 
     return item.id;
@@ -225,6 +230,7 @@ export async function listItems(filters: LibraryFilters): Promise<LibraryRow[]> 
   const limit = Math.min(filters.limit ?? 100, 500);
   const offset = filters.offset ?? 0;
   const lang = await getTargetLang(); // scope: library per bahasa target
+  const uid = requireUserId(); // scope: library per user
 
   // Full-text search via FTS5 (BLUEPRINT §5).
   if (filters.q && filters.q.trim()) {
@@ -255,6 +261,7 @@ export async function listItems(filters: LibraryFilters): Promise<LibraryRow[]> 
         JOIN items_fts f ON i.id = f.rowid
         WHERE items_fts MATCH ${ftsQuery}
           AND i.lang = ${lang}
+          AND i.user_id = ${uid}
           AND i.deck_id IS NULL
           AND i.status = ${filters.status === "all" ? sql`i.status` : (filters.status || "learning")}
           ${filters.type ? sql`AND i.type = ${filters.type}` : sql``}
@@ -297,6 +304,7 @@ export async function listItems(filters: LibraryFilters): Promise<LibraryRow[]> 
     FROM items i
     WHERE ${statusCond}
       AND i.lang = ${lang}
+      AND i.user_id = ${uid}
       AND i.deck_id IS NULL
       ${filters.type ? sql`AND i.type = ${filters.type}` : sql``}
       ${filters.excludeType ? sql`AND i.type != ${filters.excludeType}` : sql``}
@@ -325,7 +333,12 @@ export async function getFacetCounts(status?: string): Promise<{
   byRegister: Record<string, number>;
 }> {
   // Kanji = entitas referensi (Aksara), bukan kosakata Library — jangan dihitung.
-  const conds: SQLWrapper[] = [eq(items.lang, await getTargetLang()), isNull(items.deckId), ne(items.type, "kanji")];
+  const conds: SQLWrapper[] = [
+    eq(items.lang, await getTargetLang()),
+    eq(items.userId, requireUserId()),
+    isNull(items.deckId),
+    ne(items.type, "kanji"),
+  ];
   if (status === "all") conds.push(sql`${items.status} IN ('learning', 'known')`);
   else if (status) conds.push(eq(items.status, status));
   else conds.push(eq(items.status, "learning"));
@@ -392,7 +405,8 @@ function mapLibraryRow(r: {
 }
 
 export async function getItemDetail(id: number) {
-  const [item] = await db.select().from(items).where(eq(items.id, id)).limit(1);
+  const uid = requireUserId();
+  const [item] = await db.select().from(items).where(and(eq(items.id, id), eq(items.userId, uid))).limit(1);
   if (!item) return null;
   // 3 query independen dijalankan paralel (Turso remote = hemat latency).
   const [exs, alts, cardRow] = await Promise.all([
@@ -433,14 +447,16 @@ export async function updateItem(
   if (patch.status !== undefined) values.status = patch.status;
   if (patch.hideMeaning !== undefined) values.hideMeaning = patch.hideMeaning;
   if (Object.keys(values).length === 0) return;
-  await db.update(items).set(values).where(eq(items.id, id));
+  const uid = requireUserId();
+  await db.update(items).set(values).where(and(eq(items.id, id), eq(items.userId, uid)));
 }
 
 export async function deleteItem(id: number) {
+  const uid = requireUserId();
   // review_logs tak punya FK cascade → dibersihkan manual sekalian.
   await db.transaction(async (tx) => {
-    await tx.delete(reviewLogs).where(eq(reviewLogs.itemId, id));
-    await tx.delete(items).where(eq(items.id, id));
+    await tx.delete(reviewLogs).where(and(eq(reviewLogs.itemId, id), eq(reviewLogs.userId, uid)));
+    await tx.delete(items).where(and(eq(items.id, id), eq(items.userId, uid)));
   });
 }
 
@@ -465,6 +481,7 @@ export async function getReviewQueue(): Promise<{
   const today = startOfDay().getTime();
   const tomorrow = addDays(startOfDay(), 1).getTime();
   const lang = await getTargetLang();
+  const uid = requireUserId();
   const newPerDay = await getNewCardsPerDay(); // preferensi user (slider di Pengaturan)
 
   const dueRows = await db
@@ -479,7 +496,7 @@ export async function getReviewQueue(): Promise<{
     })
     .from(cards)
     .innerJoin(items, eq(items.id, cards.itemId))
-    .where(and(lte(cards.due, tomorrow - 1), eq(items.status, "learning"), eq(items.lang, lang), isNull(items.deckId), sql`${cards.reps} > 0`))
+    .where(and(lte(cards.due, tomorrow - 1), eq(items.status, "learning"), eq(items.lang, lang), eq(items.userId, uid), isNull(items.deckId), sql`${cards.reps} > 0`))
     .orderBy(cards.due)
     .limit(200);
 
@@ -495,7 +512,7 @@ export async function getReviewQueue(): Promise<{
     })
     .from(cards)
     .innerJoin(items, eq(items.id, cards.itemId))
-    .where(and(gte(cards.due, today), lte(cards.due, tomorrow - 1), sql`${cards.reps} = 0`, eq(items.status, "learning"), eq(items.lang, lang), isNull(items.deckId)))
+    .where(and(gte(cards.due, today), lte(cards.due, tomorrow - 1), sql`${cards.reps} = 0`, eq(items.status, "learning"), eq(items.lang, lang), eq(items.userId, uid), isNull(items.deckId)))
     .orderBy(items.createdAt)
     .limit(newPerDay);
 
@@ -543,6 +560,7 @@ export async function applyReview(
     lastReview: number | null;
   },
 ) {
+  const uid = requireUserId();
   await db.transaction(async (tx) => {
     await tx.update(cards)
       .set({
@@ -556,7 +574,7 @@ export async function applyReview(
         state: next.state,
         lastReview: next.lastReview,
       })
-      .where(eq(cards.itemId, itemId));
+      .where(and(eq(cards.itemId, itemId), eq(cards.userId, uid)));
     await tx.insert(reviewLogs).values({
       itemId,
       rating,
@@ -564,17 +582,20 @@ export async function applyReview(
       reviewedAt: Date.now(),
       state: next.state,
       due: next.due,
+      userId: uid,
     });
   });
 }
 
 /** Tandai sudah hafal: kartu keluar dari antrian, item tetap di Library. */
 export async function markKnown(itemId: number) {
-  await db.update(items).set({ status: "known" }).where(eq(items.id, itemId));
+  const uid = requireUserId();
+  await db.update(items).set({ status: "known" }).where(and(eq(items.id, itemId), eq(items.userId, uid)));
 }
 
 export async function markLearning(itemId: number) {
-  await db.update(items).set({ status: "learning" }).where(eq(items.id, itemId));
+  const uid = requireUserId();
+  await db.update(items).set({ status: "learning" }).where(and(eq(items.id, itemId), eq(items.userId, uid)));
 }
 
 /* ── Explore ────────────────────────────────────────────────── */

@@ -6,17 +6,20 @@ import { items, llmUsage, quizSets } from "~/lib/db/schema";
 import { getTargetLang } from "~/lib/lang.server";
 import { laraStatus } from "~/lib/lara.server";
 import { todayStr } from "~/lib/utils.shared";
+import { requireUserId } from "~/lib/user-context";
 
 /** Cache in-memory 60 detik — buka ulang halaman = instan (data statistik gak perlu realtime). */
 const statsCache = new Map<string, { at: number; data: unknown }>();
 const STATS_TTL = 60_000;
 
-/** GET /api/stats — data statistik untuk halaman Pengaturan. */
+/** GET /api/stats — data statistik untuk halaman Pengaturan (per-user). */
 export async function loader({ request }: LoaderFunctionArgs) {
   await requireUser(request);
   const lang = await getTargetLang();
+  const uid = requireUserId();
 
-  const cached = statsCache.get(lang);
+  const cacheKey = `${uid}:${lang}`;
+  const cached = statsCache.get(cacheKey);
   if (cached && Date.now() - cached.at < STATS_TTL) {
     return Response.json(cached.data);
   }
@@ -29,7 +32,7 @@ export async function loader({ request }: LoaderFunctionArgs) {
     db
       .select({ status: items.status, total: sql<number>`count(*)` })
       .from(items)
-      .where(and(eq(items.lang, lang), isNull(items.deckId)))
+      .where(and(eq(items.lang, lang), eq(items.userId, uid), isNull(items.deckId)))
       .groupBy(items.status),
     db
       .select({
@@ -37,7 +40,7 @@ export async function loader({ request }: LoaderFunctionArgs) {
         total: sql<number>`count(*)`,
       })
       .from(items)
-      .where(and(gte(items.createdAt, since), eq(items.lang, lang), isNull(items.deckId)))
+      .where(and(gte(items.createdAt, since), eq(items.lang, lang), eq(items.userId, uid), isNull(items.deckId)))
       .groupBy(sql`1`),
     db.select().from(llmUsage).orderBy(desc(llmUsage.day)).limit(7),
     db
@@ -50,13 +53,14 @@ export async function loader({ request }: LoaderFunctionArgs) {
         completed: quizSets.completed,
       })
       .from(quizSets)
+      .where(eq(quizSets.userId, uid))
       .orderBy(desc(quizSets.day))
       .limit(7),
     laraStatus(),
     db
       .select({ total: sql<number>`count(*)` })
       .from(items)
-      .where(and(eq(items.status, "known"), eq(items.lang, lang), isNull(items.deckId))),
+      .where(and(eq(items.status, "known"), eq(items.lang, lang), eq(items.userId, uid), isNull(items.deckId))),
   ]);
 
   const byStatus = Object.fromEntries(statusRows.map((r) => [r.status, Number(r.total)]));
@@ -102,6 +106,6 @@ export async function loader({ request }: LoaderFunctionArgs) {
     lara,
     knownTotal: Number(knownCount[0]?.total ?? 0),
   };
-  statsCache.set(lang, { at: Date.now(), data });
+  statsCache.set(cacheKey, { at: Date.now(), data });
   return data;
 }

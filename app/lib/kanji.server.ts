@@ -1,5 +1,6 @@
 import { and, eq, inArray, notInArray, sql } from "drizzle-orm";
 import { db } from "~/lib/db/client.server";
+import { requireUserId } from "~/lib/user-context";
 import {
   kanji,
   kanjiCards,
@@ -9,6 +10,14 @@ import {
   kanjiVocab,
 } from "~/lib/db/schema";
 import { applyRating, type CardRow } from "~/lib/fsrs.server";
+import kradFile from "../../data/kanji-krad.json";
+
+/**
+ * KRADFILE (EDRDG) — dekomposisi komponen penuh per kanji.
+ * Tabel DB kanji_components seed-nya tidak lengkap (N5 hanya ±77%),
+ * jadi union dengan KRad ini biar filter & grouping pola akurat.
+ */
+const KRAD = kradFile as Record<string, string[]>;
 
 /**
  * Kanji N5 — referensi kanonis (seed dataset) + kartu FSRS 3 mode.
@@ -36,6 +45,26 @@ export type KanjiDetail = {
   radical?: string | null;
 };
 
+/** Union komponen DB + KRad per kanji (dedupe, urut stabil). */
+async function componentMapForChars(chars: string[]): Promise<Map<string, string[]>> {
+  const map = new Map<string, string[]>();
+  if (chars.length === 0) return map;
+  const compRows = await db
+    .select({ kanji: kanjiComponents.kanji, component: kanjiComponents.component })
+    .from(kanjiComponents)
+    .where(inArray(kanjiComponents.kanji, chars));
+  for (const c of compRows) {
+    const arr = map.get(c.kanji) ?? [];
+    arr.push(c.component);
+    map.set(c.kanji, arr);
+  }
+  for (const ch of chars) {
+    const merged = [...new Set([...(map.get(ch) ?? []), ...(KRAD[ch] ?? [])])];
+    map.set(ch, merged);
+  }
+  return map;
+}
+
 export async function listKanji(opts: { jlpt?: number; component?: string; limit?: number } = {}) {
   const conds = [];
   if (opts.jlpt) conds.push(eq(kanji.jlpt, opts.jlpt));
@@ -60,27 +89,19 @@ export async function listKanji(opts: { jlpt?: number; component?: string; limit
     .where(conds.length ? and(...conds) : undefined)
     .orderBy(sql`CASE WHEN ${kanji.freq} IS NULL THEN 1 ELSE 0 END`, kanji.freq, kanji.strokes)
     .limit(opts.limit ?? 200);
-  // Komponen + bacaan per kanji — 2 query batch (bukan N+1) buat filter
-  // "mengandung X" dan pencarian kana/romaji di klien.
+  // Komponen + bacaan per kanji — batch query (bukan N+1) buat filter
+  // "mengandung X" dan pencarian kana/romaji di klien. Komponen di-union
+  // dengan KRad karena seed DB tidak lengkap (miss. 女/好/妻/嫁/嫌).
   const chars = rows.map((r) => r.char);
-  const [compRows, readRows] = chars.length
+  const [compMap, readRows] = chars.length
     ? await Promise.all([
-        db
-          .select({ kanji: kanjiComponents.kanji, component: kanjiComponents.component })
-          .from(kanjiComponents)
-          .where(inArray(kanjiComponents.kanji, chars)),
+        componentMapForChars(chars),
         db
           .select({ kanji: kanjiReadings.kanji, reading: kanjiReadings.reading })
           .from(kanjiReadings)
           .where(inArray(kanjiReadings.kanji, chars)),
       ])
-    : [[], []];
-  const compMap = new Map<string, string[]>();
-  for (const c of compRows) {
-    const arr = compMap.get(c.kanji) ?? [];
-    arr.push(c.component);
-    compMap.set(c.kanji, arr);
-  }
+    : [new Map<string, string[]>(), []];
   const readMap = new Map<string, string[]>();
   for (const r of readRows) {
     const arr = readMap.get(r.kanji) ?? [];
@@ -94,15 +115,17 @@ export async function listKanji(opts: { jlpt?: number; component?: string; limit
   }));
 }
 
-/** Komponen yang muncul di kanji level ini — buat filter "mengandung X". */
+/** Komponen yang muncul di kanji level ini — buat filter "mengandung X".
+ *  Dihitung dari KRad (lengkap) + DB, bukan hanya tabel seed yang tidak
+ *  lengkap — sebelumnya chip filter kehilangan kanji (mis. 女). */
 export async function listComponents(jlpt = 5) {
-  const rows = await db
-    .select({ component: kanjiComponents.component })
-    .from(kanjiComponents)
-    .innerJoin(kanji, eq(kanji.char, kanjiComponents.kanji))
-    .where(eq(kanji.jlpt, jlpt));
+  const rows = await db.select({ char: kanji.char }).from(kanji).where(eq(kanji.jlpt, jlpt));
+  const chars = rows.map((r) => r.char);
+  const map = await componentMapForChars(chars);
   const freq = new Map<string, number>();
-  for (const r of rows) freq.set(r.component, (freq.get(r.component) ?? 0) + 1);
+  for (const ch of chars) {
+    for (const p of map.get(ch) ?? []) freq.set(p, (freq.get(p) ?? 0) + 1);
+  }
   return [...freq.entries()].sort((a, b) => b[1] - a[1]).map(([component, count]) => ({ component, count }));
 }
 
@@ -159,6 +182,7 @@ export function cleanSvg(svg: string | null): string | null {
 /** Antrean flashcard kanji: due dulu + baru (reps=0), per mode. */
 export async function getKanjiQueue(mode: KanjiMode, limit = 20, jlpt = 5) {
   const now = Date.now();
+  const uid = requireUserId();
   const rows = await db
     .select({
       kanji: kanji.char,
@@ -168,13 +192,19 @@ export async function getKanjiQueue(mode: KanjiMode, limit = 20, jlpt = 5) {
       reps: kanjiCards.reps,
     })
     .from(kanji)
-    .leftJoin(kanjiCards, and(eq(kanjiCards.kanji, kanji.char), eq(kanjiCards.mode, mode)))
+    .leftJoin(
+      kanjiCards,
+      and(eq(kanjiCards.kanji, kanji.char), eq(kanjiCards.mode, mode), eq(kanjiCards.userId, uid)),
+    )
     // Kanji yang ditandai "dikenal" dari sheet detail tidak masuk antrean lagi —
     // kalau tetap muncul, tombol tandai terasa tidak berpengaruh.
     .where(
       and(
         eq(kanji.jlpt, jlpt),
-        notInArray(kanji.char, db.select({ char: kanjiKnown.kanji }).from(kanjiKnown)),
+        notInArray(
+          kanji.char,
+          db.select({ char: kanjiKnown.kanji }).from(kanjiKnown).where(eq(kanjiKnown.userId, uid)),
+        ),
       ),
     )
     .limit(200);
@@ -239,12 +269,13 @@ function toRow(kanjiChar: string, mode: KanjiMode, r: typeof kanjiCards.$inferSe
   };
 }
 
-/** Nilai kartu kanji 1-4 → jadwal baru tersimpan. */
+/** Nilai kartu kanji 1-4 → jadwal baru tersimpan (per-user). */
 export async function rateKanjiCard(kanjiChar: string, mode: KanjiMode, rating: 1 | 2 | 3 | 4) {
+  const uid = requireUserId();
   const [existing] = await db
     .select()
     .from(kanjiCards)
-    .where(and(eq(kanjiCards.kanji, kanjiChar), eq(kanjiCards.mode, mode)))
+    .where(and(eq(kanjiCards.kanji, kanjiChar), eq(kanjiCards.mode, mode), eq(kanjiCards.userId, uid)))
     .limit(1);
   const next = await applyRating(toRow(kanjiChar, mode, existing), rating);
   await db
@@ -254,9 +285,10 @@ export async function rateKanjiCard(kanjiChar: string, mode: KanjiMode, rating: 
       difficulty: next.difficulty, elapsedDays: next.elapsedDays,
       scheduledDays: next.scheduledDays, reps: next.reps, lapses: next.lapses,
       state: next.state, learningSteps: next.learningSteps, lastReview: next.lastReview,
+      userId: uid,
     })
     .onConflictDoUpdate({
-      target: [kanjiCards.kanji, kanjiCards.mode],
+      target: [kanjiCards.userId, kanjiCards.kanji, kanjiCards.mode],
       set: {
         due: next.due, stability: next.stability, difficulty: next.difficulty,
         elapsedDays: next.elapsedDays, scheduledDays: next.scheduledDays, reps: next.reps,
@@ -273,10 +305,14 @@ export async function rateKanjiCard(kanjiChar: string, mode: KanjiMode, rating: 
  * tidak mundur kalau user menandai manual lebih dulu.
  */
 export async function getKanjiProgress(jlpt = 5) {
+  const uid = requireUserId();
   const [total, drilled, marked] = await Promise.all([
     db.select({ char: kanji.char }).from(kanji).where(eq(kanji.jlpt, jlpt)),
-    db.select({ kanji: kanjiCards.kanji }).from(kanjiCards).where(eq(kanjiCards.mode, "recognition")),
-    db.select({ kanji: kanjiKnown.kanji }).from(kanjiKnown),
+    db
+      .select({ kanji: kanjiCards.kanji })
+      .from(kanjiCards)
+      .where(and(eq(kanjiCards.mode, "recognition"), eq(kanjiCards.userId, uid))),
+    db.select({ kanji: kanjiKnown.kanji }).from(kanjiKnown).where(eq(kanjiKnown.userId, uid)),
   ]);
   const knownSet = new Set([
     ...drilled.map((d) => d.kanji),
@@ -286,25 +322,30 @@ export async function getKanjiProgress(jlpt = 5) {
   return { total: total.length, done: known.length, known };
 }
 
-/** Tandai / batalkan tanda "sudah dikenal" (manual, dari sheet detail). */
+/** Tandai / batalkan tanda "sudah dikenal" (manual, dari sheet detail) — per-user. */
 export async function setKanjiKnown(char: string, known: boolean) {
+  const uid = requireUserId();
   if (known) {
     await db
       .insert(kanjiKnown)
-      .values({ kanji: char, markedAt: Date.now() })
-      .onConflictDoUpdate({ target: kanjiKnown.kanji, set: { markedAt: Date.now() } });
+      .values({ kanji: char, markedAt: Date.now(), userId: uid })
+      .onConflictDoUpdate({
+        target: [kanjiKnown.userId, kanjiKnown.kanji],
+        set: { markedAt: Date.now() },
+      });
   } else {
-    await db.delete(kanjiKnown).where(eq(kanjiKnown.kanji, char));
+    await db.delete(kanjiKnown).where(and(eq(kanjiKnown.kanji, char), eq(kanjiKnown.userId, uid)));
   }
   return { ok: true as const, known };
 }
 
-/** Status "dikenal" untuk satu kanji (dipakai sheet detail). */
+/** Status "dikenal" untuk satu kanji (dipakai sheet detail) — per-user. */
 export async function isKanjiKnown(char: string): Promise<boolean> {
+  const uid = requireUserId();
   const [row] = await db
     .select({ kanji: kanjiKnown.kanji })
     .from(kanjiKnown)
-    .where(eq(kanjiKnown.kanji, char))
+    .where(and(eq(kanjiKnown.kanji, char), eq(kanjiKnown.userId, uid)))
     .limit(1);
   return Boolean(row);
 }

@@ -1,8 +1,9 @@
-import { and, desc, eq, inArray, isNull, notInArray, sql } from "drizzle-orm";
+import { and, desc, eq, inArray, isNull, notInArray, or, sql } from "drizzle-orm";
 import { db } from "~/lib/db/client.server";
-import { cards, items, quizSets, quizAnswers, wordbank } from "~/lib/db/schema";
+import { cards, items, quizSets, quizAnswers, wordbank, wordbankProgress } from "~/lib/db/schema";
 import { env } from "~/lib/env.server";
 import { getTargetLang, type TargetLang } from "~/lib/lang.server";
+import { requireUserId } from "~/lib/user-context";
 
 /**
  * Latihan harian & multi-metode — BLUEPRINT §3 F3 (diupgrade):
@@ -89,6 +90,7 @@ export type QuizQuestion = {
 };
 
 type ItemRow = {
+
   id: number;
   text: string;
   type: string;
@@ -185,6 +187,7 @@ async function segmentJa(sentence: string): Promise<string[]> {
 async function collectRows(opts: BuildOpts) {
   const sources = opts.sources ?? ["library", "bank"];
   const lang = opts.lang ?? (await getTargetLang());
+  const uid = requireUserId();
   // Ulas Salah: cuma item library yang ID-nya dikasih (jawaban salah terakhir).
   const idFilter = opts.itemIds && opts.itemIds.length > 0 ? opts.itemIds : null;
   // Deck scope: deckId terisi = hanya item deck itu; null = library saja
@@ -207,6 +210,7 @@ async function collectRows(opts: BuildOpts) {
           and(
             eq(items.status, "learning"),
             eq(items.lang, lang),
+            eq(items.userId, uid),
             deckScope,
             ...(idFilter ? [inArray(items.id, idFilter)] : []),
           ),
@@ -216,7 +220,12 @@ async function collectRows(opts: BuildOpts) {
 
   let bank: ItemRow[] = [];
   if (sources.includes("bank")) {
-    const conds = [eq(wordbank.status, "learning"), sql`${wordbank.itemId} IS NULL`, eq(wordbank.lang, lang)];
+    const conds = [
+      eq(wordbankProgress.status, "learning"),
+      sql`${wordbankProgress.itemId} IS NULL`,
+      eq(wordbank.lang, lang),
+      eq(wordbankProgress.userId, uid),
+    ];
     if (opts.bankLevel) conds.push(eq(wordbank.cefr, opts.bankLevel));
     const bankRows = await db
       .select({
@@ -224,11 +233,12 @@ async function collectRows(opts: BuildOpts) {
         text: wordbank.text,
         type: wordbank.type,
         register: wordbank.register,
-          meaningId: wordbank.meaningId,
-          reading: wordbank.reading,
-          firstEn: sql<string | null>`(SELECT json_extract(value, '$.en') FROM json_each(wordbank.examples_json) ORDER BY length(json_extract(value, '$.en')) LIMIT 1)`,
+        meaningId: wordbank.meaningId,
+        reading: wordbank.reading,
+        firstEn: sql<string | null>`(SELECT json_extract(value, '$.en') FROM json_each(wordbank.examples_json) ORDER BY length(json_extract(value, '$.en')) LIMIT 1)`,
       })
       .from(wordbank)
+      .innerJoin(wordbankProgress, eq(wordbankProgress.bankId, wordbank.id))
       .where(and(...conds))
       .limit(300);
     bank = bankRows;
@@ -247,6 +257,7 @@ async function buildQuestions(
   const allRows = await collectRows(opts);
   if (allRows.length === 0) return [];
   const lang = opts.lang ?? (await getTargetLang());
+  const uid = requireUserId();
   const deckScope = opts.deckId != null ? eq(items.deckId, opts.deckId) : isNull(items.deckId);
 
   // Recall: selipkan item yang sudah hafal (±15%) di antara materi belajar.
@@ -267,7 +278,7 @@ async function buildQuestions(
         firstKana: sql<string | null>`(SELECT kana FROM examples WHERE item_id = items.id ORDER BY length(en), id LIMIT 1)`,
       })
       .from(items)
-      .where(and(eq(items.status, "known"), eq(items.lang, lang), deckScope))
+      .where(and(eq(items.status, "known"), eq(items.lang, lang), eq(items.userId, uid), deckScope))
       .orderBy(sql`RANDOM()`)
       .limit(recallN);
     const knownIds = new Set(allRows.map((r) => r.id));
@@ -290,7 +301,13 @@ async function buildQuestions(
         .select({ itemId: cards.itemId })
         .from(cards)
         .innerJoin(items, eq(items.id, cards.itemId))
-        .where(and(sql`${cards.due} <= ${Date.now() + 86_400_000}`, eq(items.lang, await getTargetLang())))
+        .where(
+          and(
+            sql`${cards.due} <= ${Date.now() + 86_400_000}`,
+            eq(items.lang, await getTargetLang()),
+            eq(items.userId, requireUserId()),
+          ),
+        )
         .limit(100)
     ).map((r) => r.itemId),
   );
@@ -304,7 +321,7 @@ async function buildQuestions(
       .select({ itemId: cards.itemId, reps: cards.reps })
       .from(cards)
       .innerJoin(items, eq(items.id, cards.itemId))
-      .where(eq(items.lang, await getTargetLang()))
+      .where(and(eq(items.lang, await getTargetLang()), eq(items.userId, requireUserId())))
       .limit(500);
     for (const r of repsRows) repsMap.set(r.itemId, r.reps);
   }
@@ -642,6 +659,7 @@ export async function getTodaySet() {
  * Riset: melatih kesalahan = retensi tertinggi per menit. Tanpa migrasi. */
 async function recentWrongItemIds(limit = 60): Promise<number[]> {
   const lang = await getTargetLang();
+  const uid = requireUserId();
   const cutoff = Date.now() - 14 * 86_400_000;
   const rows = await db
     .select({ itemId: quizAnswers.itemId })
@@ -649,7 +667,15 @@ async function recentWrongItemIds(limit = 60): Promise<number[]> {
     .innerJoin(quizSets, eq(quizSets.id, quizAnswers.setId))
     // Set deck (day `deck:*`) dikecualikan — salah deck dilatih di mode deck.
     // matcha: salah deck bocor ke ulas-salah library.
-    .where(and(eq(quizAnswers.correct, 0), eq(quizSets.lang, lang), sql`${quizAnswers.answeredAt} >= ${cutoff}`, sql`${quizSets.day} NOT LIKE 'deck:%'`))
+    .where(
+      and(
+        eq(quizAnswers.correct, 0),
+        eq(quizSets.lang, lang),
+        eq(quizAnswers.userId, uid),
+        sql`${quizAnswers.answeredAt} >= ${cutoff}`,
+        sql`${quizSets.day} NOT LIKE 'deck:%'`,
+      ),
+    )
     .limit(400);
   const freq = new Map<number, number>();
   for (const r of rows) freq.set(r.itemId, (freq.get(r.itemId) ?? 0) + 1);
@@ -662,10 +688,11 @@ async function recentWrongItemIds(limit = 60): Promise<number[]> {
 /** Set harian per mode (satu per mode per hari). */
 export async function getSetForDay(mode: QuizMode, day: string, limit: number, opts: BuildOpts = {}) {
   const lang = await getTargetLang();
+  const uid = requireUserId();
   const [existing] = await db
     .select()
     .from(quizSets)
-    .where(and(eq(quizSets.day, day), eq(quizSets.mode, mode), eq(quizSets.lang, lang)))
+    .where(and(eq(quizSets.day, day), eq(quizSets.mode, mode), eq(quizSets.lang, lang), eq(quizSets.userId, uid)))
     .limit(1);
   if (existing) return existing;
 
@@ -707,6 +734,7 @@ export async function getSetForDay(mode: QuizMode, day: string, limit: number, o
       correct: 0,
       completed: 0,
       createdAt: Date.now(),
+      userId: requireUserId(),
     })
     .onConflictDoNothing()
     .returning();
@@ -714,7 +742,7 @@ export async function getSetForDay(mode: QuizMode, day: string, limit: number, o
   const [again] = await db
     .select()
     .from(quizSets)
-    .where(and(eq(quizSets.day, day), eq(quizSets.mode, mode), eq(quizSets.lang, lang)))
+    .where(and(eq(quizSets.day, day), eq(quizSets.mode, mode), eq(quizSets.lang, lang), eq(quizSets.userId, uid)))
     .limit(1);
   return again ?? null;
 }
@@ -757,6 +785,7 @@ export async function createExtraSet(
           correct: 0,
           completed: 0,
           createdAt: Date.now(),
+          userId: requireUserId(),
         })
         .returning();
       return created ?? null;
@@ -767,9 +796,10 @@ export async function createExtraSet(
   return null;
 }
 
-/** Ambil set by id (mode tambahan bisa dibuat kapan pun). */
+/** Ambil set by id (mode tambahan bisa dibuat kapan pun) — hanya milik user. */
 export async function getSetById(id: number) {
-  const [row] = await db.select().from(quizSets).where(eq(quizSets.id, id)).limit(1);
+  const uid = requireUserId();
+  const [row] = await db.select().from(quizSets).where(and(eq(quizSets.id, id), eq(quizSets.userId, uid))).limit(1);
   return row ?? null;
 }
 
@@ -781,7 +811,11 @@ export async function answerQuestionById(
   pos?: number,
   counted = true,
 ) {
-  const [set] = await db.select().from(quizSets).where(eq(quizSets.id, setId)).limit(1);
+  const [set] = await db
+    .select()
+    .from(quizSets)
+    .where(and(eq(quizSets.id, setId), eq(quizSets.userId, requireUserId())))
+    .limit(1);
   if (!set) return { ok: false as const, error: "Set tidak ada" };
 
   const questions = JSON.parse(set.questions) as QuizQuestion[];
@@ -851,7 +885,15 @@ async function applyAnswer(
       return;
     }
     await tx.insert(quizAnswers)
-      .values({ setId: set.id, day: set.day, questionIndex: index, itemId: questions[index]?.itemId ?? 0, correct: correct ? 1 : 0, answeredAt: Date.now() })
+      .values({
+        setId: set.id,
+        day: set.day,
+        questionIndex: index,
+        itemId: questions[index]?.itemId ?? 0,
+        correct: correct ? 1 : 0,
+        answeredAt: Date.now(),
+        userId: set.userId,
+      })
       .onConflictDoNothing();
     await tx.update(quizSets)
       .set({
@@ -912,12 +954,14 @@ async function applyAnswer(
 
 /** Tandai item sudah hafal langsung dari soal. */
 export async function markItemKnownFromQuiz(itemId: number) {
-  await db.update(items).set({ status: "known" }).where(eq(items.id, itemId));
+  const uid = requireUserId();
+  await db.update(items).set({ status: "known" }).where(and(eq(items.id, itemId), eq(items.userId, uid)));
 }
 
 /** Riwayat latihan (untuk halaman review). */
 export async function getHistory(limit = 14) {
-  return db.select().from(quizSets).orderBy(desc(quizSets.day)).limit(limit);
+  const uid = requireUserId();
+  return db.select().from(quizSets).where(eq(quizSets.userId, uid)).orderBy(desc(quizSets.day)).limit(limit);
 }
 
 /** Bel: set harian (daily) belum selesai? */
@@ -934,10 +978,11 @@ export async function pendingToday(): Promise<{ total: number; done: number; com
  */
 export async function getStreak(): Promise<{ days: number; todayDone: boolean }> {
   const lang = await getTargetLang();
+  const uid = requireUserId();
   const rows = await db
     .select({ day: quizSets.day, completed: quizSets.completed })
     .from(quizSets)
-    .where(and(eq(quizSets.lang, lang), eq(quizSets.completed, 1)))
+    .where(and(eq(quizSets.lang, lang), eq(quizSets.completed, 1), eq(quizSets.userId, uid)))
     .orderBy(desc(quizSets.day))
     .limit(400);
   const doneDays = new Set(rows.map((r) => r.day));
@@ -969,6 +1014,7 @@ export async function getFlashQueue(
   const dayStart = new Date(today + "T00:00:00+07:00").getTime();
   const dayEnd = dayStart + 86_400_000;
   const lang = opts.lang ?? (await getTargetLang());
+  const uid = requireUserId();
   // Deck scope: deckId = hanya item deck itu; default = library saja.
   const deckScope = opts.deckId != null ? eq(items.deckId, opts.deckId) : isNull(items.deckId);
   // Contoh TERPENDEK + terjemahannya (pasangan) — contoh panjang melelahkan
@@ -1005,7 +1051,7 @@ export async function getFlashQueue(
     })
     .from(cards)
     .innerJoin(items, eq(items.id, cards.itemId))
-    .where(and(eq(items.status, "learning"), eq(items.lang, lang), deckScope, sql`${cards.due} < ${Date.now()}`, ...notShown))
+    .where(and(eq(items.status, "learning"), eq(items.lang, lang), eq(items.userId, uid), deckScope, sql`${cards.due} < ${Date.now()}`, ...notShown))
     .orderBy(cards.due)
     .limit(limit);
   const newRows = await db
@@ -1024,7 +1070,7 @@ export async function getFlashQueue(
     })
     .from(cards)
     .innerJoin(items, eq(items.id, cards.itemId))
-    .where(and(eq(items.status, "learning"), eq(items.lang, lang), deckScope, sql`${cards.due} >= ${dayStart}`, sql`${cards.due} < ${dayEnd}`, eq(cards.reps, 0), ...notShown))
+    .where(and(eq(items.status, "learning"), eq(items.lang, lang), eq(items.userId, uid), deckScope, sql`${cards.due} >= ${dayStart}`, sql`${cards.due} < ${dayEnd}`, eq(cards.reps, 0), ...notShown))
     .limit(Math.max(0, limit - dueRows.length));
   const queue = [...dueRows, ...newRows];
   // Exclude menghabiskan semua (mis. kartu sedikit) → fallback antrean penuh.
@@ -1050,7 +1096,7 @@ export async function getFlashQueue(
       })
       .from(cards)
       .innerJoin(items, eq(items.id, cards.itemId))
-      .where(and(eq(items.status, "known"), eq(items.lang, lang), deckScope))
+      .where(and(eq(items.status, "known"), eq(items.lang, lang), eq(items.userId, uid), deckScope))
       .orderBy(sql`RANDOM()`)
       .limit(recallN);
     const seen = new Set(queue.map((c) => c.itemId));
@@ -1108,12 +1154,13 @@ export async function getFlashQueue(
  */
 export async function getPeriodicSet(mode: "toefl" | "bulanan") {
   const lang = await getTargetLang();
+  const uid = requireUserId();
   if (mode === "toefl") {
     const week = isoWeekKey();
     const [existing] = await db
       .select()
       .from(quizSets)
-      .where(and(eq(quizSets.mode, "toefl"), eq(quizSets.day, week), eq(quizSets.lang, lang)))
+      .where(and(eq(quizSets.mode, "toefl"), eq(quizSets.day, week), eq(quizSets.lang, lang), eq(quizSets.userId, uid)))
       .limit(1);
     if (existing) return existing;
 
@@ -1141,6 +1188,7 @@ export async function getPeriodicSet(mode: "toefl" | "bulanan") {
         correct: 0,
         completed: 0,
         createdAt: Date.now(),
+        userId: uid,
       })
       .onConflictDoNothing()
       .returning();
@@ -1148,7 +1196,7 @@ export async function getPeriodicSet(mode: "toefl" | "bulanan") {
     const [again] = await db
       .select()
       .from(quizSets)
-      .where(and(eq(quizSets.mode, "toefl"), eq(quizSets.day, week), eq(quizSets.lang, lang)))
+      .where(and(eq(quizSets.mode, "toefl"), eq(quizSets.day, week), eq(quizSets.lang, lang), eq(quizSets.userId, uid)))
       .limit(1);
     return again ?? null;
   }
@@ -1159,7 +1207,7 @@ export async function getPeriodicSet(mode: "toefl" | "bulanan") {
   const [existing] = await db
     .select()
     .from(quizSets)
-    .where(and(eq(quizSets.mode, "bulanan"), eq(quizSets.day, month), eq(quizSets.lang, lang)))
+    .where(and(eq(quizSets.mode, "bulanan"), eq(quizSets.day, month), eq(quizSets.lang, lang), eq(quizSets.userId, uid)))
     .limit(1);
   if (existing) return existing;
 
@@ -1182,6 +1230,7 @@ export async function getPeriodicSet(mode: "toefl" | "bulanan") {
       correct: 0,
       completed: 0,
       createdAt: Date.now(),
+      userId: uid,
     })
     .onConflictDoNothing()
     .returning();
@@ -1189,7 +1238,7 @@ export async function getPeriodicSet(mode: "toefl" | "bulanan") {
   const [again] = await db
     .select()
     .from(quizSets)
-    .where(and(eq(quizSets.mode, "bulanan"), eq(quizSets.day, month), eq(quizSets.lang, lang)))
+    .where(and(eq(quizSets.mode, "bulanan"), eq(quizSets.day, month), eq(quizSets.lang, lang), eq(quizSets.userId, uid)))
     .limit(1);
   return again ?? null;
 }
@@ -1197,16 +1246,17 @@ export async function getPeriodicSet(mode: "toefl" | "bulanan") {
 /** Badge periodik untuk bel notifikasi: tes minggu/bulan ini sudah selesai? */
 export async function periodicStatus() {
   const lang = await getTargetLang();
+  const uid = requireUserId();
   const [toefl] = await db
     .select({ id: quizSets.id, done: quizSets.done, completed: quizSets.completed })
     .from(quizSets)
-    .where(and(eq(quizSets.mode, "toefl"), eq(quizSets.day, isoWeekKey()), eq(quizSets.lang, lang)))
+    .where(and(eq(quizSets.mode, "toefl"), eq(quizSets.day, isoWeekKey()), eq(quizSets.lang, lang), eq(quizSets.userId, uid)))
     .limit(1);
   const available = dayOfMonth() >= 25;
   const [bulanan] = await db
     .select({ id: quizSets.id, done: quizSets.done, completed: quizSets.completed })
     .from(quizSets)
-    .where(and(eq(quizSets.mode, "bulanan"), eq(quizSets.day, monthKey()), eq(quizSets.lang, lang)))
+    .where(and(eq(quizSets.mode, "bulanan"), eq(quizSets.day, monthKey()), eq(quizSets.lang, lang), eq(quizSets.userId, uid)))
     .limit(1);
   return {
     toefl: {
@@ -1236,12 +1286,13 @@ export async function getMatchRounds(
   opts: { deckId?: number; lang?: string } = {},
 ): Promise<MatchPair[][]> {
   const lang = opts.lang ?? (await getTargetLang());
+  const uid = requireUserId();
   const deckScope = opts.deckId != null ? eq(items.deckId, opts.deckId) : isNull(items.deckId);
   const rows = (
     await db
       .select({ id: items.id, text: items.text, meaningId: items.meaningId })
       .from(items)
-      .where(and(eq(items.status, "learning"), eq(items.lang, lang), deckScope, sql`${items.meaningId} IS NOT NULL`))
+      .where(and(eq(items.status, "learning"), eq(items.lang, lang), eq(items.userId, uid), deckScope, sql`${items.meaningId} IS NOT NULL`))
       .limit(200)
   ).map((r) => ({ itemId: r.id, word: r.text, meaning: r.meaningId! }));
   if (rows.length < perRound) return [];

@@ -1402,7 +1402,7 @@ function KanjiRef({
       ? "Paling sering dipakai tampil dulu."
       : order === "theme"
         ? "Kelompok makna (angka, waktu, alam…) — hafalan nyambung."
-        : "Berbagi radikal — hafal satu bentuk, sisanya lebih mudah.";
+        : "Berbagi pola/komponen — satu kanji bisa muncul di beberapa grup (mis. 女 & 安).";
 
   // Tandai/batalkan "dikenal" — optimistis, di-rollback kalau request gagal.
   const toggleKnown = async (char: string) => {
@@ -1448,9 +1448,11 @@ function KanjiRef({
             <h2 className="text-base font-semibold leading-tight">
               Kanji {level}
               <span className="ml-1.5 text-xs font-normal text-zinc-400">
-                {shown.length === list.length
-                  ? `${list.length} kanji`
-                  : `${shown.length} dari ${list.length}`}
+                {order === "pattern" && groups.length > 0
+                  ? `${groups.reduce((a, g) => a + g.rows.length, 0)} penempatan · ${shown.length} kanji`
+                  : shown.length === list.length
+                    ? `${list.length} kanji`
+                    : `${shown.length} dari ${list.length}`}
               </span>
             </h2>
             <p className="mt-0.5 text-[10px] leading-relaxed text-zinc-400">

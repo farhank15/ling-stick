@@ -14,6 +14,23 @@ import {
  * - `llm_usage` : penghitung panggilan LLM harian (DAILY_LLM_CALL_LIMIT)
  */
 
+/** Akun (multi-user) — username+password lokal (scrypt). */
+export const users = sqliteTable(
+  "users",
+  {
+    id: integer("id").primaryKey({ autoIncrement: true }),
+    username: text("username"), // dinormalisasi lowercase, unik
+    displayName: text("display_name").notNull(),
+    provider: text("provider").notNull().default("local"), // local | password_bootstrap
+    passwordHash: text("password_hash"),
+    passwordSalt: text("password_salt"),
+    isOwner: integer("is_owner").notNull().default(0), // pemilik data lama (claim)
+    createdAt: integer("created_at").notNull(),
+    lastLoginAt: integer("last_login_at"),
+  },
+  (t) => [uniqueIndex("users_username_uq").on(t.username)],
+);
+
 export const items = sqliteTable(
   "items",
   {
@@ -35,11 +52,13 @@ export const items = sqliteTable(
     deckId: integer("deck_id"),
     extraJson: text("extra_json"),
     needsId: integer("needs_id").notNull().default(0),
+    userId: integer("user_id"), // pemilik (null = legacy, diklaim user pertama)
   },
   (t) => [
-    uniqueIndex("items_text_norm_uq").on(t.textNorm),
+    uniqueIndex("items_user_textnorm_uq").on(t.userId, t.textNorm),
     index("items_status_idx").on(t.status),
     index("items_deck_idx").on(t.deckId),
+    index("items_user_idx").on(t.userId),
   ],
 );
 
@@ -54,6 +73,7 @@ export const decks = sqliteTable("decks", {
   count: integer("count").notNull().default(0),
   skipped: integer("skipped").notNull().default(0), // duplikat vs library
   createdAt: integer("created_at").notNull(),
+  userId: integer("user_id"),
 });
 
 export const examples = sqliteTable(
@@ -117,6 +137,7 @@ export const cards = sqliteTable("cards", {
   state: integer("state").notNull().default(0), // 0 new, 1 learning, 2 review, 3 relearning
   learningSteps: integer("learning_steps").notNull().default(0),
   lastReview: integer("last_review"),
+  userId: integer("user_id"),
 });
 
 export const reviewLogs = sqliteTable(
@@ -129,6 +150,7 @@ export const reviewLogs = sqliteTable(
     reviewedAt: integer("reviewed_at").notNull(),
     state: integer("state"),
     due: integer("due"),
+    userId: integer("user_id"),
   },
   (t) => [index("review_logs_item_idx").on(t.itemId)],
 );
@@ -173,11 +195,18 @@ export const laraUsage = sqliteTable(
 export const sessions = sqliteTable(
   "sessions",
   {
-    id: text("id").primaryKey(), // token acak
+    id: text("id").primaryKey(), // token acak (opaque)
+    userId: integer("user_id")
+      .notNull()
+      .references(() => users.id, { onDelete: "cascade" }),
     createdAt: integer("created_at").notNull(),
     expiresAt: integer("expires_at").notNull(),
+    lastSeenAt: integer("last_seen_at"),
   },
-  (t) => [index("sessions_expires_idx").on(t.expiresAt)],
+  (t) => [
+    index("sessions_expires_idx").on(t.expiresAt),
+    index("sessions_user_idx").on(t.userId),
+  ],
 );
 
 export const llmUsage = sqliteTable("llm_usage", {
@@ -185,10 +214,15 @@ export const llmUsage = sqliteTable("llm_usage", {
   calls: integer("calls").notNull().default(0),
 });
 
-export const settings = sqliteTable("settings", {
-  key: text("key").primaryKey(),
-  value: text("value").notNull(),
-});
+export const settings = sqliteTable(
+  "settings",
+  {
+    key: text("key").notNull(),
+    value: text("value").notNull(),
+    userId: integer("user_id"),
+  },
+  (t) => [primaryKey({ columns: [t.userId, t.key] })],
+);
 
 /** Kanji referensi (data kanonis KANJIDIC2/KanjiVG, bukan LLM). */
 export const kanji = sqliteTable("kanji", {
@@ -256,18 +290,24 @@ export const kanjiCards = sqliteTable(
     state: integer("state").notNull().default(0),
     learningSteps: integer("learning_steps").notNull().default(0),
     lastReview: integer("last_review"),
+    userId: integer("user_id"),
   },
-  (t) => [primaryKey({ columns: [t.kanji, t.mode] })],
+  (t) => [primaryKey({ columns: [t.userId, t.kanji, t.mode] })],
 );
 /**
  * Tanda "sudah dikenal" yang di-set manual dari sheet detail — bukan hasil
  * FSRS. Dipisah dari kanji_cards supaya menandai tidak mengacaukan jadwal
  * ulang kartu (due/stability).
  */
-export const kanjiKnown = sqliteTable("kanji_known", {
-  kanji: text("kanji").primaryKey(),
-  markedAt: integer("marked_at").notNull(),
-});
+export const kanjiKnown = sqliteTable(
+  "kanji_known",
+  {
+    kanji: text("kanji").notNull(),
+    markedAt: integer("marked_at").notNull(),
+    userId: integer("user_id"),
+  },
+  (t) => [primaryKey({ columns: [t.userId, t.kanji] })],
+);
 export const routeNotes = sqliteTable(
   "route_notes",
   {
@@ -276,8 +316,9 @@ export const routeNotes = sqliteTable(
     note: text("note").notNull().default(""),
     qaJson: text("qa_json").notNull().default("[]"),
     updatedAt: integer("updated_at").notNull(),
+    userId: integer("user_id"),
   },
-  (t) => [uniqueIndex("route_notes_step_lang_uq").on(t.stepId, t.lang)],
+  (t) => [uniqueIndex("route_notes_user_step_lang_uq").on(t.userId, t.stepId, t.lang)],
 );
 
 export const chatSessions = sqliteTable("chat_sessions", {
@@ -285,6 +326,7 @@ export const chatSessions = sqliteTable("chat_sessions", {
   title: text("title").notNull().default("Obrolan baru"),
   createdAt: integer("created_at").notNull(),
   updatedAt: integer("updated_at").notNull(),
+  userId: integer("user_id"),
 });
 
 export const chatMessages = sqliteTable(
@@ -317,8 +359,9 @@ export const quizSets = sqliteTable(
     correct: integer("correct").notNull().default(0),
     completed: integer("completed").notNull().default(0),
     createdAt: integer("created_at").notNull(),
+    userId: integer("user_id"),
   },
-  (t) => [uniqueIndex("quiz_sets_day_mode_uq").on(t.day, t.mode)],
+  (t) => [uniqueIndex("quiz_sets_user_day_mode_lang_uq").on(t.userId, t.day, t.mode, t.lang)],
 );
 
 export const quizAnswers = sqliteTable(
@@ -331,6 +374,7 @@ export const quizAnswers = sqliteTable(
     itemId: integer("item_id").notNull(),
     correct: integer("correct").notNull(),
     answeredAt: integer("answered_at").notNull(),
+    userId: integer("user_id"),
   },
   (t) => [uniqueIndex("quiz_answers_set_idx_uq").on(t.setId, t.questionIndex)],
 );
@@ -367,7 +411,7 @@ export const wordbank = sqliteTable(
     meaningId: text("meaning_id").notNull(),
     useWhenId: text("use_when_id"),
     examplesJson: text("examples_json").notNull().default("[]"),
-    status: text("status").notNull().default("new"), // new|learning|known
+    status: text("status").notNull().default("new"), // new|learning|known (katalog)
     itemId: integer("item_id"),
     source: text("source").notNull().default("seed"),
     lang: text("lang").notNull().default("en"), // en | ja — bahasa target entri
@@ -375,4 +419,24 @@ export const wordbank = sqliteTable(
     createdAt: integer("created_at").notNull(),
   },
   (t) => [index("wordbank_cefr_idx").on(t.cefr), index("wordbank_status_idx").on(t.status)],
+);
+
+/** Status belajar per-user atas katalog wordbank (isolasi data). */
+export const wordbankProgress = sqliteTable(
+  "wordbank_progress",
+  {
+    userId: integer("user_id")
+      .notNull()
+      .references(() => users.id, { onDelete: "cascade" }),
+    bankId: integer("bank_id")
+      .notNull()
+      .references(() => wordbank.id, { onDelete: "cascade" }),
+    status: text("status").notNull().default("learning"), // learning|known
+    itemId: integer("item_id"),
+    updatedAt: integer("updated_at").notNull(),
+  },
+  (t) => [
+    primaryKey({ columns: [t.userId, t.bankId] }),
+    index("wordbank_progress_user_idx").on(t.userId),
+  ],
 );
