@@ -39,6 +39,9 @@ function randomToken(): string {
 
 /** Ambil sesi + user; null kalau tidak ada / kedaluwarsa. */
 async function lookupSession(sid: string): Promise<{ session: SessionRow; user: UserRow } | null> {
+  // Cold start (Vercel): query pertama bisa kalah cepat dari migrasi —
+  // tunggu dulu supaya "no such column" tidak muncul di request awal.
+  await ensureDbReady();
   const [row] = await db
     .select({ session: sessions, user: users })
     .from(sessions)
